@@ -1,0 +1,106 @@
+/**
+ * Organized Chaos domain types (spec §3).
+ *
+ * Conventions used across every entity:
+ * - timestamps (`createdAt`, `updatedAt`, `notTodayUntil`, ...) are ms-epoch numbers
+ * - calendar dates (`deadline`) are LOCAL 'YYYY-MM-DD' strings — deadlines are dates, not moments
+ * - deletes are tombstones (`deleted: true`) so the future sync layer can merge them;
+ *   `updatedAt` is stamped on every write and is the newest-wins merge key
+ */
+
+export type Priority = 'someday' | 'low' | 'medium' | 'high' | 'max';
+
+/** Ascending order — index doubles as the comparable rank. */
+export const PRIORITIES = ['someday', 'low', 'medium', 'high', 'max'] as const satisfies readonly Priority[];
+
+/** someday=0 … max=4; higher wins everywhere priorities are compared. */
+export function priorityRank(p: Priority): number {
+  return PRIORITIES.indexOf(p);
+}
+
+export type SortMode = 'priority' | 'date' | 'tag';
+
+interface Base {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  deleted: boolean;
+}
+
+export interface List extends Base {
+  title: string;
+  /** Display grouping label on the home screen (imported from Things areas). */
+  areaGroup?: string;
+  /** Last sort mode used in this list's view (spec §6: remembered per list). */
+  sortMode: SortMode;
+}
+
+export interface Task extends Base {
+  listId: string;
+  name: string;
+  /** Freeform markdown; imported Things checklists live here as `- [ ]` lines. */
+  notes: string;
+  /** Manual priority; deadline escalation may raise the effective value (spec §4). */
+  priority: Priority;
+  tagIds: string[];
+  deadline?: string;
+  estimateHours?: number;
+  /** Set when a task is accepted from the randomizer; cleared only manually. */
+  inProgress: boolean;
+  /** "Not Today" snooze — excludes from the randomizer pool ONLY, until this moment. */
+  notTodayUntil?: number;
+  completedAt?: number;
+  /** The RecurrenceTemplate this task was spawned from, if any. */
+  recurrenceId?: string;
+  /** Original Things UUID — makes re-imports idempotent (spec §9). */
+  thingsUuid?: string;
+}
+
+export interface Tag extends Base {
+  name: string;
+  /** Index into the 16-color preset swatch (spec §7). */
+  colorIndex: number;
+}
+
+export type RecurrenceMode =
+  /** "Come back X after completion" — spec §5. */
+  | { kind: 'afterCompletion'; interval: number; unit: 'days' | 'weeks' | 'months' }
+  /** Fixed weekly cadence; weekday numbers follow JS Date#getDay (0=Sunday … 6=Saturday). */
+  | { kind: 'weekly'; weekdays: number[] }
+  /** Fixed monthly cadence; 1–31, clamped to the month's length when it overshoots. */
+  | { kind: 'monthly'; dayOfMonth: number };
+
+export interface RecurrenceTemplate extends Base {
+  listId: string;
+  name: string;
+  notes: string;
+  tagIds: string[];
+  priority: Priority;
+  estimateHours?: number;
+  mode: RecurrenceMode;
+  /** When set, spawned tasks get `deadline = spawn day + offset` (spec §5). */
+  deadlineOffsetDays?: number;
+  paused: boolean;
+  /** Next moment the spawn sweep should materialize an instance; unset = not armed. */
+  nextSpawnAt?: number;
+  lastSpawnedTaskId?: string;
+}
+
+export interface CurrentTaskRef {
+  taskId: string;
+  acceptedAt: number;
+}
+
+export interface Settings {
+  /** Assumed focus hours available per day per task — drives deadline escalation. */
+  hoursPerDay: number;
+  /** Width (in days of slack) of each escalation band below max. */
+  slackBandDays: number;
+  /** Local hour at which the "app day" rolls over (spec §3: the 4am rule). */
+  rolloverHour: number;
+}
+
+export const DEFAULT_SETTINGS: Settings = { hoursPerDay: 1, slackBandDays: 3, rolloverHour: 4 };
+
+/** What callers provide to create a task; base fields are stamped by the storage layer. */
+export type TaskDraft = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'deleted'>;
