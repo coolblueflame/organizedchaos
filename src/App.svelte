@@ -6,6 +6,7 @@
   import ListView from './lib/ui/ListView.svelte';
   import SortView from './lib/ui/SortView.svelte';
   import CompletedView from './lib/ui/CompletedView.svelte';
+  import UndoToast from './lib/ui/UndoToast.svelte';
 </script>
 
 {#if !app.ready}
@@ -24,6 +25,7 @@
     <Home />
   {/if}
 {/if}
+<UndoToast />
 
 <style>
   .boot { min-height: 100vh; display: grid; place-content: center; }
