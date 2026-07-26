@@ -12,6 +12,8 @@ import {
   type CurrentTaskRef, type List, type RecurrenceTemplate, type Settings,
   type Tag, type Task, type TaskDraft,
 } from '../domain/types';
+import type { RemoteSnapshot } from '../sync/files';
+import type { SyncConfig } from '../sync/githubClient';
 import type { AppDb } from './db';
 
 export interface AppState {
@@ -140,5 +142,49 @@ export class Repo {
       key: 'settings',
       value: { data: { ...current, ...patch }, updatedAt: Date.now() },
     });
+  }
+
+  // ── sync support (spec §8) ───────────────────────────────────────────────
+
+  /** Full store INCLUDING tombstones — what the sync merge operates on. */
+  async loadSnapshot(): Promise<RemoteSnapshot> {
+    const state = await this.loadState();
+    const [lists, tasks, tags, templates] = await Promise.all([
+      this.db.lists.toArray(), this.db.tasks.toArray(),
+      this.db.tags.toArray(), this.db.templates.toArray(),
+    ]);
+    return { ...state, lists, tasks, tags, templates };
+  }
+
+  /** Swap the whole store for a merged snapshot — one transaction, all-or-nothing. */
+  async replaceAll(snap: RemoteSnapshot): Promise<void> {
+    await this.db.transaction('rw', [this.db.lists, this.db.tasks, this.db.tags, this.db.templates, this.db.kv], async () => {
+      await Promise.all([
+        this.db.lists.clear(), this.db.tasks.clear(),
+        this.db.tags.clear(), this.db.templates.clear(),
+      ]);
+      await Promise.all([
+        this.db.lists.bulkPut(snap.lists),
+        this.db.tasks.bulkPut(snap.tasks),
+        this.db.tags.bulkPut(snap.tags),
+        this.db.templates.bulkPut(snap.templates),
+        this.db.kv.put({ key: 'currentTask', value: { data: snap.currentTask, updatedAt: snap.currentTaskUpdatedAt } }),
+        this.db.kv.put({ key: 'settings', value: { data: snap.settings, updatedAt: snap.settingsUpdatedAt } }),
+      ]);
+    });
+  }
+
+  /** Device-local sync credentials — NEVER part of snapshots or synced files. */
+  async getSyncAuth(): Promise<SyncConfig | null> {
+    const row = await this.db.kv.get('syncAuth');
+    return (row?.value as SyncConfig | undefined) ?? null;
+  }
+
+  async setSyncAuth(cfg: SyncConfig): Promise<void> {
+    await this.db.kv.put({ key: 'syncAuth', value: cfg });
+  }
+
+  async clearSyncAuth(): Promise<void> {
+    await this.db.kv.delete('syncAuth');
   }
 }

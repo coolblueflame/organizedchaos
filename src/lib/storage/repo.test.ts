@@ -99,4 +99,41 @@ describe('Repo', () => {
     const again = new Repo(openDb(db.name));
     expect((await again.loadState()).lists.map((l) => l.id)).toEqual([list.id]);
   });
+
+  it('loadSnapshot INCLUDES tombstones (sync needs them to propagate deletes)', async () => {
+    const list = await repo.createList({ title: 'Doomed' });
+    await repo.softDelete('lists', list.id);
+    expect((await repo.loadState()).lists).toHaveLength(0);
+    const snapshot = await repo.loadSnapshot();
+    expect(snapshot.lists).toHaveLength(1);
+    expect(snapshot.lists[0]!.deleted).toBe(true);
+  });
+
+  it('replaceAll swaps the entire store transactionally and round-trips', async () => {
+    await repo.createList({ title: 'stale local' });
+    const incoming = await repo.loadSnapshot();
+    incoming.lists = [{
+      id: 'L9', title: 'from remote', sortMode: 'priority' as const,
+      createdAt: 1, updatedAt: 2, deleted: false,
+    }];
+    incoming.currentTask = { taskId: 'T1', acceptedAt: 3 };
+    incoming.currentTaskUpdatedAt = 4;
+    incoming.settings = { ...incoming.settings, hoursPerDay: 7 };
+    incoming.settingsUpdatedAt = 5;
+    await repo.replaceAll(incoming);
+    const back = await repo.loadSnapshot();
+    expect(back.lists.map((l) => l.id)).toEqual(['L9']);
+    expect(back.currentTask).toEqual({ taskId: 'T1', acceptedAt: 3 });
+    expect(back.currentTaskUpdatedAt).toBe(4);
+    expect(back.settings.hoursPerDay).toBe(7);
+    expect(back.settingsUpdatedAt).toBe(5);
+  });
+
+  it('sync auth kv round-trips and clears', async () => {
+    expect(await repo.getSyncAuth()).toBeNull();
+    await repo.setSyncAuth({ owner: 'me', repo: 'data', token: 'tok' });
+    expect(await repo.getSyncAuth()).toEqual({ owner: 'me', repo: 'data', token: 'tok' });
+    await repo.clearSyncAuth();
+    expect(await repo.getSyncAuth()).toBeNull();
+  });
 });

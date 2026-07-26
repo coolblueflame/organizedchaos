@@ -9,6 +9,9 @@ import {
 } from '../domain/types';
 import { nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
+import { drawTask } from '../domain/randomizer';
+import { SyncEngine, type SyncStatus } from '../sync/engine';
+import { GithubClient } from '../sync/githubClient';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -19,8 +22,12 @@ export class AppStore {
     settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
   });
   ready = $state(false);
+  syncStatus = $state<SyncStatus>('disabled');
+  syncDetail = $state('');
+  lastSyncAt = $state<number | null>(null);
 
   private repo!: Repo;
+  private engine: SyncEngine | null = null;
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
   private trashTasks = new Map<string, Task>();
   private trashLists = new Map<string, List>();
@@ -39,6 +46,84 @@ export class AppStore {
     // Materialize any recurrences that came due while the app was closed.
     await this.runSpawnSweep();
     this.ready = true;
+    // Resume sync if this device is connected; first pull runs behind the UI.
+    const auth = await this.repo.getSyncAuth();
+    if (auth) {
+      this.buildEngine(auth);
+      void this.engine!.syncNow();
+    }
+  }
+
+  // ── sync lifecycle (spec §8) ─────────────────────────────────────────────
+
+  private buildEngine(cfg: { owner: string; repo: string; token: string }): void {
+    this.engine?.dispose();
+    const engine = new SyncEngine({
+      client: new GithubClient(cfg),
+      loadLocal: () => this.repo.loadSnapshot(),
+      saveLocal: async (snap) => {
+        await this.repo.replaceAll(snap);
+        await this.refreshFromDisk();
+      },
+    });
+    engine.onStatus = (status, detail) => {
+      this.syncStatus = status;
+      this.syncDetail = detail;
+      this.lastSyncAt = engine.lastSyncAt;
+    };
+    this.engine = engine;
+    this.syncStatus = 'idle';
+  }
+
+  /** Re-read the (post-merge) db into the mirror without touching sync/ready. */
+  private async refreshFromDisk(): Promise<void> {
+    const loaded = await this.repo.loadState();
+    this.state.lists = loaded.lists;
+    this.state.tasks = loaded.tasks;
+    this.state.tags = loaded.tags;
+    this.state.templates = loaded.templates;
+    this.state.currentTask = loaded.currentTask;
+    this.state.currentTaskUpdatedAt = loaded.currentTaskUpdatedAt;
+    this.state.settings = loaded.settings;
+    this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
+  }
+
+  async configureSync(owner: string, repo: string, token: string): Promise<{ ok: boolean; error?: string }> {
+    const probe = await new GithubClient({ owner, repo, token }).checkAuth();
+    if (!probe.ok) return probe;
+    await this.repo.setSyncAuth({ owner, repo, token });
+    this.buildEngine({ owner, repo, token });
+    await this.engine!.syncNow();
+    return { ok: this.syncStatus !== 'error', error: this.syncDetail || undefined };
+  }
+
+  async disconnectSync(): Promise<void> {
+    await this.repo.clearSyncAuth();
+    this.engine?.dispose();
+    this.engine = null;
+    this.syncStatus = 'disabled';
+    this.syncDetail = '';
+  }
+
+  /** Debounced push — every mutation funnels through here. */
+  private requestSync(): void {
+    this.engine?.requestSync();
+  }
+
+  async syncNow(): Promise<void> {
+    await this.engine?.syncNow();
+  }
+
+  async updateSettings(patch: Partial<import('../domain/types').Settings>): Promise<void> {
+    await this.repo.updateSettings(patch);
+    this.state.settings = { ...this.state.settings, ...patch };
+    this.state.settingsUpdatedAt = Date.now();
+    this.requestSync();
+  }
+
+  /** Full local backup for the Settings export button. */
+  exportSnapshot(): Promise<import('../sync/files').RemoteSnapshot> {
+    return this.repo.loadSnapshot();
   }
 
   // ── lists ────────────────────────────────────────────────────────────────
@@ -46,6 +131,7 @@ export class AppStore {
   async addList(title: string, areaGroup?: string): Promise<List> {
     const list = await this.repo.createList({ title, areaGroup });
     this.state.lists.push(list);
+    this.requestSync();
     return list;
   }
 
@@ -65,6 +151,7 @@ export class AppStore {
     await this.repo.updateList(id, patch);
     const list = this.state.lists.find((l) => l.id === id);
     if (list) Object.assign(list, patch, { updatedAt: Date.now() });
+    this.requestSync();
   }
 
   /**
@@ -80,6 +167,7 @@ export class AppStore {
     if (list) this.trashLists.set(id, list);
     await this.repo.softDelete('lists', id);
     this.state.lists = this.state.lists.filter((l) => l.id !== id);
+    this.requestSync();
     return openIds;
   }
 
@@ -102,6 +190,7 @@ export class AppStore {
       listId, name: '', notes: '', priority: 'medium', tagIds: [], inProgress: false,
     });
     this.state.tasks.push(task);
+    this.requestSync();
     return task;
   }
 
@@ -109,15 +198,14 @@ export class AppStore {
     await this.repo.updateTask(id, patch);
     const task = this.state.tasks.find((t) => t.id === id);
     if (task) Object.assign(task, patch, { updatedAt: Date.now() });
+    this.requestSync();
   }
 
   async completeTask(id: string): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
+    const wasCurrent = this.state.currentTask?.taskId === id;
     await this.patchTask(id, { completedAt: Date.now(), inProgress: false });
-    if (this.state.currentTask?.taskId === id) {
-      await this.repo.setCurrentTask(null);
-      this.state.currentTask = null;
-    }
+    if (wasCurrent) await this.clearCurrent();
     // Arm after-completion recurrence: "come back X after done" (spec §5).
     const tpl = task?.recurrenceId
       ? this.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted && !t.paused)
@@ -125,6 +213,11 @@ export class AppStore {
     if (tpl) {
       const next = scheduleAfterCompletion(tpl, new Date());
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
+    }
+    // Auto-select (2026-07-26 request): finishing THE current task rolls the next one.
+    if (wasCurrent && this.state.settings.autoSelectNext) {
+      const next = drawTask(this.state.tasks, this.state.settings, new Date(), Math.random);
+      if (next) await this.acceptTask(next.id);
     }
   }
 
@@ -137,6 +230,7 @@ export class AppStore {
     if (task) this.trashTasks.set(id, task);
     await this.repo.softDelete('tasks', id);
     this.state.tasks = this.state.tasks.filter((t) => t.id !== id);
+    this.requestSync();
   }
 
   async restoreTask(id: string): Promise<void> {
@@ -147,6 +241,7 @@ export class AppStore {
       this.state.tasks.push(task);
       this.trashTasks.delete(id);
     }
+    this.requestSync();
   }
 
   // ── draw lifecycle (spec §4) ─────────────────────────────────────────────
@@ -157,6 +252,8 @@ export class AppStore {
     const ref = { taskId, acceptedAt: Date.now() };
     await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
+    this.state.currentTaskUpdatedAt = Date.now();
+    this.requestSync();
   }
 
   /**
@@ -173,6 +270,8 @@ export class AppStore {
   async clearCurrent(): Promise<void> {
     await this.repo.setCurrentTask(null);
     this.state.currentTask = null;
+    this.state.currentTaskUpdatedAt = Date.now();
+    this.requestSync();
   }
 
   async setInProgress(taskId: string, flag: boolean): Promise<void> {
@@ -206,7 +305,7 @@ export class AppStore {
       nextSpawnAt: armed ?? undefined,
     });
     this.state.templates.push(tpl);
-    await this.patchTask(taskId, { recurrenceId: tpl.id });
+    await this.patchTask(taskId, { recurrenceId: tpl.id }); // patchTask requests sync
     return tpl;
   }
 
@@ -219,11 +318,13 @@ export class AppStore {
     await this.repo.updateTemplate(id, patch);
     const tpl = this.state.templates.find((t) => t.id === id);
     if (tpl) Object.assign(tpl, patch, { updatedAt: Date.now() });
+    this.requestSync();
   }
 
   async removeRecurring(id: string): Promise<void> {
     await this.repo.softDelete('templates', id);
     this.state.templates = this.state.templates.filter((t) => t.id !== id);
+    this.requestSync();
   }
 
   /** Materialize due templates. Called from init, window focus, and the rollover timer. */
@@ -236,6 +337,7 @@ export class AppStore {
     for (const u of res.updates) {
       await this.updateRecurring(u.id, { nextSpawnAt: u.nextSpawnAt });
     }
+    if (res.drafts.length > 0) this.requestSync();
     return res.drafts.length;
   }
 
@@ -244,6 +346,7 @@ export class AppStore {
   async addTag(name: string, colorIndex: number): Promise<Tag> {
     const tag = await this.repo.createTag({ name, colorIndex });
     this.state.tags.push(tag);
+    this.requestSync();
     return tag;
   }
 }

@@ -140,6 +140,26 @@ describe('AppStore', () => {
     expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
   });
 
+  it('autoSelectNext ON: completing the current task draws and accepts the next', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    await store.updateSettings({ autoSelectNext: true });
+    await store.acceptTask(a.id);
+    await store.completeTask(a.id);
+    expect(store.state.currentTask?.taskId).toBe(b.id);
+    expect(store.state.tasks.find((t) => t.id === b.id)!.inProgress).toBe(true);
+  });
+
+  it('autoSelectNext OFF: completing the current task just clears it', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    await store.completeTask(a.id);
+    expect(store.state.currentTask).toBeNull();
+  });
+
   it('setInProgress toggles and persists', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);

@@ -164,6 +164,9 @@
     <button data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
       ✓ Completed
     </button>
+    <button data-testid="settings-link" onclick={() => navigate({ name: 'settings' })}>
+      ⚙ Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
+    </button>
   </div>
 </main>
 
@@ -259,4 +262,5 @@
     padding: 10px; cursor: pointer; text-align: left;
   }
   .footer-links button:hover { color: var(--acc-green); }
+  .sync-warn { color: var(--acc-orange); }
 </style>

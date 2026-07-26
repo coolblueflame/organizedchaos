@@ -33,6 +33,7 @@
   import RandomizerView from './lib/ui/RandomizerView.svelte';
   import InProgressView from './lib/ui/InProgressView.svelte';
   import RecurringView from './lib/ui/RecurringView.svelte';
+  import SettingsView from './lib/ui/SettingsView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import FxLayer from './lib/ui/fx/FxLayer.svelte';
 </script>
@@ -55,6 +56,8 @@
     <InProgressView />
   {:else if r.name === 'recurring'}
     <RecurringView />
+  {:else if r.name === 'settings'}
+    <SettingsView />
   {:else}
     <Home />
   {/if}

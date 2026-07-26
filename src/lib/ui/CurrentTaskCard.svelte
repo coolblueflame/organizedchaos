@@ -32,10 +32,16 @@
   });
 
   const listTitle = $derived(task ? app.state.lists.find((l) => l.id === task!.listId)?.title : undefined);
+
+  /** Idle-state verbs for the greyed-out no-current-task card (2026-07-26 request). */
+  const CHILL = ['chillin’', 'vibing', 'relaxing', 'waiting…', 'idle', 'off the clock',
+    'recharging', 'daydreaming', 'coasting', 'on standby', 'lounging', 'zen mode'];
+  const chillWord = CHILL[Math.floor(Math.random() * CHILL.length)]!;
 </script>
 
 {#if task}
-  <section class="card" data-testid="current-task-card">
+  {#key task.id}
+  <section class="card sheen-once" data-testid="current-task-card">
     <div class="head">
       <span class="eyebrow">▶ current task</span>
       <button class="clear" data-testid="current-clear" onclick={() => void app.clearCurrent()}
@@ -53,6 +59,12 @@
         not today
       </button>
     </div>
+  </section>
+  {/key}
+{:else}
+  <section class="card idle" data-testid="current-task-idle">
+    <span class="eyebrow dim">▸ {chillWord}</span>
+    <span class="idle-hint">the big button knows what you should do</span>
   </section>
 {/if}
 
@@ -86,4 +98,10 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; padding: 9px; cursor: pointer;
   }
   .later:hover { color: var(--text); }
+  .card.idle {
+    border-color: var(--line); opacity: 0.55;
+    display: flex; align-items: baseline; gap: 10px; padding: 10px 14px;
+  }
+  .eyebrow.dim { color: var(--dim); }
+  .idle-hint { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
 </style>

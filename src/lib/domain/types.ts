@@ -98,9 +98,12 @@ export interface Settings {
   slackBandDays: number;
   /** Local hour at which the "app day" rolls over (spec §3: the 4am rule). */
   rolloverHour: number;
+  /** Completing the current task immediately draws + accepts the next one. */
+  autoSelectNext: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { hoursPerDay: 1, slackBandDays: 3, rolloverHour: 4 };
+export const DEFAULT_SETTINGS: Settings =
+  { hoursPerDay: 1, slackBandDays: 3, rolloverHour: 4, autoSelectNext: false };
 
 /** What callers provide to create a task; base fields are stamped by the storage layer. */
 export type TaskDraft = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'deleted'>;

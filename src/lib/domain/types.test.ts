@@ -17,6 +17,8 @@ describe('priority ordering', () => {
 
 describe('defaults', () => {
   it('matches spec §3', () => {
-    expect(DEFAULT_SETTINGS).toEqual({ hoursPerDay: 1, slackBandDays: 3, rolloverHour: 4 });
+    expect(DEFAULT_SETTINGS).toEqual({
+      hoursPerDay: 1, slackBandDays: 3, rolloverHour: 4, autoSelectNext: false,
+    });
   });
 });
