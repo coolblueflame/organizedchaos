@@ -10,6 +10,9 @@
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
   import TagPicker from './TagPicker.svelte';
+  import RecurrenceEditor from './RecurrenceEditor.svelte';
+  import { describeRecurrence } from './recurrenceText';
+  import type { RecurrenceMode } from '../domain/types';
 
   let { task, oncollapse }: { task: Task; oncollapse: () => void } = $props();
 
@@ -56,6 +59,29 @@
   }
 
   const fmt = (ts: number) => new Date(ts).toLocaleDateString();
+
+  // ── recurrence ─────────────────────────────────────────────────────────
+  let recurOpen = $state(false);
+  const template = $derived(task.recurrenceId
+    ? app.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted)
+    : undefined);
+
+  async function saveRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: number) {
+    if (template) {
+      await app.updateRecurring(template.id, { mode, deadlineOffsetDays });
+    } else {
+      await app.createRecurring(task.id, mode, deadlineOffsetDays);
+    }
+    recurOpen = false;
+  }
+
+  async function stopRecurrence() {
+    if (template) {
+      await app.removeRecurring(template.id);
+      await app.patchTask(task.id, { recurrenceId: undefined });
+    }
+    recurOpen = false;
+  }
 </script>
 
 <div class="editor">
@@ -84,7 +110,19 @@
     </label>
   </div>
 
-  <div class="repeat-placeholder">↻ recurring — coming soon</div>
+  {#if recurOpen}
+    <RecurrenceEditor
+      initial={template ? { mode: template.mode, deadlineOffsetDays: template.deadlineOffsetDays } : undefined}
+      onsave={saveRecurrence}
+      oncancel={() => (recurOpen = false)}
+      onremove={template ? stopRecurrence : undefined} />
+  {:else}
+    <button class="repeat-row" class:linked={!!template} data-testid="task-recur-row"
+      onclick={() => (recurOpen = true)}>
+      {#if template}↻ {describeRecurrence(template.mode, template.deadlineOffsetDays)}{#if template.paused}&nbsp;(paused){/if}
+      {:else}↻ make recurring{/if}
+    </button>
+  {/if}
 
   <div class="flow-row">
     <button class="flow" data-testid="task-make-current"
@@ -128,10 +166,13 @@
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
     color-scheme: dark; width: 100%;
   }
-  .repeat-placeholder {
+  .repeat-row {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
-    border: 1px dashed var(--line); border-radius: 6px; padding: 8px; opacity: 0.6;
+    border: 1px dashed var(--line); border-radius: 6px; padding: 8px;
+    background: none; cursor: pointer; text-align: left;
   }
+  .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
   .flow-row { display: flex; gap: 8px; }
   .flow {
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
