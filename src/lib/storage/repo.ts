@@ -20,7 +20,23 @@ export interface AppState {
   tags: Tag[];
   templates: RecurrenceTemplate[];
   currentTask: CurrentTaskRef | null;
+  /** When currentTask last changed — the sync merge key for the singleton. 0 = never/legacy. */
+  currentTaskUpdatedAt: number;
   settings: Settings;
+  /** When settings last changed — sync merge key. 0 = never/legacy. */
+  settingsUpdatedAt: number;
+}
+
+/** kv rows wrap their payload with a stamp since Phase 6; legacy rows are bare payloads. */
+type StampedKv<T> = { data: T; updatedAt: number };
+
+function readStamped<T>(raw: unknown, isLegacy: (v: unknown) => boolean): { data: T | undefined; updatedAt: number } {
+  if (raw === undefined || raw === null) return { data: raw as T | undefined, updatedAt: 0 };
+  if (typeof raw === 'object' && 'data' in (raw as object) && 'updatedAt' in (raw as object)) {
+    const s = raw as StampedKv<T>;
+    return { data: s.data, updatedAt: s.updatedAt };
+  }
+  return isLegacy(raw) ? { data: raw as T, updatedAt: 0 } : { data: undefined, updatedAt: 0 };
 }
 
 /** Base fields for a new row. Date.now() (not an injected clock) so vi.setSystemTime works. */
@@ -38,10 +54,16 @@ export class Repo {
       this.db.templates.toArray(), this.db.kv.get('currentTask'), this.db.kv.get('settings'),
     ]);
     const live = <T extends { deleted: boolean }>(rows: T[]) => rows.filter((r) => !r.deleted);
+    const current = readStamped<CurrentTaskRef | null>(currentRow?.value, (v) =>
+      v === null || (typeof v === 'object' && 'taskId' in (v as object)));
+    const settings = readStamped<Partial<Settings>>(settingsRow?.value, (v) =>
+      typeof v === 'object' && !('data' in (v as object)));
     return {
       lists: live(lists), tasks: live(tasks), tags: live(tags), templates: live(templates),
-      currentTask: (currentRow?.value as CurrentTaskRef | null | undefined) ?? null,
-      settings: { ...DEFAULT_SETTINGS, ...((settingsRow?.value as Partial<Settings>) ?? {}) },
+      currentTask: current.data ?? null,
+      currentTaskUpdatedAt: current.updatedAt,
+      settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) },
+      settingsUpdatedAt: settings.updatedAt,
     };
   }
 
@@ -102,16 +124,21 @@ export class Repo {
   }
 
   async setCurrentTask(ref: CurrentTaskRef | null): Promise<void> {
-    await this.db.kv.put({ key: 'currentTask', value: ref });
+    await this.db.kv.put({ key: 'currentTask', value: { data: ref, updatedAt: Date.now() } });
   }
 
   async getSettings(): Promise<Settings> {
     const row = await this.db.kv.get('settings');
-    return { ...DEFAULT_SETTINGS, ...((row?.value as Partial<Settings>) ?? {}) };
+    const parsed = readStamped<Partial<Settings>>(row?.value, (v) =>
+      typeof v === 'object' && v !== null && !('data' in (v as object)));
+    return { ...DEFAULT_SETTINGS, ...(parsed.data ?? {}) };
   }
 
   async updateSettings(patch: Partial<Settings>): Promise<void> {
     const current = await this.getSettings();
-    await this.db.kv.put({ key: 'settings', value: { ...current, ...patch } });
+    await this.db.kv.put({
+      key: 'settings',
+      value: { data: { ...current, ...patch }, updatedAt: Date.now() },
+    });
   }
 }

@@ -15,7 +15,8 @@ import { Repo, type AppState } from '../storage/repo';
 export class AppStore {
   state: AppState = $state({
     lists: [], tasks: [], tags: [], templates: [],
-    currentTask: null, settings: { ...DEFAULT_SETTINGS },
+    currentTask: null, currentTaskUpdatedAt: 0,
+    settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
   });
   ready = $state(false);
 
@@ -32,7 +33,9 @@ export class AppStore {
     this.state.tags = loaded.tags;
     this.state.templates = loaded.templates;
     this.state.currentTask = loaded.currentTask;
+    this.state.currentTaskUpdatedAt = loaded.currentTaskUpdatedAt;
     this.state.settings = loaded.settings;
+    this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
     // Materialize any recurrences that came due while the app was closed.
     await this.runSpawnSweep();
     this.ready = true;

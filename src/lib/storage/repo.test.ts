@@ -60,18 +60,37 @@ describe('Repo', () => {
     expect(reread.nextSpawnAt).toBeUndefined();
   });
 
-  it('currentTask round-trips including null', async () => {
+  it('currentTask round-trips including null, with updatedAt stamps for sync merge', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const t0 = Date.now();
     expect((await repo.loadState()).currentTask).toBeNull();
     await repo.setCurrentTask({ taskId: 'abc', acceptedAt: 123 });
-    expect((await repo.loadState()).currentTask).toEqual({ taskId: 'abc', acceptedAt: 123 });
+    let state = await repo.loadState();
+    expect(state.currentTask).toEqual({ taskId: 'abc', acceptedAt: 123 });
+    expect(state.currentTaskUpdatedAt).toBe(t0);
     await repo.setCurrentTask(null);
-    expect((await repo.loadState()).currentTask).toBeNull();
+    state = await repo.loadState();
+    expect(state.currentTask).toBeNull();
+    expect(state.currentTaskUpdatedAt).toBe(t0);
   });
 
-  it('settings default and merge', async () => {
+  it('settings default and merge, with updatedAt stamp', async () => {
     expect(await repo.getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect((await repo.loadState()).settingsUpdatedAt).toBe(0);
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
     await repo.updateSettings({ hoursPerDay: 2 });
     expect(await repo.getSettings()).toEqual({ ...DEFAULT_SETTINGS, hoursPerDay: 2 });
+    expect((await repo.loadState()).settingsUpdatedAt).toBe(Date.now());
+  });
+
+  it('reads legacy (pre-sync) kv shapes with stamp 0', async () => {
+    await db.kv.put({ key: 'currentTask', value: { taskId: 'legacy', acceptedAt: 5 } });
+    await db.kv.put({ key: 'settings', value: { hoursPerDay: 3 } });
+    const state = await repo.loadState();
+    expect(state.currentTask).toEqual({ taskId: 'legacy', acceptedAt: 5 });
+    expect(state.currentTaskUpdatedAt).toBe(0);
+    expect(state.settings.hoursPerDay).toBe(3);
+    expect(state.settingsUpdatedAt).toBe(0);
   });
 
   it('data persists across a re-open of the same db name', async () => {
