@@ -18,9 +18,12 @@
 
   let { listId }: { listId?: string } = $props();
 
-  // Route param only SEEDS the filter — the user can change it after entry.
+  // List filter is an OMIT set: empty = all lists in (Ben's "all minus a few").
+  // The list-scoped 🎲 entry seeds it with everything EXCEPT that list.
   // svelte-ignore state_referenced_locally
-  let filterList = $state<string>(listId ?? '');
+  let omittedLists = $state<string[]>(
+    listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [],
+  );
   let filterTags = $state<string[]>([]);
   let notNow = $state<string[]>([]);
   let drawn = $state<Task | null>(null);
@@ -29,7 +32,9 @@
   let accepting = $state(false);
 
   const scope = () => ({
-    listId: filterList || undefined,
+    listIds: omittedLists.length
+      ? app.state.lists.filter((l) => !omittedLists.includes(l.id)).map((l) => l.id)
+      : undefined,
     tagIds: filterTags,
     excludeIds: notNow,
   });
@@ -80,9 +85,11 @@
     redraw();
   }
 
-  function setListFilter(value: string) {
-    filterList = value;
-    notNow = [];
+  function toggleListFilter(id: string) {
+    omittedLists = omittedLists.includes(id)
+      ? omittedLists.filter((x) => x !== id)
+      : [...omittedLists, id];
+    notNow = []; // filters define a fresh pool → fresh skip session
     redraw();
   }
 
@@ -111,23 +118,29 @@
   </header>
 
   <div class="filters">
-    <select data-testid="draw-filter-list" value={filterList}
-      onchange={(e) => setListFilter(e.currentTarget.value)}>
-      <option value="">all lists</option>
-      {#each app.state.lists as l (l.id)}
-        <option value={l.id}>{l.title}</option>
-      {/each}
-    </select>
-    <div class="tag-filters">
-      {#each app.state.tags as t (t.id)}
-        <button class="chip" class:on={filterTags.includes(t.id)}
-          style="--c: {tagColor(t.colorIndex)}"
-          data-testid="draw-filter-tag-{t.id}"
-          onclick={() => toggleTagFilter(t.id)}>
-          <span class="dot"></span>{t.name}
-        </button>
-      {/each}
-    </div>
+    {#if app.state.lists.length > 1}
+      <div class="filter-row">
+        <span class="filter-label">lists</span>
+        {#each app.state.lists as l (l.id)}
+          <button class="chip list-chip" class:on={!omittedLists.includes(l.id)}
+            data-testid="draw-filter-list-{l.id}"
+            onclick={() => toggleListFilter(l.id)}>{l.title}</button>
+        {/each}
+      </div>
+    {/if}
+    {#if app.state.tags.length > 0}
+      <div class="filter-row">
+        <span class="filter-label">tags</span>
+        {#each app.state.tags as t (t.id)}
+          <button class="chip" class:on={filterTags.includes(t.id)}
+            style="--c: {tagColor(t.colorIndex)}"
+            data-testid="draw-filter-tag-{t.id}"
+            onclick={() => toggleTagFilter(t.id)}>
+            <span class="dot"></span>{t.name}
+          </button>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   {#if drawn}
@@ -180,11 +193,14 @@
   h1 { font-family: var(--font-mono); font-size: 1.1rem; margin: 0; color: var(--acc-purple); }
 
   .filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-  select {
-    background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
-    color: var(--text); font-family: var(--font-mono); font-size: 0.8rem; padding: 8px;
+  .filter-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .filter-label {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.08em; margin-right: 2px;
   }
-  .tag-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .list-chip { --c: var(--acc-blue); }
+  .list-chip.on { color: var(--acc-blue); }
+  .list-chip:not(.on) { text-decoration: line-through; opacity: 0.55; }
   .chip {
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 999px;

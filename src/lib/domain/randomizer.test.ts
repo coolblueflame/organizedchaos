@@ -25,10 +25,14 @@ describe('eligibleForDraw', () => {
     expect(ids).toEqual([pool[0]!.id, pool[4]!.id]);
   });
 
-  it('scopes to a list when asked', () => {
+  it('include-list scoping: "all minus omitted" and single-list both work', () => {
     const a = task({ priority: 'low', listId: 'A' });
     const b = task({ priority: 'low', listId: 'B' });
-    expect(eligibleForDraw([a, b], now, { listId: 'B' })).toEqual([b]);
+    const c = task({ priority: 'low', listId: 'C' });
+    expect(eligibleForDraw([a, b, c], now, { listIds: ['A', 'C'] })).toEqual([a, c]); // B omitted
+    expect(eligibleForDraw([a, b, c], now, { listIds: ['B'] })).toEqual([b]);        // scoped entry
+    expect(eligibleForDraw([a, b, c], now, { listIds: [] })).toEqual([]);            // everything omitted
+    expect(eligibleForDraw([a, b, c], now, {})).toEqual([a, b, c]);                  // no restriction
   });
 
   it('tag filter matches ANY selected tag; empty filter means no tag restriction', () => {

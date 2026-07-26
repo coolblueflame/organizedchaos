@@ -78,8 +78,9 @@ Ben's calibration example (2h estimate, 1h/day): ≤2 days out = Max, 3 = High, 
 so it's obvious why something jumped the queue.
 
 **Draw algorithm** (global from Home, or scoped to one list from a list view; the randomizer
-screen also offers **filters** — restrict the pool to chosen list(s) and/or tag(s); a task
-matches a tag filter if it carries any selected tag):
+screen also offers **filters** — a row of list chips that start ALL selected so a few can be
+tapped OFF ("all minus these", 2026-07-26 request), plus tag chips; a task matches a tag filter
+if it carries any selected tag; the list-scoped 🎲 entry pre-selects only that list):
 1. Eligible: not completed, not deleted, `notTodayUntil` absent/expired, not in the session's
    "Not Now" exclusion set; scoped by the active list/tag filters. *`notTodayUntil` affects ONLY
    randomizer eligibility — snoozed tasks remain fully visible in lists, sort views, and In

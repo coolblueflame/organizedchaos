@@ -74,6 +74,24 @@ test('in-progress task is preferred by the draw', async ({ page }) => {
   await expect(page.getByTestId('draw-card')).toContainText('started'); // deterministic preference
 });
 
+test('omitting a list chip excludes it from the global draw', async ({ page }) => {
+  await seed(page, ['inpool']);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Other');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('outsider');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  // knock the "Pool" list out of the draw — chips start all-selected
+  await page.getByTestId(/^draw-filter-list-/).filter({ hasText: 'Pool' }).click();
+  await expect(page.getByTestId('draw-card')).toContainText('outsider');
+  await page.getByTestId('draw-not-now').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible(); // inpool never surfaces
+});
+
 test('list-scoped randomizer only draws from that list', async ({ page }) => {
   await seed(page, ['inpool']);
   // second list with a task that must never be drawn

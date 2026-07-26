@@ -9,8 +9,11 @@ import { effectivePriority } from './priority';
 import { priorityRank, type Settings, type Task } from './types';
 
 export interface DrawScope {
-  /** List-view entry point OR the randomizer screen's list filter. */
-  listId?: string;
+  /**
+   * Include-list of list ids (the UI's "all lists minus the omitted ones").
+   * undefined = every list; an empty array legitimately matches nothing.
+   */
+  listIds?: string[];
   /** Tag filter: a task matches if it carries ANY selected tag. Empty = unrestricted. */
   tagIds?: string[];
   /** Session-only "Not Now" skips — guarantees re-rolls surface a different task. */
@@ -23,6 +26,7 @@ export interface DrawScope {
  */
 export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Task[] {
   const ts = now.getTime();
+  const listFilter = scope?.listIds !== undefined ? new Set(scope.listIds) : null;
   const tagFilter = scope?.tagIds?.length ? new Set(scope.tagIds) : null;
   const excluded = scope?.excludeIds?.length ? new Set(scope.excludeIds) : null;
   return tasks.filter(
@@ -30,7 +34,7 @@ export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Ta
       !t.deleted &&
       t.completedAt === undefined &&
       (t.notTodayUntil === undefined || t.notTodayUntil <= ts) &&
-      (scope?.listId === undefined || t.listId === scope.listId) &&
+      (listFilter === null || listFilter.has(t.listId)) &&
       (tagFilter === null || t.tagIds.some((id) => tagFilter.has(id))) &&
       (excluded === null || !excluded.has(t.id)),
   );
