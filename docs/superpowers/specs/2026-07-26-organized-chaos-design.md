@@ -44,9 +44,11 @@ kept for sync merge; tombstones older than 90 days are compacted away).
 - **Tag** — `name`, `colorIndex` (0–15 preset palette).
 - **RecurrenceTemplate** — snapshot fields (`name`, `notes`, `tagIds`, `priority`,
   `estimateHours`, `listId`) + `mode`:
-  - `afterCompletion`: `{ interval, unit: days|weeks|months }` — next instance spawns when the
-    current one is completed.
+  - `afterCompletion`: `{ interval, unit: days|weeks|months }` — completing the current instance
+    schedules `nextSpawnAt = completion + interval`; the task *comes back* then, not instantly.
   - `schedule`: `{ weekly: [weekdays] }` or `{ monthly: dayOfMonth }` — spawns at 4am on due days.
+  - `nextSpawnAt?` — when the next instance materializes; a spawn sweep runs at app
+    open/focus and at 4am rollover and creates tasks whose `nextSpawnAt` has arrived.
   - `deadlineOffsetDays?` — spawned task gets `deadline = spawnDate + offset`; when unset,
     spawned task carries the template's priority (and no deadline).
   - `paused` (bool), `lastSpawnedTaskId?`.
@@ -95,7 +97,8 @@ the randomizer.
 
 ## 5. Recurrence behavior
 
-- `afterCompletion` templates spawn the next instance at the moment the previous one completes.
+- `afterCompletion` templates schedule the next instance for `completion + interval`; the spawn
+  sweep materializes it when that moment passes (so "3 days after done" means 3 days of quiet).
 - `schedule` templates spawn at 4am on scheduled days — **skipped if the previously spawned
   instance is still open** (no pileup of "water the plants"). [Default — Ben may veto.]
 - Completing a task that has a `recurrenceId` is what feeds `afterCompletion`; deleting a
