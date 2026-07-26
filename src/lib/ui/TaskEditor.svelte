@@ -99,13 +99,17 @@
   <div class="fields">
     <label>
       <span>deadline</span>
+      <!-- oninput AND onchange: a deadline edit can re-group (and remount) this
+           row, so waiting for blur would lose the value (found via screenshot QA) -->
       <input type="date" data-testid="task-deadline-input" value={task.deadline ?? ''}
+        oninput={(e) => setDeadline(e.currentTarget.value)}
         onchange={(e) => setDeadline(e.currentTarget.value)} />
     </label>
     <label>
       <span>estimate (h)</span>
       <input type="number" data-testid="task-estimate-input" min="0.5" step="0.5"
         value={task.estimateHours ?? ''} placeholder="1"
+        oninput={(e) => setEstimate(e.currentTarget.value)}
         onchange={(e) => setEstimate(e.currentTarget.value)} />
     </label>
   </div>
