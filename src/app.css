@@ -1,0 +1,31 @@
+/*
+ * Organized Chaos theme tokens (spec §7) — the ONLY place colors are defined.
+ * Dark IDE palette: near-black layered greys + dark-mode syntax-highlight accents.
+ * All UI must reference these variables; no hardcoded colors elsewhere.
+ */
+:root {
+  --bg0: #0b0e14;   /* app background */
+  --bg1: #11151c;   /* cards / list rows */
+  --bg2: #1a2029;   /* raised elements, inputs */
+  --line: #232a35;  /* hairline borders */
+  --text: #c9d1d9;
+  --dim: #8b949e;
+  --acc-blue: #79c0ff;
+  --acc-purple: #d2a8ff;
+  --acc-green: #7ee787;
+  --acc-orange: #ffa657;
+  --acc-cyan: #56d4dd;
+  --acc-magenta: #f778ba;
+  --acc-yellow: #e3b341;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-sans: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg0);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
