@@ -6,6 +6,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { toast } from './toast.svelte';
+  import { navigate } from './router.svelte';
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
   import TagPicker from './TagPicker.svelte';
@@ -85,6 +86,17 @@
 
   <div class="repeat-placeholder">↻ recurring — coming soon</div>
 
+  <div class="flow-row">
+    <button class="flow" data-testid="task-make-current"
+      onclick={() => { flush(); void app.acceptTask(task.id).then(() => navigate({ name: 'home' })); }}>
+      ▶ make current
+    </button>
+    <button class="flow" class:active={task.inProgress} data-testid="task-inprogress-toggle"
+      onclick={() => void app.setInProgress(task.id, !task.inProgress)}>
+      {task.inProgress ? '⏸ in progress' : '· not started'}
+    </button>
+  </div>
+
   <div class="meta">
     created {fmt(task.createdAt)}{#if task.completedAt}&nbsp;· completed {fmt(task.completedAt)}{/if}
   </div>
@@ -120,6 +132,14 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
     border: 1px dashed var(--line); border-radius: 6px; padding: 8px; opacity: 0.6;
   }
+  .flow-row { display: flex; gap: 8px; }
+  .flow {
+    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 8px; cursor: pointer;
+  }
+  .flow:hover { color: var(--text); }
+  .flow.active { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .meta { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .actions { display: flex; justify-content: space-between; }
   .actions button {

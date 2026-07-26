@@ -46,6 +46,8 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>{list?.title ?? '…'}</h1>
+    <button class="dice" data-testid="list-randomize" aria-label="randomize from this list"
+      onclick={() => navigate({ name: 'randomizer', listId: id })}>🎲</button>
     <button class="sort" data-testid="list-sort" onclick={cycleSort}>
       sort: {list?.sortMode ?? 'priority'}
     </button>
@@ -71,6 +73,11 @@
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; flex: 1; }
+  .dice {
+    background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 4px 6px;
+    filter: grayscale(0.3);
+  }
+  .dice:hover { filter: none; transform: scale(1.1); }
   .sort {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;

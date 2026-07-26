@@ -9,6 +9,10 @@
   import { toast } from './toast.svelte';
   import { openTasks } from '../domain/views';
   import type { List } from '../domain/types';
+  import { nextPhrase } from './phrases';
+  import CurrentTaskCard from './CurrentTaskCard.svelte';
+
+  const phrase = nextPhrase();
 
   let newListOpen = $state(false);
   let newListInput = $state<HTMLInputElement | null>(null);
@@ -20,6 +24,7 @@
 
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
+  const inProgressCount = $derived(open.filter((t) => t.inProgress).length);
 
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
   const grouped = $derived.by(() => {
@@ -82,8 +87,13 @@
   <h1 class="wordmark">organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
   <p class="tagline">// a todo list with a gambling problem</p>
 
-  <!-- Phase 3: big randomizer button + current task card mount here. -->
   <!-- Phase 8: stats strip mounts above the wordmark. -->
+
+  <CurrentTaskCard />
+
+  <button class="big-button" data-testid="big-button" onclick={() => navigate({ name: 'randomizer' })}>
+    {phrase}
+  </button>
 
   <nav class="sort-row">
     <button data-testid="sort-date" onclick={() => navigate({ name: 'sort', mode: 'date' })}>by date</button>
@@ -137,9 +147,14 @@
     {/if}
   </section>
 
-  <button class="completed-link" data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
-    ✓ Completed
-  </button>
+  <div class="footer-links">
+    <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
+      ▶ In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
+    </button>
+    <button data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
+      ✓ Completed
+    </button>
+  </div>
 </main>
 
 <style>
@@ -200,10 +215,22 @@
   }
   .new-list:hover { color: var(--acc-green); border-color: var(--acc-green); }
 
-  .completed-link {
-    margin-top: 24px; width: 100%; background: none; border: none;
+  .big-button {
+    width: 100%; margin-bottom: 20px; padding: 22px 12px;
+    background: linear-gradient(135deg, var(--bg2), var(--bg1));
+    border: 1px solid var(--acc-purple); border-radius: 14px;
+    color: var(--acc-purple); font-family: var(--font-mono);
+    font-size: 1.15rem; font-weight: 700; cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+  }
+  .big-button:hover { transform: scale(1.015); box-shadow: 0 0 24px rgba(210, 168, 255, 0.25); }
+  .big-button:active { transform: scale(0.985); }
+
+  .footer-links { margin-top: 24px; display: flex; flex-direction: column; }
+  .footer-links button {
+    width: 100%; background: none; border: none;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
     padding: 10px; cursor: pointer; text-align: left;
   }
-  .completed-link:hover { color: var(--acc-green); }
+  .footer-links button:hover { color: var(--acc-green); }
 </style>

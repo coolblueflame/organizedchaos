@@ -6,6 +6,8 @@
   import ListView from './lib/ui/ListView.svelte';
   import SortView from './lib/ui/SortView.svelte';
   import CompletedView from './lib/ui/CompletedView.svelte';
+  import RandomizerView from './lib/ui/RandomizerView.svelte';
+  import InProgressView from './lib/ui/InProgressView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
 </script>
 
@@ -21,6 +23,10 @@
     <SortView mode={r.mode} />
   {:else if r.name === 'completed'}
     <CompletedView />
+  {:else if r.name === 'randomizer'}
+    <RandomizerView listId={r.listId} />
+  {:else if r.name === 'inprogress'}
+    <InProgressView />
   {:else}
     <Home />
   {/if}
