@@ -33,6 +33,8 @@ export interface List extends Base {
   areaGroup?: string;
   /** Last sort mode used in this list's view (spec §6: remembered per list). */
   sortMode: SortMode;
+  /** Source Things project/area uuid — makes re-imports idempotent (spec §9). */
+  thingsUuid?: string;
 }
 
 export interface Task extends Base {
@@ -60,6 +62,8 @@ export interface Tag extends Base {
   name: string;
   /** Index into the 16-color preset swatch (spec §7). */
   colorIndex: number;
+  /** Source Things tag/heading uuid — makes re-imports idempotent (spec §9). */
+  thingsUuid?: string;
 }
 
 export type RecurrenceMode =
@@ -84,6 +88,8 @@ export interface RecurrenceTemplate extends Base {
   /** Next moment the spawn sweep should materialize an instance; unset = not armed. */
   nextSpawnAt?: number;
   lastSpawnedTaskId?: string;
+  /** Source Things repeating-template uuid — makes re-imports idempotent (spec §9). */
+  thingsUuid?: string;
 }
 
 export interface CurrentTaskRef {
