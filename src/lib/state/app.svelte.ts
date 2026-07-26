@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   type List, type SortMode, type Tag, type Task,
 } from '../domain/types';
+import { nextRolloverTs } from '../domain/time';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -131,6 +132,36 @@ export class AppStore {
       this.state.tasks.push(task);
       this.trashTasks.delete(id);
     }
+  }
+
+  // ── draw lifecycle (spec §4) ─────────────────────────────────────────────
+
+  /** Accepting a draw: task becomes THE current task and is flagged in-progress. */
+  async acceptTask(taskId: string): Promise<void> {
+    await this.patchTask(taskId, { inProgress: true });
+    const ref = { taskId, acceptedAt: Date.now() };
+    await this.repo.setCurrentTask(ref);
+    this.state.currentTask = ref;
+  }
+
+  /**
+   * "Not Today": excluded from the randomizer pool until the next 4am rollover.
+   * Touches NOTHING else — stays visible in lists/views and keeps inProgress.
+   */
+  async sendNotToday(taskId: string): Promise<void> {
+    await this.patchTask(taskId, {
+      notTodayUntil: nextRolloverTs(Date.now(), this.state.settings.rolloverHour),
+    });
+    if (this.state.currentTask?.taskId === taskId) await this.clearCurrent();
+  }
+
+  async clearCurrent(): Promise<void> {
+    await this.repo.setCurrentTask(null);
+    this.state.currentTask = null;
+  }
+
+  async setInProgress(taskId: string, flag: boolean): Promise<void> {
+    await this.patchTask(taskId, { inProgress: flag });
   }
 
   // ── tags ─────────────────────────────────────────────────────────────────

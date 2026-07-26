@@ -104,4 +104,48 @@ describe('AppStore', () => {
     await fresh.init(dbName);
     expect(fresh.state.lists.map((l) => l.title)).toEqual(['Persisted']);
   });
+
+  it('acceptTask sets current + inProgress; accepting another swaps current but keeps old inProgress', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    expect(store.state.currentTask?.taskId).toBe(a.id);
+    expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
+    await store.acceptTask(b.id);
+    expect(store.state.currentTask?.taskId).toBe(b.id);
+    expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
+    expect((await persisted()).currentTask?.taskId).toBe(b.id);
+  });
+
+  it('sendNotToday snoozes until next 4am and clears current if it was current', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    await store.sendNotToday(a.id);
+    const snoozed = store.state.tasks.find((t) => t.id === a.id)!;
+    expect(snoozed.notTodayUntil).toBe(new Date('2026-07-16T04:00:00').getTime());
+    expect(snoozed.inProgress).toBe(true); // stays in progress — only the pool is affected
+    expect(store.state.currentTask).toBeNull();
+    expect((await persisted()).tasks[0]!.notTodayUntil).toBe(snoozed.notTodayUntil);
+  });
+
+  it('clearCurrent leaves the task untouched', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    await store.clearCurrent();
+    expect(store.state.currentTask).toBeNull();
+    expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
+  });
+
+  it('setInProgress toggles and persists', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.setInProgress(a.id, true);
+    expect((await persisted()).tasks[0]!.inProgress).toBe(true);
+    await store.setInProgress(a.id, false);
+    expect((await persisted()).tasks[0]!.inProgress).toBe(false);
+  });
 });
