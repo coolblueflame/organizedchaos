@@ -24,6 +24,8 @@ export class AppStore {
     settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
   });
   ready = $state(false);
+  /** navigator.storage.persist() outcome — surfaced in Settings (spec §2 hardening). */
+  persistentStorage = $state<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
   syncStatus = $state<SyncStatus>('disabled');
   syncDetail = $state('');
   lastSyncAt = $state<number | null>(null);
@@ -53,6 +55,16 @@ export class AppStore {
     if (auth) {
       this.buildEngine(auth);
       void this.engine!.syncNow();
+    }
+    // Ask the browser to exempt our storage from eviction (installed PWAs are
+    // granted this on iOS — the belt to cloud-sync's suspenders).
+    if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+      void navigator.storage.persisted()
+        .then(async (already) => (already ? true : navigator.storage.persist()))
+        .then((granted) => (this.persistentStorage = granted ? 'granted' : 'denied'))
+        .catch(() => (this.persistentStorage = 'unknown'));
+    } else {
+      this.persistentStorage = 'unsupported';
     }
   }
 

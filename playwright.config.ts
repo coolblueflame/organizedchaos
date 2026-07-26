@@ -13,7 +13,12 @@ export default defineConfig({
     url: 'http://localhost:4173/organizedchaos/',
     reuseExistingServer: !process.env.CI,
   },
-  use: { baseURL: 'http://localhost:4173/organizedchaos/' },
+  use: {
+    baseURL: 'http://localhost:4173/organizedchaos/',
+    // The SW would swallow route-stubbed requests (webkit can't intercept
+    // SW-originated fetches). pwa.spec re-enables it explicitly.
+    serviceWorkers: 'block',
+  },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'webkit', use: { ...devices['iPhone 15'] } },

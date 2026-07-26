@@ -82,6 +82,12 @@
     <h2>backup & data</h2>
     <button data-testid="settings-export" onclick={exportBackup}>⬇ export everything as JSON</button>
     <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })}>⬆ import from Things</button>
+    <p class="hint">device storage:
+      {#if app.persistentStorage === 'granted'}persistent ✓ (the browser won't evict your data)
+      {:else if app.persistentStorage === 'denied'}best-effort — install to the home screen to lock it in
+      {:else if app.persistentStorage === 'unsupported'}best-effort (browser doesn't support persistence)
+      {:else}checking…{/if}
+    </p>
   </section>
 
   <section class="group">
