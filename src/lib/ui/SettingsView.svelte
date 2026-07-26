@@ -79,8 +79,9 @@
   </section>
 
   <section class="group">
-    <h2>backup</h2>
+    <h2>backup & data</h2>
     <button data-testid="settings-export" onclick={exportBackup}>⬇ export everything as JSON</button>
+    <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })}>⬆ import from Things</button>
   </section>
 
   <section class="group">

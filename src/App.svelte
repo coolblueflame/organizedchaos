@@ -37,6 +37,7 @@
   import InProgressView from './lib/ui/InProgressView.svelte';
   import RecurringView from './lib/ui/RecurringView.svelte';
   import SettingsView from './lib/ui/SettingsView.svelte';
+  import ImportView from './lib/ui/ImportView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import FxLayer from './lib/ui/fx/FxLayer.svelte';
 </script>
@@ -61,6 +62,8 @@
     <RecurringView />
   {:else if r.name === 'settings'}
     <SettingsView />
+  {:else if r.name === 'import'}
+    <ImportView />
   {:else}
     <Home />
   {/if}
