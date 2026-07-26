@@ -11,8 +11,14 @@
   import type { List } from '../domain/types';
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
+  import { haptic } from './fx/haptics';
 
   const phrase = nextPhrase();
+
+  function bigButton() {
+    haptic('tick');
+    navigate({ name: 'randomizer' });
+  }
 
   let newListOpen = $state(false);
   let newListInput = $state<HTMLInputElement | null>(null);
@@ -92,7 +98,7 @@
 
   <CurrentTaskCard />
 
-  <button class="big-button" data-testid="big-button" onclick={() => navigate({ name: 'randomizer' })}>
+  <button class="big-button" data-testid="big-button" onclick={bigButton}>
     {phrase}
   </button>
 
@@ -229,6 +235,22 @@
   }
   .big-button:hover { transform: scale(1.015); box-shadow: 0 0 24px rgba(210, 168, 255, 0.25); }
   .big-button:active { transform: scale(0.985); }
+  @media (prefers-reduced-motion: no-preference) {
+    .big-button { position: relative; overflow: hidden; }
+    .big-button::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(105deg, transparent 38%,
+        rgba(121, 192, 255, 0.10) 45%, rgba(210, 168, 255, 0.28) 50%,
+        rgba(126, 231, 135, 0.10) 55%, transparent 62%);
+      transform: translateX(-130%);
+      animation: big-shimmer 7s ease-in-out infinite 2s;
+    }
+    @keyframes big-shimmer {
+      0% { transform: translateX(-130%); }
+      13% { transform: translateX(130%); }
+      100% { transform: translateX(130%); }
+    }
+  }
 
   .footer-links { margin-top: 24px; display: flex; flex-direction: column; }
   .footer-links button {

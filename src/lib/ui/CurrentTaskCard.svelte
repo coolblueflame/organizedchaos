@@ -6,6 +6,18 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
+  import { confettiAt, motionOk } from './fx/particles';
+  import { haptic } from './fx/haptics';
+
+  /** Completing THE current task is the app's biggest moment — confetti-grade. */
+  function completeCurrent(e: MouseEvent, taskId: string) {
+    try {
+      const r = (e.currentTarget as Element).getBoundingClientRect();
+      confettiAt(r.left + r.width / 2, r.top + r.height / 2);
+      haptic('heavy');
+    } catch { /* fx must never block completion */ }
+    setTimeout(() => void app.completeTask(taskId), motionOk() ? 320 : 0);
+  }
 
   const task = $derived.by(() => {
     const ref = app.state.currentTask;
@@ -34,7 +46,7 @@
       {#if listTitle}<span class="list">in {listTitle}</span>{/if}
     </button>
     <div class="actions">
-      <button class="done" data-testid="current-complete" onclick={() => void app.completeTask(task!.id)}>
+      <button class="done" data-testid="current-complete" onclick={(e) => completeCurrent(e, task!.id)}>
         ✓ done
       </button>
       <button class="later" data-testid="current-not-today" onclick={() => void app.sendNotToday(task!.id)}>

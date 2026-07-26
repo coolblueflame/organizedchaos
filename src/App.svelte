@@ -34,6 +34,7 @@
   import InProgressView from './lib/ui/InProgressView.svelte';
   import RecurringView from './lib/ui/RecurringView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
+  import FxLayer from './lib/ui/fx/FxLayer.svelte';
 </script>
 
 {#if !app.ready}
@@ -59,6 +60,7 @@
   {/if}
 {/if}
 <UndoToast />
+<FxLayer />
 
 <style>
   .boot { min-height: 100vh; display: grid; place-content: center; }

@@ -3,6 +3,7 @@
   Tapping the body expands the editor; completed rows show restore instead.
 -->
 <script lang="ts">
+  import { slide } from 'svelte/transition';
   import { app } from '../state/app.svelte';
   import { toast } from './toast.svelte';
   import { isEscalated, effectivePriority } from '../domain/priority';
@@ -10,6 +11,8 @@
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
   import TaskEditor from './TaskEditor.svelte';
+  import { burstFromElement, motionOk } from './fx/particles';
+  import { haptic } from './fx/haptics';
 
   let {
     task, expanded = false, ontoggle, showList = false, completedMode = false,
@@ -33,8 +36,18 @@
     .map((id) => app.state.tags.find((t) => t.id === id))
     .filter((t) => t !== undefined));
 
+  let checkEl: HTMLButtonElement | undefined = $state();
+  let completing = $state(false);
+
   function complete() {
-    void app.completeTask(task.id);
+    if (completing) return;
+    completing = true;
+    // Juice is garnish — the mutation below runs even if fx throw (spec P5).
+    try {
+      if (checkEl) burstFromElement(checkEl, { colors: ['#7ee787', '#56d4dd', '#e3b341'] });
+      haptic('success');
+    } catch { /* never block completion on fx */ }
+    setTimeout(() => void app.completeTask(task.id), motionOk() ? 280 : 0);
   }
 
   function restore() {
@@ -52,12 +65,13 @@
   };
 </script>
 
-<div class="row" class:expanded data-testid="task-row-{task.id}">
+<div class="row" class:expanded transition:slide={{ duration: 220 }} data-testid="task-row-{task.id}">
   <div class="line">
     {#if completedMode}
       <button class="restore" data-testid="task-restore-{task.id}" onclick={restore} aria-label="restore">↩</button>
     {:else}
-      <button class="check" data-testid="task-check-{task.id}" onclick={complete} aria-label="complete"></button>
+      <button class="check" class:completing bind:this={checkEl}
+        data-testid="task-check-{task.id}" onclick={complete} aria-label="complete"></button>
     {/if}
 
     <button class="body" onclick={ontoggle}>
@@ -97,6 +111,15 @@
     border: 1.5px solid var(--dim); background: none; cursor: pointer;
   }
   .check:hover { border-color: var(--acc-green); box-shadow: 0 0 6px var(--acc-green); }
+  .check.completing {
+    border-color: var(--acc-green); background: var(--acc-green);
+    box-shadow: 0 0 10px var(--acc-green);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .check.completing::after {
+    content: '✓'; display: block; color: var(--bg0);
+    font-size: 0.8rem; font-weight: 900; line-height: 17px; text-align: center;
+  }
   .restore {
     width: 24px; height: 24px; flex: none; background: none; border: none;
     color: var(--acc-green); font-size: 1rem; cursor: pointer; padding: 0;

@@ -12,6 +12,9 @@
   import { effectivePriority, isEscalated } from '../domain/priority';
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
+  import { burstFromElement, motionOk } from './fx/particles';
+  import { haptic } from './fx/haptics';
+  import { shuffleReveal } from './fx/shuffle';
 
   let { listId }: { listId?: string } = $props();
 
@@ -21,6 +24,9 @@
   let filterTags = $state<string[]>([]);
   let notNow = $state<string[]>([]);
   let drawn = $state<Task | null>(null);
+  let displayName = $state('');
+  let drawSeq = $state(0);      // keys the card so the sheen replays per draw
+  let accepting = $state(false);
 
   const scope = () => ({
     listId: filterList || undefined,
@@ -30,6 +36,10 @@
 
   function redraw() {
     drawn = drawTask(app.state.tasks, app.state.settings, new Date(), Math.random, scope());
+    if (drawn) {
+      drawSeq += 1;
+      shuffleReveal(drawn.name || 'untitled', (text) => (displayName = text));
+    }
   }
 
   /** Would anything be drawable if we forgot the session skips? */
@@ -51,10 +61,18 @@
     redraw();
   }
 
-  async function accept() {
-    if (!drawn) return;
-    await app.acceptTask(drawn.id);
-    navigate({ name: 'home' });
+  function accept(e: MouseEvent) {
+    if (!drawn || accepting) return;
+    accepting = true;
+    const id = drawn.id;
+    try {
+      burstFromElement(e.currentTarget as Element, { count: 24, power: 1.3 });
+      haptic('heavy');
+    } catch { /* fx must never block accepting */ }
+    setTimeout(
+      () => void app.acceptTask(id).then(() => navigate({ name: 'home' })),
+      motionOk() ? 350 : 0,
+    );
   }
 
   function resetSkips() {
@@ -113,13 +131,14 @@
   </div>
 
   {#if drawn}
-    <section class="card" data-testid="draw-card">
+    {#key drawSeq}
+    <section class="card sheen-once" data-testid="draw-card">
       {#if drawnTier}
         <p class="tier {drawnTier}">
           drawn from: {drawnTier.toUpperCase()}{#if drawnEscalated}&nbsp;▲ deadline-escalated{/if}
         </p>
       {/if}
-      <h2 class="task-name">{drawn.name || 'untitled'}</h2>
+      <h2 class="task-name">{displayName}</h2>
       {#if drawnList}<p class="list-name">in {drawnList.title}</p>{/if}
       {#if drawn.notes}<p class="notes">{drawn.notes.slice(0, 200)}</p>{/if}
       <div class="meta">
@@ -131,12 +150,13 @@
         {#if drawn.inProgress}<span class="pill started">in progress</span>{/if}
       </div>
     </section>
+    {/key}
 
     <div class="actions">
-      <button class="accept" data-testid="draw-accept" onclick={accept}>accept — let's go</button>
+      <button class="accept" data-testid="draw-accept" disabled={accepting} onclick={accept}>accept — let's go</button>
       <div class="secondary">
-        <button data-testid="draw-not-now" onclick={notNowClick}>not now</button>
-        <button data-testid="draw-not-today" onclick={notTodayClick}>not today</button>
+        <button data-testid="draw-not-now" disabled={accepting} onclick={notNowClick}>not now</button>
+        <button data-testid="draw-not-today" disabled={accepting} onclick={notTodayClick}>not today</button>
       </div>
     </div>
   {:else}

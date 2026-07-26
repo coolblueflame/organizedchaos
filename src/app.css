@@ -22,6 +22,23 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Rainbow sheen sweep (the UltraCode effect) — plays once on mount; components
+   remount keyed elements to replay it. Dead under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .sheen-once { position: relative; overflow: hidden; }
+  .sheen-once::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(105deg, transparent 33%,
+      rgba(121, 192, 255, 0.12) 42%, rgba(210, 168, 255, 0.20) 47%,
+      rgba(126, 231, 135, 0.16) 52%, rgba(255, 166, 87, 0.12) 57%,
+      transparent 66%);
+    transform: translateX(-130%);
+    animation: sheen-sweep 0.75s ease-out 0.35s forwards;
+  }
+  @keyframes sheen-sweep { to { transform: translateX(130%); } }
+}
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg0);
