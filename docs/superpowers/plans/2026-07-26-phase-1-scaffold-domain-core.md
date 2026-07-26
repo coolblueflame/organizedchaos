@@ -584,7 +584,11 @@ export function isEscalated(
 - Produces:
 
 ```ts
-export interface DrawScope { listId?: string }
+export interface DrawScope {
+  listId?: string;      // list-view entry point OR the randomizer screen's list filter
+  tagIds?: string[];    // tag filter: task matches if it carries ANY selected tag
+  excludeIds?: string[]; // session "Not Now" set — transient, never persisted
+}
 export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Task[];
 export function drawTask(tasks: Task[], settings: Settings, now: Date, rng: () => number, scope?: DrawScope): Task | null;
 ```
@@ -622,6 +626,20 @@ describe('eligibleForDraw', () => {
     const b = task({ priority: 'low', listId: 'B' });
     expect(eligibleForDraw([a, b], now, { listId: 'B' })).toEqual([b]);
   });
+  it('tag filter matches ANY selected tag; empty filter means no tag restriction', () => {
+    const urgent = task({ priority: 'low', tagIds: ['urgent'] });
+    const chill = task({ priority: 'low', tagIds: ['chill'] });
+    const untagged = task({ priority: 'low' });
+    expect(eligibleForDraw([urgent, chill, untagged], now, { tagIds: ['urgent', 'chill'] }))
+      .toEqual([urgent, chill]);
+    expect(eligibleForDraw([urgent, untagged], now, { tagIds: [] }))
+      .toEqual([urgent, untagged]);
+  });
+  it('excludeIds ("Not Now" session set) removes tasks from the pool', () => {
+    const a = task({ priority: 'high' });
+    const b = task({ priority: 'high' });
+    expect(eligibleForDraw([a, b], now, { excludeIds: [a.id] })).toEqual([b]);
+  });
 });
 
 describe('drawTask — tier selection', () => {
@@ -655,6 +673,11 @@ describe('drawTask — tier selection', () => {
   it('returns null when nothing is eligible', () => {
     expect(drawTask([task({ priority: 'high', completedAt: 1 })], DEFAULT_SETTINGS, now, firstRng)).toBeNull();
   });
+  it('"Not Now" exclusion of the whole top tier falls through to the next tier', () => {
+    const hi = task({ priority: 'high' });
+    const med = task({ priority: 'medium' });
+    expect(drawTask([hi, med], DEFAULT_SETTINGS, now, firstRng, { excludeIds: [hi.id] })!.id).toBe(med.id);
+  });
   it('reaches every candidate in the tier (seeded sweep)', () => {
     const pool = [task({ priority: 'max' }), task({ priority: 'max' }), task({ priority: 'max' })];
     const seen = new Set<string>();
@@ -673,17 +696,25 @@ describe('drawTask — tier selection', () => {
 import { effectivePriority } from './priority';
 import { priorityRank, type Settings, type Task } from './types';
 
-export interface DrawScope { listId?: string }
+export interface DrawScope {
+  listId?: string;
+  tagIds?: string[];     // match ANY; empty array = unrestricted
+  excludeIds?: string[]; // session-only "Not Now" skips
+}
 
 /** Spec §4: "Not today" (notTodayUntil) affects ONLY this pool — nowhere else in the app. */
 export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Task[] {
   const ts = now.getTime();
+  const tagFilter = scope?.tagIds?.length ? new Set(scope.tagIds) : null;
+  const excluded = scope?.excludeIds?.length ? new Set(scope.excludeIds) : null;
   return tasks.filter(
     (t) =>
       !t.deleted &&
       t.completedAt === undefined &&
       (t.notTodayUntil === undefined || t.notTodayUntil <= ts) &&
-      (scope?.listId === undefined || t.listId === scope.listId),
+      (scope?.listId === undefined || t.listId === scope.listId) &&
+      (tagFilter === null || t.tagIds.some((id) => tagFilter.has(id))) &&
+      (excluded === null || !excluded.has(t.id)),
   );
 }
 

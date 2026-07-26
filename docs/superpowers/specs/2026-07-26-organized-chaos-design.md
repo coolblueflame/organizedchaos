@@ -77,17 +77,24 @@ Ben's calibration example (2h estimate, 1h/day): ≤2 days out = Max, 3 = High, 
 9 = Low. ✔ Escalated tasks show a visual indicator (e.g. small flame + the escalated tier color)
 so it's obvious why something jumped the queue.
 
-**Draw algorithm** (global from Home, or scoped to one list from a list view):
-1. Eligible: not completed, not deleted, `notTodayUntil` absent/expired; scoped to the list if
-   applicable. *`notTodayUntil` affects ONLY randomizer eligibility — snoozed tasks remain fully
-   visible in lists, sort views, and In Progress.*
+**Draw algorithm** (global from Home, or scoped to one list from a list view; the randomizer
+screen also offers **filters** — restrict the pool to chosen list(s) and/or tag(s); a task
+matches a tag filter if it carries any selected tag):
+1. Eligible: not completed, not deleted, `notTodayUntil` absent/expired, not in the session's
+   "Not Now" exclusion set; scoped by the active list/tag filters. *`notTodayUntil` affects ONLY
+   randomizer eligibility — snoozed tasks remain fully visible in lists, sort views, and In
+   Progress.*
 2. Group by effective priority; take the highest non-empty tier. **Someday is the bottom tier**
    — it participates, but only when every tier above is empty.
 3. Within the tier: if any tasks are `inProgress`, draw uniformly among those; else uniformly
    among the tier.
-4. Present with **Accept** (→ becomes CurrentTask, `inProgress = true`) and **Not Today**
-   (→ `notTodayUntil = next 4am`; nothing else changes). Dismissing the draw without choosing
-   leaves the task untouched.
+4. Present with three choices:
+   - **Accept** → becomes CurrentTask, `inProgress = true`.
+   - **Not Now** → transient skip: the task joins a session-only exclusion set and a new task is
+     drawn immediately (guaranteed different). The set lives only while the randomizer screen is
+     open — closing it (or exhausting the pool) resets; nothing is persisted.
+   - **Not Today** → `notTodayUntil = next 4am`; nothing else changes.
+   Dismissing the draw without choosing leaves the task untouched.
 
 **Current task rules:** exactly one at a time. Accepting while one is active returns the old one
 to the general pool (stays `inProgress`, not snoozed). From the Home card you can: complete it
