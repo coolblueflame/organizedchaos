@@ -1,0 +1,76 @@
+import { expect, test } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase('organizedchaos');
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+      }),
+  );
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+});
+
+test('after-completion task respawns after the interval (clock time-travel)', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Rec');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('water plants');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('3');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);
+
+  // Four days later, reopening the app resurrects it via the init sweep.
+  await page.clock.install({ time: Date.now() + 4 * 86_400_000 });
+  await page.reload();
+  await page.getByTestId('new-task').waitFor();
+  await expect(page.getByTestId(/^task-row-/).first()).toContainText('water plants');
+});
+
+test('recurring screen lists, pauses, and deletes templates', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Rec');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('weekly thing');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-weekly').click();
+  await page.getByTestId('recur-weekday-1').click();
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('recurring-link').click();
+  const row = page.getByTestId(/^recurring-row-/).first();
+  await expect(row).toContainText('weekly thing');
+  await expect(row).toContainText('every Mon');
+  const id = (await row.getAttribute('data-testid'))!.replace('recurring-row-', '');
+  await page.getByTestId(`recurring-pause-${id}`).click();
+  await expect(row).toContainText('paused');
+  page.on('dialog', (d) => void d.accept());
+  await page.getByTestId(`recurring-delete-${id}`).click();
+  await expect(page.getByTestId(`recurring-row-${id}`)).toHaveCount(0);
+});
+
+test('editor shows the cadence summary on a recurring task', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Rec');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('rent');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-monthly').click();
+  await page.getByTestId('recur-monthday').fill('1');
+  await page.getByTestId('recur-deadline-offset').fill('5');
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the 1st · deadline +5d');
+});

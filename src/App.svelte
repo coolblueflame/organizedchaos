@@ -2,6 +2,30 @@
 <script lang="ts">
   import { app } from './lib/state/app.svelte';
   import { router } from './lib/ui/router.svelte';
+  import { nextRolloverTs } from './lib/domain/time';
+
+  // Spawn-sweep triggers beyond init (spec §5): returning to the app, and the
+  // 4am rollover while it stays open. The timer re-arms itself each rollover.
+  $effect(() => {
+    if (!app.ready) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void app.runSpawnSweep();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      const delay = Math.max(1000, nextRolloverTs(Date.now(), app.state.settings.rolloverHour) - Date.now());
+      timer = setTimeout(() => {
+        void app.runSpawnSweep();
+        arm();
+      }, delay);
+    };
+    arm();
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearTimeout(timer);
+    };
+  });
   import Home from './lib/ui/Home.svelte';
   import ListView from './lib/ui/ListView.svelte';
   import SortView from './lib/ui/SortView.svelte';

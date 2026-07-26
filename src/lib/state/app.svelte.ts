@@ -33,6 +33,8 @@ export class AppStore {
     this.state.templates = loaded.templates;
     this.state.currentTask = loaded.currentTask;
     this.state.settings = loaded.settings;
+    // Materialize any recurrences that came due while the app was closed.
+    await this.runSpawnSweep();
     this.ready = true;
   }
 
