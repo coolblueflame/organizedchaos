@@ -237,6 +237,52 @@ describe('AppStore', () => {
     expect((await persisted()).templates[0]!.nextSpawnAt).toBeUndefined();
   });
 
+  it('importThings: fresh import remaps ids, resolves refs, and re-import is idempotent', async () => {
+    const mapped = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [{ id: 'TG1', thingsUuid: 'TG1', name: 'green', colorIndex: 0, createdAt: 100, updatedAt: 100, deleted: false }],
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'plant', notes: '', priority: 'medium' as const,
+        tagIds: ['TG1'], inProgress: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      templates: [{
+        id: 'TR1', thingsUuid: 'TR1', listId: 'TP1', name: 'water', notes: '', tagIds: [],
+        priority: 'medium' as const, mode: { kind: 'weekly' as const, weekdays: [1] },
+        paused: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      review: [], counts: { lists: 1, tags: 1, openTasks: 1, completedTasks: 0, templates: 1 },
+    };
+    await store.importThings(mapped);
+    const list = store.state.lists.find((l) => l.thingsUuid === 'TP1')!;
+    expect(list.id).not.toBe('TP1'); // remapped to an app id
+    const task = store.state.tasks.find((t) => t.thingsUuid === 'TT1')!;
+    expect(task.listId).toBe(list.id); // ref resolved
+    expect(task.tagIds).toEqual([store.state.tags[0]!.id]);
+    expect(store.state.templates[0]!.listId).toBe(list.id);
+
+    await store.importThings(mapped); // identical re-import
+    expect(store.state.lists).toHaveLength(1);
+    expect(store.state.tasks).toHaveLength(1);
+    expect((await persisted()).tasks).toHaveLength(1);
+  });
+
+  it('importThings: re-import never clobbers a newer local edit', async () => {
+    const mapped = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], templates: [], review: [],
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'original', notes: '', priority: 'medium' as const,
+        tagIds: [], inProgress: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      counts: { lists: 1, tags: 0, openTasks: 1, completedTasks: 0, templates: 0 },
+    };
+    await store.importThings(mapped);
+    const appId = store.state.tasks[0]!.id;
+    await store.patchTask(appId, { name: 'locally renamed' }); // updatedAt = now ≫ 100
+    await store.importThings(mapped);
+    expect(store.state.tasks[0]!.name).toBe('locally renamed');
+  });
+
   it('paused templates never spawn; removeRecurring tombstones', async () => {
     vi.setSystemTime(new Date('2026-07-15T12:00:00'));
     const list = await store.addList('L');

@@ -12,6 +12,8 @@ import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../dom
 import { drawTask } from '../domain/randomizer';
 import { SyncEngine, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
+import { nanoid } from 'nanoid';
+import type { MappedImport } from '../import/thingsMap';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -339,6 +341,56 @@ export class AppStore {
     }
     if (res.drafts.length > 0) this.requestSync();
     return res.drafts.length;
+  }
+
+  // ── Things import (spec §9) ──────────────────────────────────────────────
+
+  /**
+   * Idempotent import: entities match on `thingsUuid`. New ones get app ids;
+   * matches keep their app id and only update when the imported row is newer
+   * than the local one (so re-imports never clobber local edits). All Things-
+   * uuid cross-references are remapped to app ids. One transaction.
+   */
+  async importThings(mapped: MappedImport): Promise<MappedImport['counts']> {
+    const snap = await this.repo.loadSnapshot();
+    const idMap = new Map<string, string>();
+
+    const upsert = <T extends { id: string; thingsUuid?: string; updatedAt: number }>(
+      existing: T[],
+      incoming: T[],
+      remap?: (row: T) => T,
+    ): T[] => {
+      const byThings = new Map(existing.filter((e) => e.thingsUuid).map((e) => [e.thingsUuid!, e]));
+      const out = [...existing];
+      for (const raw of incoming) {
+        const prior = byThings.get(raw.thingsUuid!);
+        const appId = prior?.id ?? nanoid();
+        idMap.set(raw.thingsUuid!, appId);
+        const finalize = () => ({ ...(remap ? remap(raw) : raw), id: appId });
+        if (!prior) out.push(finalize());
+        else if (raw.updatedAt > prior.updatedAt) out[out.indexOf(prior)] = finalize();
+      }
+      return out;
+    };
+
+    const ref = (thingsUuid: string) => idMap.get(thingsUuid) ?? thingsUuid;
+    // Order matters: lists/tags first so tasks/templates can resolve refs.
+    snap.lists = upsert(snap.lists, mapped.lists);
+    snap.tags = upsert(snap.tags, mapped.tags);
+    snap.templates = upsert(snap.templates, mapped.templates, (t) => ({
+      ...t, listId: ref(t.listId), tagIds: t.tagIds.map(ref),
+    }));
+    snap.tasks = upsert(snap.tasks, mapped.tasks, (t) => ({
+      ...t,
+      listId: ref(t.listId),
+      tagIds: t.tagIds.map(ref),
+      recurrenceId: t.recurrenceId ? ref(t.recurrenceId) : undefined,
+    }));
+
+    await this.repo.replaceAll(snap);
+    await this.refreshFromDisk();
+    this.requestSync();
+    return mapped.counts;
   }
 
   // ── tags ─────────────────────────────────────────────────────────────────
