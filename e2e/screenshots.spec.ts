@@ -73,4 +73,12 @@ test('capture app screens', async ({ page }) => {
   await page.getByTestId('current-task-card').waitFor();
   await page.waitForTimeout(400);
   await page.screenshot({ path: 'screenshots/01-home.png', fullPage: true });
+
+  // complete the current task, then the stats screen
+  await page.getByTestId('current-complete').click();
+  await page.getByTestId('current-task-idle').waitFor(); // completion settled
+  await page.getByTestId('stats-strip').click();
+  await page.getByTestId('stats-estimate').waitFor();
+  await page.waitForTimeout(400); // let charts paint
+  await page.screenshot({ path: 'screenshots/04-stats.png', fullPage: true });
 });

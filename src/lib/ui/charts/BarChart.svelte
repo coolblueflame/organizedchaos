@@ -24,7 +24,12 @@
   const x = (i: number) => PAD.left + i * step + (step - barW) / 2;
   const y = (v: number) => PAD.top + innerH * (1 - v / max);
   const labelEvery = $derived(Math.max(1, Math.ceil(points.length / 6)));
-  const gridLines = $derived([0.5, 1].map((f) => ({ v: Math.round(max * f), yy: y(max * f) })));
+  // Dedupe: at small maxima both fractions can round to the same tick
+  // (max=1 → round(0.5)=round(1)=1), which would duplicate the each-key.
+  const gridLines = $derived.by(() => {
+    const ls = [0.5, 1].map((f) => ({ v: Math.round(max * f), yy: y(max * f) }));
+    return ls.filter((g, i) => ls.findIndex((o) => o.v === g.v) === i);
+  });
 </script>
 
 <div class="wrap">
