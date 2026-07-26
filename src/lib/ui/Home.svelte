@@ -25,6 +25,7 @@
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
   const inProgressCount = $derived(open.filter((t) => t.inProgress).length);
+  const recurringCount = $derived(app.state.templates.filter((t) => !t.deleted).length);
 
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
   const grouped = $derived.by(() => {
@@ -150,6 +151,9 @@
   <div class="footer-links">
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
       ▶ In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
+    </button>
+    <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
+      ↻ Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
     </button>
     <button data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
       ✓ Completed

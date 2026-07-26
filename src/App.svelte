@@ -8,6 +8,7 @@
   import CompletedView from './lib/ui/CompletedView.svelte';
   import RandomizerView from './lib/ui/RandomizerView.svelte';
   import InProgressView from './lib/ui/InProgressView.svelte';
+  import RecurringView from './lib/ui/RecurringView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
 </script>
 
@@ -27,6 +28,8 @@
     <RandomizerView listId={r.listId} />
   {:else if r.name === 'inprogress'}
     <InProgressView />
+  {:else if r.name === 'recurring'}
+    <RecurringView />
   {:else}
     <Home />
   {/if}

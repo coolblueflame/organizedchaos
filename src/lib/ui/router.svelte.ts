@@ -13,7 +13,8 @@ export type Route =
   | { name: 'sort'; mode: 'date' | 'priority' | 'tag' }
   | { name: 'completed' }
   | { name: 'randomizer'; listId?: string }
-  | { name: 'inprogress' };
+  | { name: 'inprogress' }
+  | { name: 'recurring' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -24,6 +25,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'completed') return { name: 'completed' };
   if (parts[0] === 'randomizer') return { name: 'randomizer', listId: parts[1] };
   if (parts[0] === 'inprogress') return { name: 'inprogress' };
+  if (parts[0] === 'recurring') return { name: 'recurring' };
   return { name: 'home' };
 }
 
@@ -35,6 +37,7 @@ function toHash(r: Route): string {
     case 'completed': return '#/completed';
     case 'randomizer': return r.listId ? `#/randomizer/${r.listId}` : '#/randomizer';
     case 'inprogress': return '#/inprogress';
+    case 'recurring': return '#/recurring';
   }
 }
 
