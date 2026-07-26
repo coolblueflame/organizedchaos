@@ -5,9 +5,10 @@
  */
 import {
   DEFAULT_SETTINGS,
-  type List, type SortMode, type Tag, type Task,
+  type List, type RecurrenceMode, type RecurrenceTemplate, type SortMode, type Tag, type Task,
 } from '../domain/types';
 import { nextRolloverTs } from '../domain/time';
+import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -106,10 +107,19 @@ export class AppStore {
   }
 
   async completeTask(id: string): Promise<void> {
+    const task = this.state.tasks.find((t) => t.id === id);
     await this.patchTask(id, { completedAt: Date.now(), inProgress: false });
     if (this.state.currentTask?.taskId === id) {
       await this.repo.setCurrentTask(null);
       this.state.currentTask = null;
+    }
+    // Arm after-completion recurrence: "come back X after done" (spec §5).
+    const tpl = task?.recurrenceId
+      ? this.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted && !t.paused)
+      : undefined;
+    if (tpl) {
+      const next = scheduleAfterCompletion(tpl, new Date());
+      if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
     }
   }
 
@@ -162,6 +172,66 @@ export class AppStore {
 
   async setInProgress(taskId: string, flag: boolean): Promise<void> {
     await this.patchTask(taskId, { inProgress: flag });
+  }
+
+  // ── recurrence (spec §5) ─────────────────────────────────────────────────
+
+  /**
+   * Make a task recurring: snapshot its fields into a template and link back.
+   * Scheduled modes arm immediately; afterCompletion arms when the task completes.
+   */
+  async createRecurring(
+    taskId: string,
+    mode: RecurrenceMode,
+    deadlineOffsetDays?: number,
+  ): Promise<RecurrenceTemplate> {
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error(`createRecurring: no such task ${taskId}`);
+    const armed = nextScheduledSpawn(mode, new Date(), this.state.settings.rolloverHour);
+    const tpl = await this.repo.createTemplate({
+      listId: task.listId,
+      name: task.name,
+      notes: task.notes,
+      tagIds: [...task.tagIds],
+      priority: task.priority,
+      estimateHours: task.estimateHours,
+      mode,
+      deadlineOffsetDays,
+      paused: false,
+      nextSpawnAt: armed ?? undefined,
+    });
+    this.state.templates.push(tpl);
+    await this.patchTask(taskId, { recurrenceId: tpl.id });
+    return tpl;
+  }
+
+  async updateRecurring(id: string, patch: Partial<RecurrenceTemplate>): Promise<void> {
+    // Cadence edits re-arm scheduled modes (afterCompletion re-arms on next completion).
+    if (patch.mode) {
+      const armed = nextScheduledSpawn(patch.mode, new Date(), this.state.settings.rolloverHour);
+      patch = { ...patch, nextSpawnAt: armed ?? undefined };
+    }
+    await this.repo.updateTemplate(id, patch);
+    const tpl = this.state.templates.find((t) => t.id === id);
+    if (tpl) Object.assign(tpl, patch, { updatedAt: Date.now() });
+  }
+
+  async removeRecurring(id: string): Promise<void> {
+    await this.repo.softDelete('templates', id);
+    this.state.templates = this.state.templates.filter((t) => t.id !== id);
+  }
+
+  /** Materialize due templates. Called from init, window focus, and the rollover timer. */
+  async runSpawnSweep(now: Date = new Date()): Promise<number> {
+    const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings);
+    for (const draft of res.drafts) {
+      const task = await this.repo.createTask(draft);
+      this.state.tasks.push(task);
+    }
+    for (const u of res.updates) {
+      await this.updateRecurring(u.id, { nextSpawnAt: u.nextSpawnAt });
+    }
+    return res.drafts.length;
   }
 
   // ── tags ─────────────────────────────────────────────────────────────────

@@ -148,4 +148,89 @@ describe('AppStore', () => {
     await store.setInProgress(a.id, false);
     expect((await persisted()).tasks[0]!.inProgress).toBe(false);
   });
+
+  it('createRecurring weekly arms nextSpawnAt, links the task, snapshots fields', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00')); // Wednesday
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'weekly thing', priority: 'high' });
+    const tpl = await store.createRecurring(a.id, { kind: 'weekly', weekdays: [1] });
+    expect(tpl.name).toBe('weekly thing');
+    expect(tpl.priority).toBe('high');
+    expect(tpl.nextSpawnAt).toBe(new Date('2026-07-20T04:00:00').getTime());
+    expect(store.state.tasks.find((t) => t.id === a.id)!.recurrenceId).toBe(tpl.id);
+    expect((await persisted()).templates[0]!.nextSpawnAt).toBe(tpl.nextSpawnAt);
+  });
+
+  it('afterCompletion template arms only when its task completes', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const tpl = await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 3, unit: 'days' });
+    expect(tpl.nextSpawnAt).toBeUndefined();
+    await store.completeTask(a.id);
+    const armed = store.state.templates.find((t) => t.id === tpl.id)!;
+    expect(armed.nextSpawnAt).toBe(new Date('2026-07-18T12:00:00').getTime());
+    expect((await persisted()).templates[0]!.nextSpawnAt).toBe(armed.nextSpawnAt);
+  });
+
+  it('completing a task with a dangling recurrenceId does not throw', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { recurrenceId: 'ghost' });
+    await expect(store.completeTask(a.id)).resolves.toBeUndefined();
+  });
+
+  it('runSpawnSweep spawns a due weekly instance once, then respects skip-if-open', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'weekly thing' });
+    const tpl = await store.createRecurring(a.id, { kind: 'weekly', weekdays: [1] });
+    await store.completeTask(a.id); // original instance out of the way
+
+    vi.setSystemTime(new Date('2026-07-20T05:00:00')); // Monday past 4am
+    const spawned = await store.runSpawnSweep();
+    expect(spawned).toBe(1);
+    const open = store.state.tasks.filter((t) => t.completedAt === undefined);
+    expect(open).toHaveLength(1);
+    expect(open[0]!.name).toBe('weekly thing');
+    expect(open[0]!.recurrenceId).toBe(tpl.id);
+    expect(open[0]!.listId).toBe(list.id);
+
+    const again = await store.runSpawnSweep(); // same day, instance still open
+    expect(again).toBe(0);
+    expect(store.state.templates[0]!.nextSpawnAt).toBe(new Date('2026-07-27T04:00:00').getTime());
+    expect((await persisted()).tasks.filter((t) => t.completedAt === undefined)).toHaveLength(1);
+  });
+
+  it('due afterCompletion template spawns then disarms', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 3, unit: 'days' });
+    await store.completeTask(a.id);
+
+    vi.setSystemTime(new Date('2026-07-19T12:00:00'));
+    expect(await store.runSpawnSweep()).toBe(1);
+    expect(store.state.templates[0]!.nextSpawnAt).toBeUndefined();
+    expect((await persisted()).templates[0]!.nextSpawnAt).toBeUndefined();
+  });
+
+  it('paused templates never spawn; removeRecurring tombstones', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const tpl = await store.createRecurring(a.id, { kind: 'weekly', weekdays: [1] });
+    await store.completeTask(a.id);
+    await store.updateRecurring(tpl.id, { paused: true });
+
+    vi.setSystemTime(new Date('2026-07-20T05:00:00'));
+    expect(await store.runSpawnSweep()).toBe(0);
+
+    await store.removeRecurring(tpl.id);
+    expect(store.state.templates).toHaveLength(0);
+    const db = openDb(dbName);
+    expect((await db.templates.get(tpl.id))!.deleted).toBe(true);
+  });
 });
