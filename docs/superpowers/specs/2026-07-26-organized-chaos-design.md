@@ -117,8 +117,19 @@ the randomizer.
 
 **Home** — top to bottom:
 1. **Stats strip**: animated counters — today / this week / this month / this year / lifetime
-   completed. Tapping opens the **progress graph** (completions over time; day/week/month
-   granularity toggles).
+   completed. Tapping opens the **stats screen**:
+   - **Progress graph** — completions over time; day/week/month granularity toggles.
+   - **Estimated time to completion** — sum of `estimate ?? 1h` across all open tasks, shown as
+     a literal duration in years/months/weeks/days/hours, with an info tooltip: "assumes 1 hour
+     for any task without an estimate". [Default: literal duration; Ben may switch to
+     paced-by-hoursPerDay.]
+   - **Backlog burden graph** — the same metric reconstructed over time: for each past day,
+     Σ estimates of tasks where `createdAt ≤ day` and not yet completed (`completedAt > day` or
+     open) and not yet deleted (tombstone `updatedAt > day` — a tombstone's last update IS its
+     deletion time). Uses current estimates (historical estimate edits aren't tracked — noted
+     approximation). Imported Things history feeds this from real creation/completion dates, so
+     the chart is meaningful from day one — including the honest answer to "am I adding more
+     than I finish?".
 2. **The Big Button** — full-width, prominent; label rotates through a large pool (~60+) of
    upbeat/funny phrases ("Let's gooooo!", "BEAST MODE", "Roll the dice.", "Git 'er done!",
    "Summon my destiny", …). Same action always: global randomizer.
