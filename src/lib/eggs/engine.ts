@@ -16,10 +16,13 @@ export interface EggContext {
   event: EggEvent;
   screen?: string;
   completionsToday: number;
+  lifetimeCompletions: number;
   streakDays: number;
   storyStage: number;
   triviaCorrect: number;
   triviaTotal: number;
+  /** Already-earned unlock ids — lets unlock entries stay eligible until granted. */
+  unlocks: string[];
   now: Date;
   rng: () => number;
 }
@@ -153,10 +156,12 @@ export class EggEngine {
       event,
       screen: partial.screen,
       completionsToday: partial.completionsToday ?? 0,
+      lifetimeCompletions: partial.lifetimeCompletions ?? 0,
       streakDays: this.state.streakDays,
       storyStage: this.state.storyStage,
       triviaCorrect: this.state.trivia.correct,
       triviaTotal: this.state.trivia.total,
+      unlocks: [...this.state.unlocks],
       now,
       rng: this.rng,
     };

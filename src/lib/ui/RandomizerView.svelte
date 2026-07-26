@@ -15,6 +15,9 @@
   import { burstFromElement, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
   import { shuffleReveal } from './fx/shuffle';
+  import { SELF_CARE } from '../eggs/content/extras';
+  import { completionCounts } from '../domain/stats';
+  import { priorityRank } from '../domain/types';
 
   let { listId }: { listId?: string } = $props();
 
@@ -39,12 +42,48 @@
     excludeIds: notNow,
   });
 
+  // Transient bonus draws (spec §12): appear only when the day earned one or the
+  // pool is calm; NEVER persisted unless explicitly accepted. Once per visit.
+  let selfCare = $state<string | null>(null);
+  let selfCareOffered = false;
+
+  function maybeOfferSelfCare(): void {
+    // Automation determinism: silent under webdriver unless explicitly forced.
+    if (typeof navigator !== 'undefined' && navigator.webdriver) {
+      if (localStorage.getItem('OC_EGG_FORCE') !== 'selfcare' || selfCareOffered) return;
+      selfCareOffered = true;
+      selfCare = SELF_CARE[0]!;
+      return;
+    }
+    if (selfCareOffered || Math.random() > 0.12) return;
+    const counts = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
+    const calmPool = drawn === null ||
+      priorityRank(effectivePriority(drawn, app.state.settings, new Date())) <= priorityRank('medium');
+    if (counts.today >= 6 || calmPool) {
+      selfCareOffered = true;
+      selfCare = SELF_CARE[Math.floor(Math.random() * SELF_CARE.length)]!;
+    }
+  }
+
   function redraw() {
     drawn = drawTask(app.state.tasks, app.state.settings, new Date(), Math.random, scope());
     if (drawn) {
       drawSeq += 1;
       shuffleReveal(drawn.name || 'untitled', (text) => (displayName = text));
     }
+    maybeOfferSelfCare();
+  }
+
+  /** Accepting materializes it as a REAL task — that's the consent (spec §12). */
+  async function acceptSelfCare() {
+    if (!selfCare) return;
+    const listId = drawn?.listId ?? app.state.lists[0]?.id;
+    if (!listId) { selfCare = null; return; }
+    const task = await app.addTask(listId);
+    await app.patchTask(task.id, { name: selfCare, priority: 'high' });
+    await app.acceptTask(task.id);
+    selfCare = null;
+    navigate({ name: 'home' });
   }
 
   /** Would anything be drawable if we forgot the session skips? */
@@ -143,7 +182,19 @@
     {/if}
   </div>
 
-  {#if drawn}
+  {#if selfCare}
+    <section class="card selfcare sheen-once" data-testid="draw-selfcare">
+      <p class="tier bonus">✦ bonus roll</p>
+      <h2 class="task-name">{selfCare}</h2>
+      <p class="list-name">not from your list — just for you. skipping leaves no trace.</p>
+    </section>
+    <div class="actions">
+      <button class="accept" data-testid="selfcare-accept" onclick={acceptSelfCare}>sure — make it my task</button>
+      <div class="secondary">
+        <button data-testid="selfcare-skip" onclick={() => (selfCare = null)}>maybe later</button>
+      </div>
+    </div>
+  {:else if drawn}
     {#key drawSeq}
     <section class="card sheen-once" data-testid="draw-card">
       {#if drawnTier}
@@ -221,6 +272,8 @@
   .tier.medium { color: var(--acc-green); }
   .tier.high { color: var(--acc-orange); }
   .tier.max { color: var(--acc-magenta); }
+  .tier.bonus { color: var(--acc-yellow); }
+  .selfcare { border-color: var(--acc-yellow); }
   .task-name { font-size: 1.4rem; margin: 0 0 4px; }
   .list-name { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0 0 10px; }
   .notes { color: var(--dim); font-size: 0.85rem; margin: 0 0 10px; white-space: pre-line; }

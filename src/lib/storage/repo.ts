@@ -174,6 +174,16 @@ export class Repo {
     });
   }
 
+  /** Generic device-local kv (delight state etc.) — not part of sync snapshots. */
+  async getKv<T>(key: string): Promise<T | null> {
+    const row = await this.db.kv.get(key);
+    return (row?.value as T | undefined) ?? null;
+  }
+
+  async setKv<T>(key: string, value: T): Promise<void> {
+    await this.db.kv.put({ key, value });
+  }
+
   /** Device-local sync credentials — NEVER part of snapshots or synced files. */
   async getSyncAuth(): Promise<SyncConfig | null> {
     const row = await this.db.kv.get('syncAuth');

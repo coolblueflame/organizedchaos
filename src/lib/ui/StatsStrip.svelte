@@ -44,6 +44,9 @@
       <span class="label">{t.label}</span>
     </span>
   {/each}
+  {#if app.eggStreak >= 3}
+    <span class="flame" title="{app.eggStreak}-day streak">🔥<span class="flame-n">{app.eggStreak}</span></span>
+  {/if}
 </button>
 
 <style>
@@ -56,4 +59,6 @@
   .tile { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
   .num { color: var(--acc-green); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
   .label { color: var(--dim); font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .flame { display: flex; flex-direction: column; align-items: center; font-size: 0.95rem; }
+  .flame-n { color: var(--acc-orange); font-family: var(--font-mono); font-size: 0.65rem; font-weight: 700; }
 </style>

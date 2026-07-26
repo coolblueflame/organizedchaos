@@ -41,6 +41,12 @@
   import StatsView from './lib/ui/StatsView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import FxLayer from './lib/ui/fx/FxLayer.svelte';
+  import DelightLayer from './lib/eggs/DelightLayer.svelte';
+
+  // Screen visits feed the delight layer (throttled internally by the engine).
+  $effect(() => {
+    if (app.ready) app.fireEgg('screenVisited', { screen: router.current.name });
+  });
 </script>
 
 {#if !app.ready}
@@ -72,6 +78,7 @@
   {/if}
 {/if}
 <UndoToast />
+<DelightLayer />
 <FxLayer />
 
 <style>

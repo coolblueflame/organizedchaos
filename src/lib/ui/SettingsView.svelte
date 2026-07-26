@@ -5,6 +5,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
+  import { UNLOCKS } from '../eggs/content/extras';
 
   let owner = $state('coolblueflame');
   let repoName = $state('organizedchaos-data');
@@ -106,6 +107,20 @@
         onchange={(e) => setting({ autoSelectNext: e.currentTarget.checked })} /></label>
   </section>
 
+  <section class="group">
+    <h2>discoveries</h2>
+    <p class="hint">Things you've stumbled into. There are more.
+      {#if app.eggTrivia.total > 0}&nbsp;Quiz score: {app.eggTrivia.correct}/{app.eggTrivia.total}.{/if}
+    </p>
+    <ul class="discoveries" data-testid="discoveries">
+      {#each UNLOCKS as u (u.id)}
+        <li class:found={app.eggUnlocks.includes(u.id)}>
+          {#if app.eggUnlocks.includes(u.id)}🏆 {u.label}{:else}❓ ??? <span class="disc-hint">({u.hint})</span>{/if}
+        </li>
+      {/each}
+    </ul>
+  </section>
+
   <p class="about">organized chaos v{__APP_VERSION__} — a todo list with a gambling problem</p>
 </main>
 
@@ -148,4 +163,8 @@
   .row button { flex: 1; }
   .error { color: var(--acc-magenta); font-size: 0.8rem; margin: 0; }
   .about { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; text-align: center; margin-top: 20px; }
+  .discoveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .discoveries li { color: var(--dim); font-size: 0.82rem; }
+  .discoveries li.found { color: var(--text); }
+  .disc-hint { opacity: 0.6; font-size: 0.72rem; font-style: italic; }
 </style>

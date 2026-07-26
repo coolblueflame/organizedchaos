@@ -12,13 +12,26 @@
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
   import StatsStrip from './StatsStrip.svelte';
+  import Companion from '../eggs/Companion.svelte';
   import { haptic } from './fx/haptics';
 
   const phrase = nextPhrase();
 
   function bigButton() {
     haptic('tick');
+    app.fireEgg('bigButtonPressed');
     navigate({ name: 'randomizer' });
+  }
+
+  // A little ritual for the curious: rapid taps on the wordmark do… something.
+  let tapTimes: number[] = [];
+  function wordmarkTap() {
+    const now = Date.now();
+    tapTimes = [...tapTimes.filter((t) => now - t < 3000), now];
+    if (tapTimes.length >= 7) {
+      tapTimes = [];
+      app.grantUnlockAndShow('chaos-word');
+    }
   }
 
   let newListOpen = $state(false);
@@ -92,7 +105,7 @@
 </script>
 
 <main>
-  <h1 class="wordmark">organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
+  <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
   <p class="tagline">// a todo list with a gambling problem</p>
 
   <StatsStrip />
@@ -170,6 +183,7 @@
     </button>
   </div>
 </main>
+<Companion />
 
 <style>
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }

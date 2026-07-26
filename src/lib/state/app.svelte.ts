@@ -14,6 +14,11 @@ import { SyncEngine, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
 import type { MappedImport } from '../import/thingsMap';
+import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
+import { REGISTRY } from '../eggs/registry';
+import { UNLOCKS } from '../eggs/content/extras';
+import { presenter } from '../eggs/presenter.svelte';
+import { completionCounts } from '../domain/stats';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -32,6 +37,11 @@ export class AppStore {
 
   private repo!: Repo;
   private engine: SyncEngine | null = null;
+  private eggs: EggEngine | null = null;
+  /** Reactive mirrors of delight state the UI cares about. */
+  eggStreak = $state(0);
+  eggUnlocks = $state<string[]>([]);
+  eggTrivia = $state({ correct: 0, total: 0 });
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
   private trashTasks = new Map<string, Task>();
   private trashLists = new Map<string, List>();
@@ -66,6 +76,77 @@ export class AppStore {
     } else {
       this.persistentStorage = 'unsupported';
     }
+    // The delight layer (spec §12) — after ready so it never delays boot.
+    this.eggs = new EggEngine({
+      registry: REGISTRY,
+      rolloverHour: this.state.settings.rolloverHour,
+      load: () => this.repo.getKv<EggState>('eggState'),
+      save: (s) => this.repo.setKv('eggState', s),
+    });
+    await this.eggs.ready;
+    this.syncEggMirrors();
+    this.fireEgg('appOpened');
+  }
+
+  // ── delight layer (spec §12) ─────────────────────────────────────────────
+
+  private syncEggMirrors(): void {
+    if (!this.eggs) return;
+    this.eggStreak = this.eggs.streakDays;
+    this.eggUnlocks = this.eggs.unlocks;
+    this.eggTrivia = this.eggs.triviaStats;
+  }
+
+  /** Report an app event; at most one delight presentation may result. */
+  fireEgg(event: EggEvent, extra: { screen?: string } = {}): void {
+    if (!this.eggs) return;
+    const counts = completionCounts(this.state.tasks, new Date(), this.state.settings.rolloverHour);
+    // Test determinism: under automation, delight is silent unless a specific
+    // entry is forced (OC_EGG_FORCE). Humans never hit this branch.
+    const automated = typeof navigator !== 'undefined' && navigator.webdriver;
+    const force = typeof localStorage !== 'undefined' ? localStorage.getItem('OC_EGG_FORCE') : null;
+    if (automated) {
+      const def = force ? REGISTRY.find((r) => r.id === force && r.triggers.includes(event)) : undefined;
+      if (def) {
+        localStorage.removeItem('OC_EGG_FORCE'); // one-shot: a forced entry fires once
+        presenter.show(def.present({
+          event, screen: extra.screen,
+          completionsToday: counts.today, lifetimeCompletions: counts.lifetime,
+          streakDays: this.eggs.streakDays, storyStage: this.eggs.storyStage,
+          triviaCorrect: this.eggs.triviaStats.correct, triviaTotal: this.eggs.triviaStats.total,
+          unlocks: this.eggs.unlocks, now: new Date(), rng: Math.random,
+        }));
+      }
+      return;
+    }
+    const presentation = this.eggs.handle(event, {
+      ...extra,
+      completionsToday: counts.today,
+      lifetimeCompletions: counts.lifetime,
+    });
+    this.syncEggMirrors();
+    if (presentation) presenter.show(presentation);
+  }
+
+  recordTrivia(correct: boolean): void {
+    this.eggs?.recordTrivia(correct);
+    this.syncEggMirrors();
+    // Earned-by-knowledge discovery threshold.
+    if (this.eggs && this.eggs.triviaStats.correct >= 10) this.grantUnlockAndShow('quiz-whiz');
+  }
+
+  /** Direct grant path for flows outside the registry (codes, trivia milestones). */
+  grantUnlockAndShow(id: string): void {
+    if (!this.eggs) return;
+    if (this.eggs.grantUnlock(id)) {
+      const def = UNLOCKS.find((u) => u.id === id);
+      if (def) presenter.show({ kind: 'unlock', unlockId: id, label: def.label });
+    }
+    this.syncEggMirrors();
+  }
+
+  advanceStory(stage: number): void {
+    this.eggs?.advanceStory(stage);
   }
 
   // ── sync lifecycle (spec §8) ─────────────────────────────────────────────
@@ -219,6 +300,7 @@ export class AppStore {
     const task = this.state.tasks.find((t) => t.id === id);
     const wasCurrent = this.state.currentTask?.taskId === id;
     await this.patchTask(id, { completedAt: Date.now(), inProgress: false });
+    this.fireEgg('taskCompleted');
     if (wasCurrent) await this.clearCurrent();
     // Arm after-completion recurrence: "come back X after done" (spec §5).
     const tpl = task?.recurrenceId
@@ -268,6 +350,7 @@ export class AppStore {
     this.state.currentTask = ref;
     this.state.currentTaskUpdatedAt = Date.now();
     this.requestSync();
+    this.fireEgg('drawAccepted');
   }
 
   /**
@@ -279,6 +362,7 @@ export class AppStore {
       notTodayUntil: nextRolloverTs(Date.now(), this.state.settings.rolloverHour),
     });
     if (this.state.currentTask?.taskId === taskId) await this.clearCurrent();
+    this.fireEgg('drawSkipped');
   }
 
   async clearCurrent(): Promise<void> {
