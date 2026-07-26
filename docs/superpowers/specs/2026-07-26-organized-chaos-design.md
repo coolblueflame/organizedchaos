@@ -97,6 +97,11 @@ if it carries any selected tag; the list-scoped 🎲 entry pre-selects only that
    - **Not Today** → `notTodayUntil = next 4am`; nothing else changes.
    Dismissing the draw without choosing leaves the task untouched.
 
+**Auto-select** (2026-07-26 request): a Settings toggle "auto-select next task" (default off).
+ON → completing the current task immediately draws + accepts the next one with celebratory
+juice. OFF → the current-task card stays but greys out into an idle state cycling chill verbs
+("chillin'", "vibing", "waiting…").
+
 **Current task rules:** exactly one at a time. Accepting while one is active returns the old one
 to the general pool (stays `inProgress`, not snoozed). From the Home card you can: complete it
 (celebration!), edit it (notably the estimate), send it to Not Today (clears CurrentTask, sets
@@ -253,7 +258,32 @@ never be imported for real.
 Phases 2–5 are where Ben's iterative visual feedback rounds are expected; later phases have
 sharper acceptance criteria.
 
-## 12. Out of scope (v1)
+## 12. Surprise & delight layer (Easter eggs — post-core phase)
+
+Requested 2026-07-26: a large, rarity-tiered surprise engine woven through normal use. The
+SYSTEM is documented here; the individual eggs are deliberately NOT documented anywhere Ben
+will casually read (including this spec and commit messages) — discovery is the product.
+
+- **Engine**: a central egg registry with rarity tiers (common ≈ every few completions →
+  ultra-rare), trigger types (task completion, streaks/counts, specific screens/actions/dates,
+  idle time, puzzle solutions), per-egg cooldowns + "seen" persistence so nothing repeats
+  enough to wear thin. Frequency target: some delight ≤ every 5 completions, individual eggs
+  rare-feeling.
+- **Content directions** (from Ben, non-exhaustive): fun facts (science/animals/records —
+  large rotating pool, can be near-every-completion), video-game + anime + meme + music/lyric
+  references, programming humor, cats/lasers/neon/rgb, trivia questions with a persisted
+  correct/total stat, streak "on fire" states, slot-machine flourishes, glitch/CRT aesthetic
+  moments, a slowly-unfolding mystery/narrative thread ("is the app being hacked?"), a
+  mascot/helper, unlockable visuals at milestones, cheat codes, occasional transient
+  self-care/encouragement draws in the randomizer (NEVER persisted unless accepted; only when
+  no max-priority tasks exist or after a productive day), "on this day" facts, doodles,
+  optical illusions, dances.
+- **Hard rules**: never create/modify/delete real user data without overt consent; never
+  obscure the user's data for more than a few seconds; everything skippable in one tap;
+  respects reduced-motion; pranks stay harmless.
+- **Delivery**: built as its own phase after core phases 6–9, then grown continuously.
+
+## 13. Out of scope (v1)
 
 Push notifications/reminders (needs a send server — revisit with ntfy/Worker later) · light
 theme · multi-user/sharing · widgets · native rebuild · ongoing Things sync (import is one-way,

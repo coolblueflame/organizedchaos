@@ -9,7 +9,10 @@
   $effect(() => {
     if (!app.ready) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void app.runSpawnSweep();
+      if (document.visibilityState === 'visible') {
+        void app.runSpawnSweep();
+        void app.syncNow(); // returning to the app pulls other devices' changes (spec §8)
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     let timer: ReturnType<typeof setTimeout>;
