@@ -1,0 +1,91 @@
+import { expect, test } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('./');
+  // Fresh database per test. Dexie closes its connection on versionchange,
+  // so the delete resolves instead of deadlocking on the open handle.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase('organizedchaos');
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+      }),
+  );
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+});
+
+async function makeList(page: import('@playwright/test').Page, title: string) {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill(title);
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').waitFor(); // navigated into the list view
+}
+
+async function firstTaskId(page: import('@playwright/test').Page) {
+  const row = page.getByTestId(/^task-row-/).first();
+  return (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+}
+
+test('create list, add + edit task, complete it, find it in Completed, restore it', async ({ page }) => {
+  await makeList(page, 'Chores');
+
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('water the plants');
+  await page.getByTestId('task-name-input').blur();
+
+  const id = await firstTaskId(page);
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('water the plants');
+
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+
+  await page.getByTestId('back').click();
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('water the plants');
+  await page.getByTestId(`task-restore-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+});
+
+test('delete a task and undo it', async ({ page }) => {
+  await makeList(page, 'Trash test');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('doomed');
+  await page.getByTestId('task-name-input').blur();
+
+  const id = await firstTaskId(page);
+  await page.getByTestId(`task-delete-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+  await page.getByTestId('undo-toast').getByRole('button', { name: /undo/i }).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('doomed');
+});
+
+test('sort views group across lists', async ({ page }) => {
+  await makeList(page, 'A');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('dated');
+  await page.getByTestId('task-deadline-input').fill('2030-01-01');
+  await page.getByTestId('back').click();
+
+  await makeList(page, 'B');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('undated');
+  await page.getByTestId('task-name-input').blur();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('sort-date').click();
+  await expect(page.getByText('2030-01-01')).toBeVisible();
+  await expect(page.getByText('No deadline')).toBeVisible();
+  await expect(page.getByText('dated', { exact: true })).toBeVisible();
+  await expect(page.getByText('undated', { exact: true })).toBeVisible();
+});
+
+test('per-list sort mode is remembered', async ({ page }) => {
+  await makeList(page, 'Sorty');
+  await expect(page.getByTestId('list-sort')).toContainText('priority');
+  await page.getByTestId('list-sort').click();
+  await expect(page.getByTestId('list-sort')).toContainText('date');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId('list-sort')).toContainText('date');
+});
