@@ -11,7 +11,9 @@ export type Route =
   | { name: 'home' }
   | { name: 'list'; id: string }
   | { name: 'sort'; mode: 'date' | 'priority' | 'tag' }
-  | { name: 'completed' };
+  | { name: 'completed' }
+  | { name: 'randomizer'; listId?: string }
+  | { name: 'inprogress' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -20,6 +22,8 @@ function parse(hash: string): Route {
     return { name: 'sort', mode: parts[1] };
   }
   if (parts[0] === 'completed') return { name: 'completed' };
+  if (parts[0] === 'randomizer') return { name: 'randomizer', listId: parts[1] };
+  if (parts[0] === 'inprogress') return { name: 'inprogress' };
   return { name: 'home' };
 }
 
@@ -29,6 +33,8 @@ function toHash(r: Route): string {
     case 'list': return `#/list/${r.id}`;
     case 'sort': return `#/sort/${r.mode}`;
     case 'completed': return '#/completed';
+    case 'randomizer': return r.listId ? `#/randomizer/${r.listId}` : '#/randomizer';
+    case 'inprogress': return '#/inprogress';
   }
 }
 
