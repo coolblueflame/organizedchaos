@@ -129,7 +129,9 @@ the randomizer.
 **List view** — header with title + list-scoped randomizer button; sort toggle (remembers per
 list); tasks as rows (checkbox, name, tag chips, deadline/priority glyphs); **New Todo** →
 inserts immediately, scrolls into view, expands the editor with the name field focused.
-Delete via swipe (touch) / hover action (desktop) with a brief undo toast.
+Delete via swipe (touch) / hover action (desktop) with a brief undo toast. Lists themselves can
+be renamed, re-grouped (`areaGroup`), and deleted — deleting a list requires a confirm and
+tombstones its open tasks with it (its completed tasks stay in the logbook/stats).
 
 **Task editor** (expanding row, not a separate page): unlabeled name (top) and notes (below,
 freeform markdown) → priority segmented control → tag picker (existing tags + create-new with
