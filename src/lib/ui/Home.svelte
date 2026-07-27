@@ -14,7 +14,10 @@
   import CurrentTaskCard from './CurrentTaskCard.svelte';
   import StatsStrip from './StatsStrip.svelte';
   import Companion from '../eggs/Companion.svelte';
+  import QuickAdd from './QuickAdd.svelte';
   import { haptic } from './fx/haptics';
+
+  let quickAddOpen = $state(false);
 
   const phrase = nextPhrase();
 
@@ -137,9 +140,16 @@
     {phrase}
   </button>
 
-  <button class="search-bar" data-testid="search-entry" onclick={() => navigate({ name: 'search' })}>
-    <span class="mag">⌕</span> search everything…
-  </button>
+  <div class="capture-row">
+    <button class="search-bar" data-testid="search-entry" onclick={() => navigate({ name: 'search' })}>
+      <span class="mag">⌕</span> search everything…
+    </button>
+    {#if app.state.lists.length > 0}
+      <button class="quick-add" data-testid="quick-add-open" onclick={() => (quickAddOpen = true)}>
+        + todo
+      </button>
+    {/if}
+  </div>
 
   <nav class="sort-row">
     <button data-testid="sort-date" onclick={() => navigate({ name: 'sort', mode: 'date' })}>by date</button>
@@ -228,6 +238,9 @@
     </button>
   </div>
 </main>
+{#if quickAddOpen}
+  <QuickAdd onclose={() => (quickAddOpen = false)} />
+{/if}
 <Companion />
 
 <style>
@@ -238,8 +251,15 @@
   @keyframes blink { 50% { opacity: 0; } }
   .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 4px 0 20px; }
 
+  .capture-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .quick-add {
+    flex: none; background: var(--bg1); border: 1px solid var(--acc-green); border-radius: 8px;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700;
+    padding: 0 14px; cursor: pointer; white-space: nowrap;
+  }
+  .quick-add:hover { background: var(--acc-green); color: var(--bg0); }
   .search-bar {
-    width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    flex: 1; display: flex; align-items: center; gap: 8px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
     color: var(--dim); font-size: 0.85rem; padding: 10px 12px; cursor: text; text-align: left;
   }

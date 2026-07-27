@@ -123,6 +123,8 @@ export interface Settings {
   rolloverHour: number;
   /** Completing the current task immediately draws + accepts the next one. */
   autoSelectNext: boolean;
+  /** Last list used from quick add, so capture always lands where you left it. */
+  quickAddListId?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings =

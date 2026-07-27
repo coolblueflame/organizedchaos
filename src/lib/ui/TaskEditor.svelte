@@ -13,7 +13,12 @@
   import { describeRecurrence } from './recurrenceText';
   import type { RecurrenceMode } from '../domain/types';
 
-  let { task, oncollapse }: { task: Task; oncollapse: () => void } = $props();
+  let { task, oncollapse, compact = false }: {
+    task: Task;
+    oncollapse: () => void;
+    /** Quick add supplies its own buttons — hide the row-editor's own controls. */
+    compact?: boolean;
+  } = $props();
 
   // The name field lives in TaskRow (the row title IS the input). This editor
   // owns notes only. Draft copy is intentional: it holds text while typing and
@@ -134,6 +139,7 @@
     </button>
   {/if}
 
+  {#if !compact}
   <div class="flow-row">
     <button class="flow" data-testid="task-make-current"
       onclick={() => { flush(); void app.acceptTask(task.id).then(() => navigate({ name: 'home' })); }}>
@@ -144,7 +150,9 @@
       {task.inProgress ? '⏸ in progress' : '· not started'}
     </button>
   </div>
+  {/if}
 
+  {#if !compact}
   <div class="meta">
     created {fmt(task.createdAt)}{#if task.completedAt}&nbsp;· completed {fmt(task.completedAt)}{/if}
   </div>
@@ -153,6 +161,7 @@
     <button class="danger" data-testid="task-delete-{task.id}" onclick={remove}>delete</button>
     <button data-testid="task-collapse" onclick={() => { flush(); oncollapse(); }}>done</button>
   </div>
+  {/if}
 </div>
 
 <style>
