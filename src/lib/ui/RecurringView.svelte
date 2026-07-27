@@ -9,6 +9,7 @@
   import { describeRecurrence } from './recurrenceText';
   import type { RecurrenceMode, RecurrenceTemplate } from '../domain/types';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
+  import Glyph from './Glyph.svelte';
 
   let editingId = $state<string | null>(null);
 
@@ -57,7 +58,8 @@
           <div class="btns">
             <button data-testid="recurring-pause-{tpl.id}"
               onclick={() => void app.updateRecurring(tpl.id, { paused: !tpl.paused })}>
-              {tpl.paused ? '▶' : '⏸'}
+              <Glyph name={tpl.paused ? 'play' : 'pause'} size={11}
+                title={tpl.paused ? 'resume' : 'pause'} />
             </button>
             <button data-testid="recurring-edit-{tpl.id}"
               onclick={() => (editingId = editingId === tpl.id ? null : tpl.id)}>✎</button>
@@ -93,6 +95,7 @@
   .cadence { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem; }
   .btns { display: flex; gap: 4px; }
   .btns button {
+    display: inline-flex; align-items: center; justify-content: center;
     background: none; border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-size: 0.8rem; padding: 5px 8px; cursor: pointer;
   }

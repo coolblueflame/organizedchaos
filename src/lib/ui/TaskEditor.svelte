@@ -14,6 +14,7 @@
   import { describeRecurrence } from './recurrenceText';
   import { activeMs, formatElapsed } from '../domain/stats';
   import type { RecurrenceMode } from '../domain/types';
+  import Glyph from './Glyph.svelte';
 
   let { task, oncollapse, compact = false }: {
     task: Task;
@@ -184,7 +185,8 @@
     </button>
     <button class="flow" class:active={task.inProgress} data-testid="task-inprogress-toggle"
       onclick={() => void app.setInProgress(task.id, !task.inProgress)}>
-      {task.inProgress ? '⏸ in progress' : '· not started'}
+      {#if task.inProgress}<Glyph name="pause" size={10} />{:else}<span class="dot">·</span>{/if}
+      {task.inProgress ? 'in progress' : 'not started'}
     </button>
   </div>
   {/if}
@@ -244,10 +246,12 @@
   .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
   .flow-row { display: flex; gap: 8px; }
   .flow {
-    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
     padding: 8px; cursor: pointer;
   }
+  .flow .dot { line-height: 1; }
   .flow:hover { color: var(--text); }
   .flow.active { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .meta { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }

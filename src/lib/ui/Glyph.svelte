@@ -11,8 +11,11 @@
   punctuation rather than as UI furniture.
 -->
 <script lang="ts">
-  /** notes = a page with lines; blocked = no-entry; timebox = hourglass; period = clock. */
-  type GlyphName = 'notes' | 'blocked' | 'timebox' | 'period';
+  /**
+   * notes = a page with lines; blocked = no-entry; timebox = hourglass;
+   * period = clock; pause/play = the transport controls everyone knows.
+   */
+  type GlyphName = 'notes' | 'blocked' | 'timebox' | 'period' | 'pause' | 'play';
 
   let { name, size = 11, title }: {
     name: GlyphName;
@@ -51,6 +54,13 @@
     <line x1="3" y1="1" x2="9" y2="1" />
     <line x1="3" y1="11" x2="9" y2="11" />
     <path d="M3.4 1 L8.6 1 L4.6 6 L8.6 11 L3.4 11 L7.4 6 Z" />
+  {:else if name === 'pause'}
+    <!-- Solid rather than outlined: these are controls you press, not status
+         markers you read, and the transport symbols are iconic filled. -->
+    <rect class="solid" x="3" y="1.8" width="2.4" height="8.4" rx="0.7" />
+    <rect class="solid" x="6.6" y="1.8" width="2.4" height="8.4" rx="0.7" />
+  {:else if name === 'play'}
+    <path class="solid" d="M3.6 1.8 L10 6 L3.6 10.2 Z" />
   {:else}
     <!-- Clock: a ring with hands at roughly ten-past. -->
     <circle cx="6" cy="6" r="5.2" />
@@ -64,4 +74,5 @@
     fill: none; stroke: currentColor;
     stroke-width: 1; stroke-linecap: round; stroke-linejoin: round;
   }
+  .solid { fill: currentColor; stroke: none; }
 </style>

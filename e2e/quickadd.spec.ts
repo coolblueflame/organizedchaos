@@ -133,10 +133,29 @@ test('start now captures the task and puts it straight into progress', async ({ 
   await page.getByTestId('quick-add-name').fill('do this right now');
   await page.getByTestId('quick-add-start').click();
 
-  // Sheet closes, and the task is live in the In Progress section.
+  // Sheet closes, and it becomes the current task — not just flagged, but the
+  // thing the app now says you are doing.
   await expect(page.getByTestId('quick-add')).toHaveCount(0);
+  await expect(page.getByTestId('current-task-card')).toContainText('do this right now');
+
+  // …and it is genuinely in progress, with the clock running.
   await page.getByTestId('inprogress-link').click();
   await expect(page.getByText('do this right now', { exact: true })).toBeVisible();
+});
+
+test('start now displaces whatever was current, because that is the point', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Inbox');
+
+  await page.getByTestId('quick-add-open').click();
+  await page.getByTestId('quick-add-name').fill('the old current');
+  await page.getByTestId('quick-add-start').click();
+  await expect(page.getByTestId('current-task-card')).toContainText('the old current');
+
+  await page.getByTestId('quick-add-open').click();
+  await page.getByTestId('quick-add-name').fill('the new current');
+  await page.getByTestId('quick-add-start').click();
+  await expect(page.getByTestId('current-task-card')).toContainText('the new current');
 });
 
 test('start now on an empty field keeps the sheet open rather than making a blank', async ({

@@ -97,10 +97,10 @@
   }
 
   /**
-   * Capture it and start the clock in one go, for the "actually, I'm doing
-   * this right now" case. Marks it in progress only — it deliberately does NOT
-   * seize the current-task slot, which may already hold something you accepted
-   * from the randomizer and haven't finished.
+   * Capture it and start on it in one go, for the "actually, I'm doing this
+   * right now" case. Goes through the same path as accepting a draw, so it
+   * takes over the current-task slot, starts the clock and arms any timebox —
+   * whatever was current is displaced, which is the point.
    */
   async function startNow(): Promise<void> {
     await flushName(); // waits for any in-flight draft itself
@@ -110,7 +110,7 @@
     }
     const id = draftId;
     draftId = null;
-    if (id) await app.setInProgress(id, true);
+    if (id) await app.acceptTask(id);
     onclose();
   }
 
