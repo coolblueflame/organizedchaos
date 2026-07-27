@@ -45,7 +45,20 @@
     nameDraft = '';
     const task = await app.addTask(listId);
     draftId = task.id;
-    queueMicrotask(() => nameEl?.focus());
+    // Note: focus deliberately does NOT happen here. See focusName().
+  }
+
+  /**
+   * Put the cursor in the name field and raise the keyboard.
+   *
+   * Timing is the whole point: iOS only opens the keyboard for a focus() that
+   * runs inside the user gesture which asked for it. This used to fire after
+   * the draft had been created — an IndexedDB round-trip, so a macrotask later
+   * and well outside that window — which meant the field quietly took focus
+   * and no keyboard ever appeared. Every caller runs before any await.
+   */
+  function focusName(): void {
+    nameEl?.focus();
   }
 
   function queueNameSave(): void {
@@ -70,6 +83,9 @@
 
   /** Commit this one and open the next; an empty one just ends the session. */
   async function addAnother(): Promise<void> {
+    // Before the awaits, while the tap that triggered this still counts as a
+    // gesture — otherwise the keyboard drops for the rest of the session.
+    focusName();
     await flushName();
     if (!nameDraft.trim()) {
       await close();
@@ -122,6 +138,10 @@
   $effect(() => {
     if (started) return;
     started = true;
+    // Focus FIRST and synchronously: this effect still runs in the microtask
+    // that the "+ todo" tap scheduled, so the gesture is live and iOS raises
+    // the keyboard. Creating the draft is what has to wait, not the cursor.
+    focusName();
     void startDraft();
   });
 </script>

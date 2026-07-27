@@ -102,3 +102,25 @@ test('remembers the last list used and targets it next time', async ({ page }) =
   await page.getByTestId(/^list-row-/).filter({ hasText: 'Beta' }).click();
   await expect(page.getByText('goes to beta', { exact: true })).toBeVisible();
 });
+
+test('the name field is focused the moment quick add opens, and stays focused', async ({ page }) => {
+  // Reported 2026-07-28: tapping "+ todo" left the keyboard down on iOS. Focus
+  // was being applied only AFTER the draft task had been written to IndexedDB,
+  // which is a macrotask later — outside the user gesture, and iOS only raises
+  // the keyboard for a focus() that happens inside one.
+  await reset(page);
+  await makeList(page, 'Inbox');
+
+  // Type immediately, with no focus assertion first — an assertion would wait
+  // for focus to arrive and hide the very lateness being tested. If the cursor
+  // is not already there, these keystrokes go to the document and vanish.
+  await page.getByTestId('quick-add-open').click();
+  await page.keyboard.type('typed without tapping');
+  await expect(page.getByTestId('quick-add-name')).toHaveValue('typed without tapping');
+  await expect(page.getByTestId('quick-add-name')).toBeFocused();
+
+  // And the cursor comes back for the next one rather than being dropped.
+  await page.getByTestId('quick-add-another').click();
+  await expect(page.getByTestId('quick-add')).toContainText('1 added');
+  await expect(page.getByTestId('quick-add-name')).toBeFocused();
+});
