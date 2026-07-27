@@ -98,10 +98,17 @@ class InstallStore {
   async promptInstall(): Promise<boolean> {
     const evt = this.deferred;
     if (!evt) return false;
-    // A captured prompt is single-use; drop it either way.
+    try {
+      await evt.prompt();
+    } catch {
+      // Rejected before it was ever shown (usually a lost user-activation).
+      // Keep the captured event so the button still works on a real tap.
+      return false;
+    }
+    // Shown means spent, whichever way the user answered. Chromium will hand
+    // us a fresh event later if it still wants to offer the install.
     this.deferred = null;
     this.canPromptDirectly = false;
-    await evt.prompt();
     const { outcome } = await evt.userChoice;
     if (outcome === 'accepted') this.installed = true;
     return outcome === 'accepted';
