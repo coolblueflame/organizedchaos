@@ -120,7 +120,12 @@
 <FxLayer />
 
 <style>
-  .boot { min-height: 100vh; display: grid; place-content: center; }
+  /* Minus the insets body now pays: a bare 100vh would overflow by exactly
+     the height of the status bar and leave the splash scrollable. */
+  .boot {
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    display: grid; place-content: center;
+  }
   .wordmark { font-family: var(--font-mono); font-size: 2rem; margin: 0; font-weight: 600; }
   .accent { color: var(--acc-purple); }
   .cursor { color: var(--acc-green); animation: blink 1.1s steps(1) infinite; }
