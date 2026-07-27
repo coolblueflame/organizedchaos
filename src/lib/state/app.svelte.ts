@@ -289,11 +289,33 @@ export class AppStore {
     return task;
   }
 
+  /**
+   * Mirror-first on purpose: the in-memory copy updates SYNCHRONOUSLY (before
+   * any await) so callers that immediately inspect state — e.g. the pristine
+   * check behind rapid entry — can never race the IndexedDB write.
+   */
   async patchTask(id: string, patch: Partial<Task>): Promise<void> {
-    await this.repo.updateTask(id, patch);
     const task = this.state.tasks.find((t) => t.id === id);
     if (task) Object.assign(task, patch, { updatedAt: Date.now() });
+    await this.repo.updateTask(id, patch);
     this.requestSync();
+  }
+
+  /**
+   * Rapid entry's escape hatch: a task that was created but never actually
+   * filled in gets discarded silently (tombstoned, so the discard syncs).
+   * Returns whether it was discarded.
+   */
+  async discardIfPristine(taskId: string): Promise<boolean> {
+    const t = this.state.tasks.find((x) => x.id === taskId);
+    if (!t) return false;
+    const untouched =
+      t.name.trim() === '' && t.notes.trim() === '' && t.priority === 'medium' &&
+      t.tagIds.length === 0 && t.deadline === undefined && t.estimateHours === undefined &&
+      t.recurrenceId === undefined && !t.inProgress && t.completedAt === undefined;
+    if (!untouched) return false;
+    await this.removeTask(taskId);
+    return true;
   }
 
   async completeTask(id: string): Promise<void> {

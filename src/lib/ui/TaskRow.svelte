@@ -15,11 +15,13 @@
   import { haptic } from './fx/haptics';
 
   let {
-    task, expanded = false, ontoggle, showList = false, completedMode = false,
+    task, expanded = false, ontoggle, onenter, showList = false, completedMode = false,
   }: {
     task: Task;
     expanded?: boolean;
     ontoggle: () => void;
+    /** Enter in the name field — the list view chains a new task (rapid entry). */
+    onenter?: (currentName: string) => void;
     showList?: boolean;
     completedMode?: boolean;
   } = $props();
@@ -38,6 +40,53 @@
 
   let checkEl: HTMLButtonElement | undefined = $state();
   let completing = $state(false);
+
+  // The row title IS the name field (no duplicate input in the editor below):
+  // expanding focuses it with the text selected, ready to retype.
+  let nameEl: HTMLInputElement | undefined = $state();
+  // svelte-ignore state_referenced_locally
+  let nameDraft = $state(task.name);
+  let nameTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function queueNameSave() {
+    clearTimeout(nameTimer);
+    // First real keystroke saves immediately so the task stops being "pristine"
+    // before any discard check can run; the rest debounce normally.
+    if (task.name === '' && nameDraft.trim() !== '') {
+      void flushName();
+      return;
+    }
+    nameTimer = setTimeout(() => void flushName(), 400);
+  }
+
+  async function flushName(): Promise<void> {
+    clearTimeout(nameTimer);
+    if (nameDraft !== task.name) await app.patchTask(task.id, { name: nameDraft });
+  }
+
+  /** Always flush BEFORE handing control back, so no save is left in flight. */
+  async function collapse() {
+    await flushName();
+    ontoggle();
+  }
+
+  async function onNameKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      await collapse();
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    await flushName();
+    if (onenter) onenter(nameDraft);
+    else ontoggle();
+  }
+
+  $effect(() => {
+    if (expanded && nameEl) {
+      nameEl.focus();
+      nameEl.select();
+    }
+  });
 
   function complete() {
     if (completing) return;
@@ -74,6 +123,17 @@
         data-testid="task-check-{task.id}" onclick={complete} aria-label="complete"></button>
     {/if}
 
+    {#if expanded && !completedMode}
+      <input
+        class="name-input"
+        data-testid="task-name-input"
+        placeholder="task name"
+        bind:this={nameEl}
+        bind:value={nameDraft}
+        oninput={queueNameSave}
+        onblur={() => void flushName()}
+        onkeydown={onNameKey} />
+    {:else}
     <button class="body" onclick={ontoggle}>
       <span class="name" class:done={completedMode}>{task.name || 'untitled'}</span>
       {#if showList && listTitle}<span class="list-tag">{listTitle}</span>{/if}
@@ -88,6 +148,7 @@
         <span class="prio {effective}"></span>
       </span>
     </button>
+    {/if}
 
     {#if !completedMode && !expanded}
       <button class="delete" data-testid="task-delete-{task.id}" onclick={remove} aria-label="delete">✕</button>
@@ -95,7 +156,7 @@
   </div>
 
   {#if expanded && !completedMode}
-    <TaskEditor {task} oncollapse={ontoggle} />
+    <TaskEditor {task} oncollapse={() => void collapse()} />
   {/if}
 </div>
 
@@ -131,6 +192,14 @@
   }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .name.done { text-decoration: line-through; color: var(--dim); }
+  /* Reads as the title, behaves as the field — same size, same weight, no chrome. */
+  .name-input {
+    flex: 1; min-width: 0; background: none; border: none;
+    border-bottom: 1px solid var(--acc-blue);
+    color: var(--text); font-size: 0.9rem; font-family: inherit;
+    padding: 11px 0 9px; outline: none;
+  }
+  .name-input::placeholder { color: var(--dim); }
   .list-tag { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; flex: none; }
   .badges { margin-left: auto; display: flex; align-items: center; gap: 5px; flex: none; }
   .tag-dot { width: 7px; height: 7px; border-radius: 50%; }

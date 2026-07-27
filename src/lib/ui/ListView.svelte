@@ -32,14 +32,48 @@
     await app.setListSort(list.id, nextMode[list.sortMode]);
   }
 
+  /**
+   * Rapid entry (Things-style): a freshly created task that never got filled in
+   * is discarded the moment you leave it — collapse, switch rows, Esc, or
+   * navigate away. Nothing that was actually typed is ever thrown away.
+   */
+  async function stopEditing(): Promise<void> {
+    const prev = editingTaskId;
+    editingTaskId = null;
+    if (prev) await app.discardIfPristine(prev);
+  }
+
   async function newTask() {
+    await stopEditing();
     const task = await app.addTask(id);
     editingTaskId = task.id;
   }
 
   function toggle(taskId: string) {
-    editingTaskId = editingTaskId === taskId ? null : taskId;
+    if (editingTaskId === taskId) {
+      void stopEditing();
+      return;
+    }
+    const prev = editingTaskId;
+    editingTaskId = taskId;
+    if (prev) void app.discardIfPristine(prev);
   }
+
+  /** Enter commits and opens the next one; Enter on an empty name ends the chain. */
+  async function chainNext(currentName: string) {
+    if (!currentName.trim()) {
+      await stopEditing();
+      return;
+    }
+    editingTaskId = null;
+    const task = await app.addTask(id);
+    editingTaskId = task.id;
+  }
+
+  // Leaving the screen with an untouched new task open discards it too.
+  $effect(() => () => {
+    if (editingTaskId) void app.discardIfPristine(editingTaskId);
+  });
 </script>
 
 <main>
@@ -57,7 +91,9 @@
     {#each groups as group (group.key)}
       <h2 class="group-header">{group.label}</h2>
       {#each group.tasks as task (group.key + task.id)}
-        <TaskRow {task} expanded={editingTaskId === task.id} ontoggle={() => toggle(task.id)} />
+        <TaskRow {task} expanded={editingTaskId === task.id}
+          ontoggle={() => toggle(task.id)}
+          onenter={(name) => void chainNext(name)} />
       {/each}
     {/each}
     {#if groups.length === 0}

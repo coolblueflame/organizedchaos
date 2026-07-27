@@ -31,8 +31,9 @@ test('create list, add + edit task, complete it, find it in Completed, restore i
   await makeList(page, 'Chores');
 
   await page.getByTestId('new-task').click();
+  // The row title IS the name field while expanded — collapse to read it as text.
   await page.getByTestId('task-name-input').fill('water the plants');
-  await page.getByTestId('task-name-input').blur();
+  await page.getByTestId('task-collapse').click();
 
   const id = await firstTaskId(page);
   await expect(page.getByTestId(`task-row-${id}`)).toContainText('water the plants');
@@ -51,7 +52,7 @@ test('delete a task and undo it', async ({ page }) => {
   await makeList(page, 'Trash test');
   await page.getByTestId('new-task').click();
   await page.getByTestId('task-name-input').fill('doomed');
-  await page.getByTestId('task-name-input').blur();
+  await page.getByTestId('task-collapse').click();
 
   const id = await firstTaskId(page);
   await page.getByTestId(`task-delete-${id}`).click();
@@ -78,6 +79,46 @@ test('sort views group across lists', async ({ page }) => {
   await expect(page.getByText('No deadline')).toBeVisible();
   await expect(page.getByText('dated', { exact: true })).toBeVisible();
   await expect(page.getByText('undated', { exact: true })).toBeVisible();
+});
+
+test('rapid entry: Enter chains a new task, Esc drops the untouched one', async ({ page }) => {
+  await makeList(page, 'Rapid');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('first');
+  await page.getByTestId('task-name-input').press('Enter');
+
+  // chained straight into a fresh, empty, focused field
+  await expect(page.getByTestId('task-name-input')).toHaveValue('');
+  await page.getByTestId('task-name-input').fill('second');
+  await page.getByTestId('task-name-input').press('Enter');
+  await expect(page.getByTestId('task-name-input')).toHaveValue('');
+
+  // the untouched third evaporates
+  await page.getByTestId('task-name-input').press('Escape');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
+  await expect(page.getByText('first', { exact: true })).toBeVisible();
+  await expect(page.getByText('second', { exact: true })).toBeVisible();
+});
+
+test('rapid entry: Enter on an empty name just ends the chain', async ({ page }) => {
+  await makeList(page, 'Enterless');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').press('Enter');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0); // editor closed
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);      // nothing left behind
+});
+
+test('rapid entry: navigating away drops untouched tasks, keeps typed ones', async ({ page }) => {
+  await makeList(page, 'Leaver');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('kept');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('new-task').click(); // left untouched
+  await page.getByTestId('back').click();
+
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+  await expect(page.getByText('kept', { exact: true })).toBeVisible();
 });
 
 test('per-list sort mode is remembered', async ({ page }) => {

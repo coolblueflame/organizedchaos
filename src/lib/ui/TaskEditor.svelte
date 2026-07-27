@@ -16,11 +16,9 @@
 
   let { task, oncollapse }: { task: Task; oncollapse: () => void } = $props();
 
-  // Draft copies are intentional: the editor owns text-field state while typing
-  // and flushes on debounce/blur. Safe because each task gets its own editor
-  // instance (keyed rows) — the props can never swap tasks under us.
-  // svelte-ignore state_referenced_locally
-  let name = $state(task.name);
+  // The name field lives in TaskRow (the row title IS the input). This editor
+  // owns notes only. Draft copy is intentional: it holds text while typing and
+  // flushes on debounce/blur; rows are keyed, so props never swap under us.
   // svelte-ignore state_referenced_locally
   let notes = $state(task.notes);
 
@@ -31,9 +29,7 @@
   }
   function flush() {
     clearTimeout(saveTimer);
-    if (name !== task.name || notes !== task.notes) {
-      void app.patchTask(task.id, { name, notes });
-    }
+    if (notes !== task.notes) void app.patchTask(task.id, { notes });
   }
 
   function toggleTag(tagId: string) {
@@ -85,10 +81,6 @@
 </script>
 
 <div class="editor">
-  <!-- svelte-ignore a11y_autofocus -->
-  <input class="name" data-testid="task-name-input" placeholder="task name"
-    autofocus={task.name === ''}
-    bind:value={name} oninput={queueSave} onblur={flush} />
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
     rows="2" bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
 
@@ -151,11 +143,6 @@
 
 <style>
   .editor { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 8px; }
-  .name {
-    background: none; border: none; border-bottom: 1px solid var(--line);
-    color: var(--text); font-size: 1rem; font-weight: 500; padding: 6px 2px; outline: none;
-  }
-  .name:focus { border-bottom-color: var(--acc-blue); }
   .notes {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-size: 0.85rem; padding: 8px; outline: none; resize: vertical;
