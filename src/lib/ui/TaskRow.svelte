@@ -71,10 +71,8 @@
   }
 
   async function onNameKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      await collapse();
-      return;
-    }
+    // Escape is handled globally (closeOnOutsideOrEscape), which blurs this
+    // field first so the name flushes — handling it here too would double-close.
     if (e.key !== 'Enter') return;
     await flushName();
     if (onenter) onenter(nameDraft);
@@ -103,9 +101,21 @@
     void app.uncompleteTask(task.id);
   }
 
+  // Two-stage delete: the first tap arms, the second commits. Cheap insurance
+  // against a mis-tap; the undo toast still covers the rest.
+  let deleteArmed = $state(false);
+  let armTimer: ReturnType<typeof setTimeout> | undefined;
+
   function remove() {
-    const id = task.id;
-    void app.removeTask(id).then(() => toast.show('Task deleted', () => void app.restoreTask(id)));
+    if (!deleteArmed) {
+      deleteArmed = true;
+      clearTimeout(armTimer);
+      armTimer = setTimeout(() => (deleteArmed = false), 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    deleteArmed = false;
+    void app.removeTask(task.id); // the store records the undo
   }
 
   const shortDate = (key: string) => {
@@ -114,7 +124,8 @@
   };
 </script>
 
-<div class="row" class:expanded transition:slide={{ duration: 220 }} data-testid="task-row-{task.id}">
+<div class="row" class:expanded transition:slide={{ duration: 220 }}
+  data-editing-root={expanded ? '' : undefined} data-testid="task-row-{task.id}">
   <div class="line">
     {#if completedMode}
       <button class="restore" data-testid="task-restore-{task.id}" onclick={restore} aria-label="restore">↩</button>
@@ -155,7 +166,10 @@
     {/if}
 
     {#if !completedMode && !expanded}
-      <button class="delete" data-testid="task-delete-{task.id}" onclick={remove} aria-label="delete">✕</button>
+      <button class="delete" class:armed={deleteArmed} data-testid="task-delete-{task.id}"
+        onclick={remove} aria-label={deleteArmed ? 'tap again to delete' : 'delete'}>
+        {deleteArmed ? 'sure?' : '✕'}
+      </button>
     {/if}
   </div>
 
@@ -225,8 +239,12 @@
     font-size: 0.8rem; padding: 4px; flex: none;
   }
   .delete:hover { color: var(--acc-magenta); }
+  .delete.armed {
+    color: var(--acc-magenta); font-family: var(--font-mono); font-size: 0.7rem;
+    border: 1px solid var(--acc-magenta); border-radius: 6px; padding: 3px 7px;
+  }
   @media (hover: hover) {
     .delete { opacity: 0; }
-    .row:hover .delete { opacity: 1; }
+    .row:hover .delete, .delete.armed { opacity: 1; }
   }
 </style>

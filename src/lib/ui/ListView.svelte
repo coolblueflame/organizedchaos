@@ -9,6 +9,7 @@
   import { groupByDate, groupByPriority, groupByTag } from '../domain/views';
   import type { SortMode } from '../domain/types';
   import TaskRow from './TaskRow.svelte';
+  import { closeOnOutsideOrEscape } from './dismiss';
 
   let { id }: { id: string } = $props();
 
@@ -76,6 +77,10 @@
   $effect(() => () => {
     if (editingTaskId) void app.discardIfPristine(editingTaskId);
   });
+
+  // Click-outside and Escape both collapse the open task (discarding it if it
+  // was never filled in).
+  $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => void stopEditing()));
 </script>
 
 <main>

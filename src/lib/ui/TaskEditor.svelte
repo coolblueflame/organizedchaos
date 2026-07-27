@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { toast } from './toast.svelte';
   import { navigate } from './router.svelte';
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
@@ -64,8 +63,7 @@
 
   function remove() {
     flush();
-    const id = task.id;
-    void app.removeTask(id).then(() => toast.show('Task deleted', () => void app.restoreTask(id)));
+    void app.removeTask(task.id); // the store records the undo
   }
 
   const fmt = (ts: number) => new Date(ts).toLocaleDateString();

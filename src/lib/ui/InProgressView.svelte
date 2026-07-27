@@ -4,8 +4,11 @@
   import { navigate } from './router.svelte';
   import { openTasks } from '../domain/views';
   import TaskRow from './TaskRow.svelte';
+  import { closeOnOutsideOrEscape } from './dismiss';
 
   let editingTaskId = $state<string | null>(null);
+
+  $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => (editingTaskId = null)));
 
   const started = $derived(openTasks(app.state.tasks).filter((t) => t.inProgress));
 </script>

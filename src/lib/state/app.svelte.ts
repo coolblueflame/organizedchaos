@@ -19,6 +19,8 @@ import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
 import { completionCounts } from '../domain/stats';
+import { undoStack } from './undo.svelte';
+import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -262,12 +264,14 @@ export class AppStore {
     const openIds = this.state.tasks
       .filter((t) => t.listId === id && t.completedAt === undefined)
       .map((t) => t.id);
-    for (const taskId of openIds) await this.removeTask(taskId);
+    // Silent per task — the list-level undo puts the whole thing back at once.
+    for (const taskId of openIds) await this.removeTask(taskId, { silent: true });
     const list = this.state.lists.find((l) => l.id === id);
     if (list) this.trashLists.set(id, list);
     await this.repo.softDelete('lists', id);
     this.state.lists = this.state.lists.filter((l) => l.id !== id);
     this.requestSync();
+    this.pushUndo(`Deleted list "${list?.title || 'list'}"`, () => this.restoreList(id, openIds));
     return openIds;
   }
 
@@ -322,13 +326,22 @@ export class AppStore {
       // A cleared review flag means a field was deliberately touched — keep it.
       t.needsReview === true;
     if (!untouched) return false;
-    await this.removeTask(taskId);
+    await this.removeTask(taskId, { silent: true });
     return true;
   }
 
   async completeTask(id: string): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
     const wasCurrent = this.state.currentTask?.taskId === id;
+    // Snapshot enough to put things back exactly as they were.
+    const before = task
+      ? { name: task.name, inProgress: task.inProgress, recurrenceId: task.recurrenceId }
+      : null;
+    const priorCurrent = this.state.currentTask;
+    const priorSpawnAt = before?.recurrenceId
+      ? this.state.templates.find((t) => t.id === before.recurrenceId)?.nextSpawnAt
+      : undefined;
+
     await this.patchTask(id, { completedAt: Date.now(), inProgress: false });
     this.fireEgg('taskCompleted');
     if (wasCurrent) await this.clearCurrent();
@@ -345,18 +358,38 @@ export class AppStore {
       const next = drawTask(this.state.tasks, this.state.settings, new Date(), Math.random);
       if (next) await this.acceptTask(next.id);
     }
+
+    this.pushUndo(`Completed "${before?.name || 'task'}"`, async () => {
+      await this.patchTask(id, { completedAt: undefined, inProgress: before?.inProgress ?? false });
+      // Un-arm any recurrence this completion scheduled, so it can't respawn.
+      if (before?.recurrenceId) {
+        await this.updateRecurring(before.recurrenceId, { nextSpawnAt: priorSpawnAt });
+      }
+      if (wasCurrent) {
+        await this.repo.setCurrentTask(priorCurrent);
+        this.state.currentTask = priorCurrent;
+        this.state.currentTaskUpdatedAt = Date.now();
+      }
+    });
   }
 
   async uncompleteTask(id: string): Promise<void> {
     await this.patchTask(id, { completedAt: undefined });
   }
 
-  async removeTask(id: string): Promise<void> {
+  /**
+   * `silent` skips the undo entry — used by the pristine sweep, which discards
+   * an empty task the user never filled in (there is nothing to regret).
+   */
+  async removeTask(id: string, opts: { silent?: boolean } = {}): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
     if (task) this.trashTasks.set(id, task);
     await this.repo.softDelete('tasks', id);
     this.state.tasks = this.state.tasks.filter((t) => t.id !== id);
     this.requestSync();
+    if (!opts.silent) {
+      this.pushUndo(`Deleted "${task?.name || 'task'}"`, () => this.restoreTask(id));
+    }
   }
 
   async restoreTask(id: string): Promise<void> {
@@ -368,6 +401,19 @@ export class AppStore {
       this.trashTasks.delete(id);
     }
     this.requestSync();
+  }
+
+  // ── undo ─────────────────────────────────────────────────────────────────
+
+  /** Record a reversible action and surface it as a tappable toast. */
+  private pushUndo(label: string, run: () => Promise<void>): void {
+    const entry = undoStack.push(label, run);
+    toast.show(label, () => void undoStack.undoEntry(entry));
+  }
+
+  /** Cmd/Ctrl+Z. Returns what was undone, for the confirmation toast. */
+  async undoLast(): Promise<string | null> {
+    return undoStack.undo();
   }
 
   // ── draw lifecycle (spec §4) ─────────────────────────────────────────────
@@ -388,11 +434,25 @@ export class AppStore {
    * Touches NOTHING else — stays visible in lists/views and keeps inProgress.
    */
   async sendNotToday(taskId: string): Promise<void> {
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    const priorSnooze = task?.notTodayUntil;
+    const priorCurrent = this.state.currentTask;
+    const wasCurrent = priorCurrent?.taskId === taskId;
+
     await this.patchTask(taskId, {
       notTodayUntil: nextRolloverTs(Date.now(), this.state.settings.rolloverHour),
     });
-    if (this.state.currentTask?.taskId === taskId) await this.clearCurrent();
+    if (wasCurrent) await this.clearCurrent();
     this.fireEgg('drawSkipped');
+
+    this.pushUndo(`Snoozed "${task?.name || 'task'}"`, async () => {
+      await this.patchTask(taskId, { notTodayUntil: priorSnooze });
+      if (wasCurrent) {
+        await this.repo.setCurrentTask(priorCurrent);
+        this.state.currentTask = priorCurrent;
+        this.state.currentTaskUpdatedAt = Date.now();
+      }
+    });
   }
 
   async clearCurrent(): Promise<void> {

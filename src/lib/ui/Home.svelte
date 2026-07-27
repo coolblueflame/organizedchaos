@@ -115,9 +115,7 @@
   async function deleteList(l: List) {
     menuFor = null;
     if (!window.confirm(`Delete "${l.title}" and its open tasks?`)) return;
-    const id = l.id;
-    const taskIds = await app.removeList(id);
-    toast.show('List deleted', () => void app.restoreList(id, taskIds));
+    await app.removeList(l.id); // the store records the undo
   }
 
   $effect(() => {

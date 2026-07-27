@@ -8,10 +8,13 @@
   import { navigate } from './router.svelte';
   import { groupByDate, groupByPriority, groupByTag } from '../domain/views';
   import TaskRow from './TaskRow.svelte';
+  import { closeOnOutsideOrEscape } from './dismiss';
 
   let { mode }: { mode: 'date' | 'priority' | 'tag' } = $props();
 
   let editingTaskId = $state<string | null>(null);
+
+  $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => (editingTaskId = null)));
 
   const titles = { date: 'By Date', priority: 'By Priority', tag: 'By Tag' } as const;
 

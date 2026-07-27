@@ -32,7 +32,7 @@ test('reduced motion: completion works immediately with no animation gate', asyn
   await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
   await page.getByTestId('back').click();
   await page.getByTestId('completed-link').click();
-  await expect(page.getByText('sober task')).toBeVisible();
+  await expect(page.getByText('sober task', { exact: true })).toBeVisible();
 });
 
 test('full motion: the celebration delay never eats the completion', async ({ page }) => {
@@ -44,5 +44,5 @@ test('full motion: the celebration delay never eats the completion', async ({ pa
   await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0); // slide-out finished
   await page.getByTestId('back').click();
   await page.getByTestId('completed-link').click();
-  await expect(page.getByText('party task')).toBeVisible(); // mutation landed
+  await expect(page.getByText('party task', { exact: true })).toBeVisible(); // mutation landed
 });

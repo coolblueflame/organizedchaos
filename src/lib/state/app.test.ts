@@ -140,6 +140,77 @@ describe('AppStore', () => {
     expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
   });
 
+  it('undo restores a completed task, its in-progress flag, and its current-task slot', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'oops' });
+    await store.acceptTask(a.id);
+    await store.completeTask(a.id);
+    expect(store.state.tasks[0]!.completedAt).toBeGreaterThan(0);
+    expect(store.state.currentTask).toBeNull();
+
+    expect(await store.undoLast()).toBe('Completed "oops"');
+    const back = store.state.tasks[0]!;
+    expect(back.completedAt).toBeUndefined();
+    expect(back.inProgress).toBe(true);
+    expect(store.state.currentTask?.taskId).toBe(a.id);
+    expect((await persisted()).tasks[0]!.completedAt).toBeUndefined();
+  });
+
+  it('undo un-arms a recurrence that the completion scheduled', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const tpl = await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 3, unit: 'days' });
+    await store.completeTask(a.id);
+    expect(store.state.templates[0]!.nextSpawnAt).toBeGreaterThan(0);
+
+    await store.undoLast();
+    expect(store.state.templates.find((t) => t.id === tpl.id)!.nextSpawnAt).toBeUndefined();
+  });
+
+  it('undo restores a deleted task and a deleted list with its tasks', async () => {
+    const list = await store.addList('Doomed');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'keepme' });
+
+    await store.removeTask(t.id);
+    expect(store.state.tasks).toHaveLength(0);
+    await store.undoLast();
+    expect(store.state.tasks.map((x) => x.name)).toEqual(['keepme']);
+
+    await store.removeList(list.id);
+    expect(store.state.lists).toHaveLength(0);
+    expect(await store.undoLast()).toBe('Deleted list "Doomed"');
+    expect(store.state.lists).toHaveLength(1);
+    expect(store.state.tasks.map((x) => x.name)).toEqual(['keepme']);
+  });
+
+  it('undo lifts a snooze and puts the task back as current', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    await store.sendNotToday(a.id);
+    expect(store.state.tasks[0]!.notTodayUntil).toBeGreaterThan(0);
+    expect(store.state.currentTask).toBeNull();
+
+    await store.undoLast();
+    expect(store.state.tasks[0]!.notTodayUntil).toBeUndefined();
+    expect(store.state.currentTask?.taskId).toBe(a.id);
+  });
+
+  it('the pristine sweep is silent — it never lands on the undo stack', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'real one' });
+    await store.removeTask(a.id);         // undoable
+    const b = await store.addTask(list.id);
+    await store.discardIfPristine(b.id);  // silent
+    // Still the deletion of "real one" on top, not the discarded blank.
+    expect(await store.undoLast()).toBe('Deleted "real one"');
+  });
+
   it('new tasks start untriaged; markReviewed clears it and is idempotent', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);

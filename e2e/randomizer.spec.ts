@@ -36,7 +36,8 @@ test('draw → accept → current task card survives reload → complete', async
   await page.getByTestId('current-complete').click();
   await expect(page.getByTestId('current-task-card')).toHaveCount(0);
   await page.getByTestId('completed-link').click();
-  await expect(page.getByText('alpha')).toBeVisible();
+  // exact: the undo toast also contains the task name
+  await expect(page.getByText('alpha', { exact: true })).toBeVisible();
 });
 
 test('not now cycles to a different task; exhausting pool offers skip reset', async ({ page }) => {
@@ -60,7 +61,8 @@ test('not today truly snoozes: pool empties with no reset offer, task stays in l
   await expect(page.getByTestId('draw-reset-skips')).toHaveCount(0); // real snooze, not a skip
   await page.getByTestId('back').click();
   await page.getByTestId(/^list-row-/).first().click();
-  await expect(page.getByText('snoozeme')).toBeVisible(); // unaffected outside the randomizer
+  // exact: the undo toast also contains the task name
+  await expect(page.getByText('snoozeme', { exact: true })).toBeVisible(); // unaffected outside the randomizer
 });
 
 test('in-progress task is preferred by the draw', async ({ page }) => {

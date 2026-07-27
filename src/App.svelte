@@ -3,6 +3,7 @@
   import { app } from './lib/state/app.svelte';
   import { router } from './lib/ui/router.svelte';
   import { nextRolloverTs } from './lib/domain/time';
+  import { toast } from './lib/ui/toast.svelte';
 
   // Spawn-sweep triggers beyond init (spec §5): returning to the app, and the
   // 4am rollover while it stays open. The timer re-arms itself each rollover.
@@ -46,6 +47,22 @@
   // Screen visits feed the delight layer (throttled internally by the engine).
   $effect(() => {
     if (app.ready) app.fireEgg('screenVisited', { screen: router.current.name });
+  });
+
+  // Cmd/Ctrl+Z undoes the last consequential action, long after its toast is gone.
+  $effect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+      const el = e.target as HTMLElement | null;
+      // Let text fields keep their own native undo.
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      void app.undoLast().then((label) => {
+        if (label) toast.show(`Undid: ${label}`, () => {});
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   });
 </script>
 

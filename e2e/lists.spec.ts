@@ -55,7 +55,8 @@ test('delete a task and undo it', async ({ page }) => {
   await page.getByTestId('task-collapse').click();
 
   const id = await firstTaskId(page);
-  await page.getByTestId(`task-delete-${id}`).click();
+  await page.getByTestId(`task-delete-${id}`).click(); // arm
+  await page.getByTestId(`task-delete-${id}`).click(); // commit
   await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
   await page.getByTestId('undo-toast').getByRole('button', { name: /undo/i }).click();
   await expect(page.getByTestId(`task-row-${id}`)).toContainText('doomed');
@@ -119,6 +120,57 @@ test('rapid entry: navigating away drops untouched tasks, keeps typed ones', asy
   await page.getByTestId(/^list-row-/).first().click();
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
   await expect(page.getByText('kept', { exact: true })).toBeVisible();
+});
+
+test('clicking outside and Escape both collapse; a named task survives, an empty one does not', async ({ page }) => {
+  await makeList(page, 'Outside');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('typed something');
+  await page.locator('h1').click(); // click well outside the row
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0); // collapsed
+  await expect(page.getByText('typed something', { exact: true })).toBeVisible(); // kept
+
+  await page.getByTestId('new-task').click(); // fresh, empty
+  await page.locator('h1').click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1); // blank one discarded
+
+  // Escape collapses an existing task from anywhere in the editor
+  await page.getByText('typed something', { exact: true }).click();
+  await page.getByTestId('task-notes-input').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
+  await expect(page.getByText('typed something', { exact: true })).toBeVisible();
+});
+
+test('undo brings back a completed task via keyboard', async ({ page }) => {
+  await makeList(page, 'Undoable');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('finish me');
+  await page.getByTestId('task-collapse').click();
+  const id = await firstTaskId(page);
+
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('finish me');
+});
+
+test('deleting a task takes two taps, and undo restores it', async ({ page }) => {
+  await makeList(page, 'Twice');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('fragile');
+  await page.getByTestId('task-collapse').click();
+  const id = await firstTaskId(page);
+
+  await page.getByTestId(`task-delete-${id}`).click();            // arms only
+  await expect(page.getByTestId(`task-delete-${id}`)).toContainText('sure?');
+  await expect(page.getByTestId(`task-row-${id}`)).toBeVisible();
+  await page.getByTestId(`task-delete-${id}`).click();            // commits
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+
+  await page.getByTestId('undo-toast').getByRole('button', { name: /undo/i }).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('fragile');
 });
 
 test('per-list sort mode is remembered', async ({ page }) => {
