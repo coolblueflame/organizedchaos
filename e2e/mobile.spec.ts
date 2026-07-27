@@ -110,6 +110,14 @@ test('the editor fields wrap instead of overlapping on a narrow screen', async (
       page.getByTestId(id).boundingBox(),
     ),
   );
+
+  // The load-bearing assertion: at phone width these must NOT all share one
+  // row. Three across is what collided on a real device, and the bounding
+  // boxes alone don't catch it — this browser renders a date input far
+  // narrower than iOS does, so only the wrap itself is worth asserting.
+  const rows = new Set(boxes.map((b) => Math.round(b!.y)));
+  expect(rows.size, 'the three fields should wrap onto multiple rows').toBeGreaterThan(1);
+
   // Every pair either sits on a different row or is horizontally disjoint.
   for (let i = 0; i < boxes.length; i += 1) {
     for (let j = i + 1; j < boxes.length; j += 1) {
