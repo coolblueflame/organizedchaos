@@ -74,10 +74,34 @@ describe('blocking', () => {
     const a = task({ id: 'a', priority: 'high', blockedBy: ['b'] });
     const b = task({ id: 'b', priority: 'low', blockedBy: ['a'] });
     const lifts = blockLifts([a, b], DEFAULT_SETTINGS, NOW);
-    expect(lifts.get('b')).toBe('high'); // b is holding up the high task
-    expect(lifts.get('a')).toBe('low');
+    // Everything in a deadlock carries the strongest priority trapped in it:
+    // b holds up the high task, and a holds up b, which now demands 'high'.
+    // (This assertion used to expect 'low' for a, which was the memoisation
+    // bug showing through — the answer depended on which node was walked first.)
+    expect(lifts.get('b')).toBe('high');
+    expect(lifts.get('a')).toBe('high');
     // …and nothing in the cycle is drawable, which is the honest outcome.
     expect(eligibleForDraw([a, b], NOW)).toEqual([]);
+  });
+
+  it('a cycle does not understate the lift of a healthy task blocking into it', () => {
+    // Regression: results computed while a cycle edge was cut got memoised and
+    // then reused for a task reached by a perfectly ordinary path, handing it a
+    // lift lower than the work actually waiting on it. The UI blocks cycles,
+    // but a sync merge of two devices can still produce one.
+    //
+    // b ⇄ a is the cycle; x (high) also waits on a; o is outside it, drawable,
+    // and blocks b — so o is holding up x's chain and should inherit 'high'.
+    const b = task({ id: 'b', priority: 'low', blockedBy: ['a', 'o'] });
+    const x = task({ id: 'x', priority: 'high', blockedBy: ['a'] });
+    const a = task({ id: 'a', priority: 'low', blockedBy: ['b'] });
+    const o = task({ id: 'o', priority: 'someday' });
+    // Order matters: it decides which node the walk reaches first, and the bug
+    // only shows when the truncated result is cached before the real one.
+    const pool = [b, x, a, o];
+
+    expect(eligibleForDraw(pool, NOW).map((t) => t.id)).toEqual(['o']);
+    expect(blockLifts(pool, DEFAULT_SETTINGS, NOW).get('o')).toBe('high');
   });
 
   it('wouldCycle rejects self-blocks and loops, allows plain chains', () => {

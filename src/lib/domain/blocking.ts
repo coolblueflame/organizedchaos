@@ -56,38 +56,57 @@ export function blockLifts(tasks: Task[], settings: Settings, now: Date): Map<st
   }
   if (waiting.size === 0) return new Map();
 
-  const memo = new Map<string, Priority | null>();
-  const onStack = new Set<string>();
-
-  const demand = (taskId: string): Priority | null => {
-    const cached = memo.get(taskId);
-    if (cached !== undefined) return cached;
-    // A cycle can only exist because the user built one; treat the revisited
-    // edge as contributing nothing rather than recursing forever.
-    if (onStack.has(taskId)) return null;
-    onStack.add(taskId);
-
-    let best: Priority | null = null;
-    for (const blocked of waiting.get(taskId) ?? []) {
-      const own = effectivePriority(blocked, settings, now);
-      const inherited = demand(blocked.id);
-      const strongest =
-        inherited && priorityRank(inherited) > priorityRank(own) ? inherited : own;
-      if (best === null || priorityRank(strongest) > priorityRank(best)) best = strongest;
-      if (best === PRIORITIES[PRIORITIES.length - 1]) break; // already at the ceiling
+  // Each blocked task's own urgency, computed once rather than per pass.
+  const ownRank = new Map<string, number>();
+  for (const list of waiting.values()) {
+    for (const t of list) {
+      if (!ownRank.has(t.id)) ownRank.set(t.id, priorityRank(effectivePriority(t, settings, now)));
     }
+  }
 
-    onStack.delete(taskId);
-    memo.set(taskId, best);
-    return best;
-  };
+  /**
+   * Solved by raising every blocker's demand until nothing moves, rather than
+   * by walking the graph depth-first.
+   *
+   * Depth-first needs a cycle rule, and every cheap rule is wrong: cutting the
+   * revisited edge yields an answer that depends on which node happened to be
+   * visited first, and caching those answers hands a healthy task a lift lower
+   * than the work genuinely waiting on it. Not caching them is correct but
+   * exponential — a dozen mutually-blocking tasks took minutes, and this runs
+   * inside a $derived, so that is a frozen app.
+   *
+   * Relaxation has neither problem. Values only ever rise, so this settles on
+   * the same answer regardless of order, cycles need no special case at all
+   * (a deadlocked group simply converges on the strongest priority trapped in
+   * it), and a pass that changes nothing ends it — normally the second one.
+   */
+  const lift = new Map<string, number>();
+  const passLimit = waiting.size + 1; // longest chain it could need; usually 2
+  for (let pass = 0; pass < passLimit; pass += 1) {
+    let changed = false;
+    for (const [blockerId, blockedTasks] of waiting) {
+      const current = lift.get(blockerId) ?? -1;
+      let best = current;
+      for (const blocked of blockedTasks) {
+        // What this blocker owes: the waiting task's own urgency, or whatever
+        // that task is itself holding up, whichever is stronger.
+        const demand = Math.max(ownRank.get(blocked.id) ?? -1, lift.get(blocked.id) ?? -1);
+        if (demand > best) best = demand;
+      }
+      if (best > current) {
+        lift.set(blockerId, best);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
 
+  const byId = new Map(tasks.map((t) => [t.id, t]));
   const lifts = new Map<string, Priority>();
-  for (const blockerId of waiting.keys()) {
-    const blocker = tasks.find((t) => t.id === blockerId);
+  for (const [blockerId, rank] of lift) {
+    const blocker = byId.get(blockerId);
     if (!blocker || isDone(blocker)) continue; // finished blockers need no help
-    const d = demand(blockerId);
-    if (d) lifts.set(blockerId, d);
+    if (rank >= 0) lifts.set(blockerId, PRIORITIES[rank]!);
   }
   return lifts;
 }
