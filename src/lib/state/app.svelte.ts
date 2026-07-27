@@ -47,6 +47,8 @@ export class AppStore {
   private repo!: Repo;
   private engine: SyncEngine | null = null;
   private eggs: EggEngine | null = null;
+  /** Events reported before the engine finished loading; replayed on ready. */
+  private pendingEggs: Array<{ event: EggEvent; extra: { screen?: string } }> = [];
   /** Reactive mirrors of delight state the UI cares about. */
   eggStreak = $state(0);
   eggUnlocks = $state<string[]>([]);
@@ -97,7 +99,11 @@ export class AppStore {
     });
     await this.eggs.ready;
     this.syncEggMirrors();
+    // Replay anything the UI reported while the engine was still loading (the
+    // app is interactive from `ready`, which lands two IndexedDB reads earlier).
+    const buffered = this.pendingEggs.splice(0);
     this.fireEgg('appOpened');
+    for (const b of buffered) this.fireEgg(b.event, b.extra);
   }
 
   // ── delight layer (spec §12) ─────────────────────────────────────────────
@@ -111,7 +117,17 @@ export class AppStore {
 
   /** Report an app event; at most one delight presentation may result. */
   fireEgg(event: EggEvent, extra: { screen?: string } = {}): void {
-    if (!this.eggs) return;
+    if (!this.eggs) {
+      // Things the user actually DID are buffered, not dropped: an expired
+      // timebox alerts the moment its view mounts, which can beat the engine's
+      // load and would otherwise make that discovery unreachable on the reopen
+      // path. Ambient events are deliberately NOT replayed — init fires
+      // appOpened itself, and a screen visit recurs on the very next
+      // navigation, so replaying either just doubles the noise at launch.
+      const worthReplaying = event !== 'screenVisited' && event !== 'appOpened';
+      if (worthReplaying && this.pendingEggs.length < 5) this.pendingEggs.push({ event, extra });
+      return;
+    }
     const counts = completionCounts(this.state.tasks, new Date(), this.state.settings.rolloverHour);
     // Test determinism: under automation, delight is silent unless a specific
     // entry is forced (OC_EGG_FORCE). Humans never hit this branch.
@@ -348,33 +364,39 @@ export class AppStore {
       .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority }));
     if (before.length === 0) return;
 
-    for (const { id } of before) {
-      if (action === 'complete') await this.completeTask(id);
-      else if (action === 'delete') await this.removeTask(id, { silent: true });
-      else if (action === 'move' && value) await this.patchTask(id, { listId: value });
-      else if (action === 'priority' && value) {
-        await this.patchTask(id, { priority: value as Task['priority'] });
+    // Collect each item's real inverse as we go. For completions that means
+    // lifting the entry completeTask just pushed rather than writing our own:
+    // it alone knows to restore the in-progress flag, the elapsed clock, the
+    // current-task slot and any recurrence it armed.
+    const inverse: Array<() => Promise<void>> = [];
+    for (const snap of before) {
+      if (action === 'complete') {
+        const priorTop = undoStack.latest?.id;
+        await this.completeTask(snap.id, { bulk: true });
+        if (undoStack.latest && undoStack.latest.id !== priorTop) {
+          const taken = undoStack.takeLatest();
+          if (taken) inverse.push(taken.run);
+        }
+      } else if (action === 'delete') {
+        await this.removeTask(snap.id, { silent: true });
+        inverse.push(() => this.restoreTask(snap.id));
+      } else if (action === 'move' && value) {
+        await this.patchTask(snap.id, { listId: value });
+        inverse.push(() => this.patchTask(snap.id, { listId: snap.listId }));
+      } else if (action === 'priority' && value) {
+        await this.patchTask(snap.id, { priority: value as Task['priority'] });
+        inverse.push(() => this.patchTask(snap.id, { priority: snap.priority }));
       }
     }
-    // Each helper may have pushed its own entry; collapse to one clean undo.
-    for (const _ of before) if (action === 'complete') undoStack.entries.pop();
+    if (inverse.length === 0) return;
 
     const verb = action === 'complete' ? 'Completed'
       : action === 'delete' ? 'Deleted'
       : action === 'move' ? 'Moved'
       : 'Re-prioritised';
     this.pushUndo(`${verb} ${before.length} task${before.length === 1 ? '' : 's'}`, async () => {
-      for (const snap of before) {
-        if (action === 'complete') {
-          await this.patchTask(snap.id, { completedAt: undefined, activeMs: undefined });
-        } else if (action === 'delete') {
-          await this.restoreTask(snap.id);
-        } else if (action === 'move') {
-          await this.patchTask(snap.id, { listId: snap.listId });
-        } else {
-          await this.patchTask(snap.id, { priority: snap.priority });
-        }
-      }
+      // Reverse order, so overlapping effects unwind the way they were applied.
+      for (const run of [...inverse].reverse()) await run();
     });
   }
 
@@ -409,12 +431,22 @@ export class AppStore {
     return true;
   }
 
-  async completeTask(id: string): Promise<void> {
+  /**
+   * `bulk` marks a completion that is one item in a multi-select sweep. It
+   * suppresses the auto-select draw: rolling a fresh task in the middle of a
+   * batch picks from tasks the batch is still working through, leaves an
+   * untouched task flagged in-progress, and is not something the batch's single
+   * undo entry can take back. The sweep is not "finishing the current task".
+   */
+  async completeTask(id: string, opts: { bulk?: boolean } = {}): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
     const wasCurrent = this.state.currentTask?.taskId === id;
     // Snapshot enough to put things back exactly as they were.
     const before = task
-      ? { name: task.name, inProgress: task.inProgress, recurrenceId: task.recurrenceId }
+      ? {
+          name: task.name, inProgress: task.inProgress, recurrenceId: task.recurrenceId,
+          startedAt: task.startedAt, activeMs: task.activeMs,
+        }
       : null;
     const priorCurrent = this.state.currentTask;
     const priorSpawnAt = before?.recurrenceId
@@ -461,13 +493,20 @@ export class AppStore {
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
     }
     // Auto-select (2026-07-26 request): finishing THE current task rolls the next one.
-    if (wasCurrent && this.state.settings.autoSelectNext) {
+    if (wasCurrent && !opts.bulk && this.state.settings.autoSelectNext) {
       const next = drawTask(this.state.tasks, this.state.settings, new Date(), Math.random);
       if (next) await this.acceptTask(next.id);
     }
 
     this.pushUndo(`Completed "${before?.name || 'task'}"`, async () => {
-      await this.patchTask(id, { completedAt: undefined, inProgress: before?.inProgress ?? false });
+      // Put the clock back too, or an undone completion silently forgets how
+      // long the task had already been running.
+      await this.patchTask(id, {
+        completedAt: undefined,
+        inProgress: before?.inProgress ?? false,
+        startedAt: before?.startedAt,
+        activeMs: before?.activeMs,
+      });
       // Un-arm any recurrence this completion scheduled, so it can't respawn.
       if (before?.recurrenceId) {
         await this.updateRecurring(before.recurrenceId, { nextSpawnAt: priorSpawnAt });

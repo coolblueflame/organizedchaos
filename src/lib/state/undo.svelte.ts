@@ -34,6 +34,20 @@ class UndoStack {
     return this.entries[this.entries.length - 1] ?? null;
   }
 
+  /**
+   * Remove and return the newest entry WITHOUT running it. Used to collapse a
+   * batch: the batch runs the per-item helpers (each of which knows its own
+   * exact inverse), lifts their entries out of the stack, and re-pushes a
+   * single entry that replays them. Reimplementing those inverses by hand is
+   * how a batch undo ends up restoring less than the single-item undo does.
+   */
+  takeLatest(): UndoEntry | null {
+    const entry = this.latest;
+    if (!entry) return null;
+    this.entries = this.entries.slice(0, -1);
+    return entry;
+  }
+
   /** Undo the most recent action; returns its label, or null if nothing to undo. */
   async undo(): Promise<string | null> {
     const entry = this.latest;

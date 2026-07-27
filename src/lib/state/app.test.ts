@@ -254,6 +254,62 @@ describe('AppStore', () => {
     expect(store.state.tasks).toHaveLength(2);
   });
 
+  it('undoing a bulk complete restores everything the single-task undo does', async () => {
+    // Regression: the batch undo hand-rolled its own inverse and reset only
+    // completedAt, quietly dropping the in-progress flag, the elapsed clock
+    // and the current-task slot that completeTask's own undo puts back.
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'current one' });
+    await store.acceptTask(a.id); // a is now current + in progress
+    expect(store.state.currentTask?.taskId).toBe(a.id);
+
+    await store.bulkApply([a.id, b.id], 'complete');
+    expect(store.state.currentTask).toBeNull();
+
+    expect(await store.undoLast()).toBe('Completed 2 tasks');
+    const back = store.state.tasks.find((t) => t.id === a.id)!;
+    expect(back.completedAt).toBeUndefined();
+    expect(back.inProgress).toBe(true);
+    expect(back.startedAt).toBeGreaterThan(0);
+    expect(store.state.currentTask?.taskId).toBe(a.id);
+  });
+
+  it('a bulk complete un-arms recurrences on undo, like the single-task path', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await store.addList('L');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'water plants' });
+    await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 3, unit: 'days' });
+
+    await store.bulkApply([t.id], 'complete');
+    expect(store.state.templates[0]!.nextSpawnAt).toBeGreaterThan(0);
+    await store.undoLast();
+    expect(store.state.templates[0]!.nextSpawnAt).toBeUndefined();
+  });
+
+  it('a bulk complete never auto-selects a task mid-sweep', async () => {
+    // Regression: autoSelectNext fired inside the loop, so finishing the
+    // current task drew an UNRELATED task, marked it in progress, and left it
+    // that way — outside anything the batch's single undo could take back.
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    const bystander = await store.addTask(list.id);
+    // Max priority so the draw would deterministically land on it — otherwise
+    // this test only catches the regression on a coin flip.
+    await store.patchTask(bystander.id, { name: 'not part of this', priority: 'max' });
+    await store.updateSettings({ autoSelectNext: true });
+    await store.acceptTask(a.id);
+
+    await store.bulkApply([a.id, b.id], 'complete');
+    const untouched = store.state.tasks.find((t) => t.id === bystander.id)!;
+    expect(untouched.inProgress).toBeFalsy();
+    expect(untouched.startedAt).toBeUndefined();
+    expect(store.state.currentTask).toBeNull();
+  });
+
   it('undo restores a completed task, its in-progress flag, and its current-task slot', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);

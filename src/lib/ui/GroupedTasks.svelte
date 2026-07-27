@@ -32,8 +32,10 @@
 
   // ── multi-select ─────────────────────────────────────────────────────────
   let selected = $state<string[]>([]);
-  let bulkPriority = $state<Priority>('high');
+  /** Both start blank so picking the value you want always fires a change. */
+  let bulkPriority = $state<Priority | ''>('');
   let bulkList = $state('');
+  let deleteArmed = $state(false);
 
   const selectionMode = $derived(selected.length > 0);
 
@@ -49,9 +51,28 @@
       : [...new Set([...selected, ...ids])];
   }
 
+  /**
+   * Deleting a whole selection is the most destructive control in the app, so
+   * it arms first — the same two-tap contract as single-task and list delete.
+   */
+  async function confirmDelete() {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      haptic('tick');
+      setTimeout(() => (deleteArmed = false), 3000);
+      return;
+    }
+    deleteArmed = false;
+    await runBulk('delete');
+  }
+
   async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority', value?: string) {
     const ids = [...selected];
     selected = [];
+    // Reset the pickers, or re-choosing the same value next time is a no-op.
+    bulkPriority = '';
+    bulkList = '';
+    deleteArmed = false;
     await app.bulkApply(ids, action, value);
     haptic('success');
     // Scale the payoff to the size of the sweep — clearing eight at once should
@@ -167,7 +188,8 @@
     <span class="count">{selected.length} selected</span>
     <button data-testid="bulk-complete" onclick={() => void runBulk('complete')}>✓ done</button>
     <select data-testid="bulk-priority" bind:value={bulkPriority}
-      onchange={() => void runBulk('priority', bulkPriority)}>
+      onchange={() => bulkPriority && void runBulk('priority', bulkPriority)}>
+      <option value="">→ priority…</option>
       {#each [...PRIORITIES].reverse() as p (p)}<option value={p}>→ {p}</option>{/each}
     </select>
     <select data-testid="bulk-move" bind:value={bulkList}
@@ -175,7 +197,10 @@
       <option value="">→ move to…</option>
       {#each app.state.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
     </select>
-    <button class="danger" data-testid="bulk-delete" onclick={() => void runBulk('delete')}>delete</button>
+    <button class="danger" class:armed={deleteArmed} data-testid="bulk-delete"
+      onclick={() => void confirmDelete()}>
+      {deleteArmed ? `delete ${selected.length}?` : 'delete'}
+    </button>
     <button class="clear" data-testid="bulk-clear" onclick={() => (selected = [])}>✕</button>
   </div>
 {/if}
@@ -224,6 +249,9 @@
     padding: 5px 9px; cursor: pointer;
   }
   .bulk .danger { color: var(--acc-magenta); }
+  .bulk .danger.armed {
+    background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);
+  }
   .bulk .clear { color: var(--dim); border-color: transparent; }
   .ghost {
     position: fixed; z-index: 500; pointer-events: none;
