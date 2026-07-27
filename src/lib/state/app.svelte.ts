@@ -24,6 +24,13 @@ import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
+/**
+ * True inside Playwright/WebDriver. Delight is deliberately silent under
+ * automation so tests are deterministic and no overlay can steal a click;
+ * state changes still happen, only the celebration is withheld.
+ */
+const underAutomation = (): boolean => typeof navigator !== 'undefined' && navigator.webdriver;
+
 export class AppStore {
   state: AppState = $state({
     lists: [], tasks: [], tags: [], templates: [],
@@ -108,7 +115,7 @@ export class AppStore {
     const counts = completionCounts(this.state.tasks, new Date(), this.state.settings.rolloverHour);
     // Test determinism: under automation, delight is silent unless a specific
     // entry is forced (OC_EGG_FORCE). Humans never hit this branch.
-    const automated = typeof navigator !== 'undefined' && navigator.webdriver;
+    const automated = underAutomation();
     const force = typeof localStorage !== 'undefined' ? localStorage.getItem('OC_EGG_FORCE') : null;
     if (automated) {
       const def = force ? REGISTRY.find((r) => r.id === force && r.triggers.includes(event)) : undefined;
@@ -158,7 +165,9 @@ export class AppStore {
   grantUnlockAndShow(id: string): boolean {
     if (!this.eggs) return false;
     const earned = this.eggs.grantUnlock(id);
-    if (earned) {
+    // The grant is always recorded; only the celebration is suppressed under
+    // automation, so a stray overlay can never intercept a test's clicks.
+    if (earned && !underAutomation()) {
       const def = UNLOCKS.find((u) => u.id === id);
       if (def) presenter.show({ kind: 'unlock', unlockId: id, label: def.label });
     }

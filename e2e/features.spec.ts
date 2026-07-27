@@ -67,6 +67,9 @@ test('project deadline shows the remaining workload and marks the list', async (
   await expect(page.getByTestId('list-settings-readout')).toContainText('2h of work left');
   await page.getByTestId('list-settings-save').click();
   await expect(page.getByTestId(`list-row-${listId}`)).toContainText('08-30');
+  // Setting a deadline earns a discovery, but celebrations stay suppressed
+  // under automation — an overlay here would sit on top of the next click.
+  await expect(page.getByTestId('delight-note')).toHaveCount(0);
 });
 
 test('sub-sort reorders within a group', async ({ page }) => {
