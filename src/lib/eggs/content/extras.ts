@@ -93,4 +93,6 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'sweeper', label: 'Clean Sweep — five tasks in one bulk action', hint: 'do a lot at once' },
   { id: 'shepherd', label: 'Herder — dragged a task into a new group', hint: 'move something without opening it' },
   { id: 'clairvoyant', label: 'Project Manager — set a deadline on a whole list', hint: 'plan further ahead' },
+  { id: 'keymaster', label: 'Keymaster — finished a task that was blocking another', hint: 'open a door' },
+  { id: 'load-bearing', label: 'Load Bearing — freed three tasks with one completion', hint: 'hold up a lot at once' },
 ] as const;

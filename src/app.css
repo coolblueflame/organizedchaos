@@ -45,4 +45,37 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /*
+   * Launched from the iOS home screen the web view runs edge-to-edge under the
+   * status bar and Dynamic Island (viewport-fit=cover + a translucent status
+   * bar in index.html), so the insets have to be paid back here or the first
+   * line of every screen sits underneath the clock. Fixed overlays opt out and
+   * apply their own inset; this covers all ordinary page content at once.
+   */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Kills the double-tap-to-zoom gesture (and its 300ms click delay) without
+     taking pinch-zoom away from anyone who needs it. */
+  touch-action: manipulation;
+}
+
+/*
+ * iOS zooms the whole page in whenever a focused field's text is smaller than
+ * 16px, then leaves you scrolled sideways. The app's type scale is deliberately
+ * smaller than that, so on touch devices the fields — and only the fields —
+ * step up to 16px. Everything else keeps its density.
+ */
+@media (pointer: coarse) {
+  input, textarea, select {
+    /*
+     * !important is load-bearing, not laziness: Svelte's scoped styles are
+     * class selectors, so they outrank any global element rule no matter how
+     * it's written. Without this, every field styled by its own component
+     * silently keeps a zooming font size — and a new one would reintroduce
+     * the bug. One deliberate override beats per-component whack-a-mole.
+     */
+    font-size: 16px !important;
+  }
 }

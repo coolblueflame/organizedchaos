@@ -128,6 +128,20 @@ export const BULK_LINES: readonly string[] = [
   'Ah, the ol’ select-and-obliterate. A classic.',
 ] as const;
 
+/** Lines for finishing something other tasks were waiting on. */
+export const UNBLOCK_LINES: readonly string[] = [
+  'The path is open. 🗝',
+  'You just pulled the load-bearing card out. Everything held.',
+  'Dependency resolved. npm would be proud.',
+  'Door unlocked. Whatever’s behind it is your problem now.',
+  'Critical path: cleared.',
+  'That was the keystone. The arch stands.',
+  'Blocker eliminated. The queue advances.',
+  'You were the bottleneck’s bottleneck. Not anymore.',
+  'Merge conflict of the soul: resolved.',
+  'Green light. ✅ Traffic may proceed.',
+] as const;
+
 /** Rarer streak / heater lines — the app noticing you’re on one. */
 export const STREAK_LINES: readonly string[] = [
   '🔥 You’re on fire. (metaphorically. hydrate.)',

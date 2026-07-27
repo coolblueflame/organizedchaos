@@ -46,6 +46,8 @@
     }).length,
   );
   const blocked = $derived(blockerCount > 0);
+  /** A page marker so you can see there's detail worth expanding for. */
+  const hasNotes = $derived(task.notes.trim().length > 0);
   const listTitle = $derived(app.state.lists.find((l) => l.id === task.listId)?.title);
   const rowTags = $derived(task.tagIds
     .map((id) => app.state.tags.find((t) => t.id === id))
@@ -92,12 +94,36 @@
     else ontoggle();
   }
 
+  const coarsePointer =
+    typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
+
+  /**
+   * Expanding a task focuses and selects its name so you can retype it
+   * immediately — but on a phone that throws the keyboard over the editor you
+   * were trying to read, every time you open a task (reported from an iPhone,
+   * 2026-07-27). So on touch, opening an EXISTING task leaves the keyboard
+   * down and waits for a deliberate tap on the field.
+   *
+   * A task with no name yet is the exception: that's the rapid-entry chain,
+   * where the user pressed Enter to make this row and is mid-flow typing. Not
+   * focusing there would break the chain on exactly the device it matters on.
+   */
+  const autoFocusName = $derived(!coarsePointer || task.name.trim() === '');
+
   $effect(() => {
-    if (expanded && nameEl) {
+    if (expanded && nameEl && autoFocusName) {
       nameEl.focus();
       nameEl.select();
     }
   });
+
+  /** The deliberate second tap: select-all so retyping still replaces it. */
+  function onNameTap() {
+    if (coarsePointer && nameEl && document.activeElement !== nameEl) {
+      nameEl.focus();
+      nameEl.select();
+    }
+  }
 
   function complete() {
     if (completing) return;
@@ -156,6 +182,7 @@
         bind:value={nameDraft}
         oninput={queueNameSave}
         onblur={() => void flushName()}
+        onclick={onNameTap}
         onkeydown={onNameKey} />
     {:else}
     <button class="body" onclick={ontoggle}>
@@ -176,6 +203,10 @@
           <span class="done-at" title="time from picking it up to finishing">
             ⧗ {formatElapsed(activeMs(task)!)}
           </span>
+        {/if}
+        {#if hasNotes}
+          <span class="notes-mark" data-testid="has-notes-{task.id}"
+            title="has a description — expand to read it">🗒</span>
         {/if}
         {#if blocked && !completedMode}
           <span class="blocked-mark" data-testid="blocked-mark-{task.id}"
@@ -258,6 +289,7 @@
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
   .blocked-mark { font-size: 0.62rem; opacity: 0.85; }
+  .notes-mark { font-size: 0.62rem; opacity: 0.75; }
   .prio { width: 8px; height: 8px; border-radius: 50%; }
   .prio.someday { background: var(--dim); opacity: 0.4; }
   .prio.low { background: var(--acc-blue); }

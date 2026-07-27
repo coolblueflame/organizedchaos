@@ -469,6 +469,13 @@ export class AppStore {
       timeboxEndsAt: undefined,
       ...(tracked && tracked > 0 ? { activeMs: tracked } : {}),
     });
+    // Did this open a door? Reported first, so freeing blocked work is the
+    // headline and the ordinary completion quip is what the governor drops.
+    const freed = newlyUnblocked(id, this.state.tasks);
+    if (freed.length > 0) {
+      this.fireEgg('taskUnblocked');
+      if (freed.length >= 3) this.grantUnlockAndShow('load-bearing');
+    }
     this.fireEgg('taskCompleted');
 
     // Feed the recurring template's rolling average of how long it really takes.
@@ -506,7 +513,6 @@ export class AppStore {
     // completion's own toast rather than a second one: the freed task was
     // invisible to the randomizer until now, and a competing toast would
     // displace the Undo the user might actually want.
-    const freed = newlyUnblocked(id, this.state.tasks);
     const freedNote = freed.length === 0 ? ''
       : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
       : ` — unblocked ${freed.length} tasks`;

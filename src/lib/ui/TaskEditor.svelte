@@ -221,8 +221,14 @@
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 6px 8px; font-size: 0.82rem;
   }
-  .fields { display: flex; gap: 12px; }
-  .fields label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  /* Grid, not a flex row: a native date input has a wide intrinsic minimum and
+     refuses to shrink past it, so three across would overlap on a phone. This
+     drops to two columns (then one) before that can happen. */
+  .fields {
+    display: grid; gap: 10px 12px;
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  }
+  .fields label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .fields span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .fields input {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

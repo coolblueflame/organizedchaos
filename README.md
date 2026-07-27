@@ -72,3 +72,45 @@ npm run build      # production build
 
 Design spec and implementation plans live in `docs/superpowers/`; the research that shaped the
 architecture is in `docs/research/`.
+
+## Where your data actually goes
+
+Short version: **nowhere, unless you turn on sync — and then only to a private repo you own.**
+This repository is public; the tasks you put in the app are not, and never touch it.
+
+**With sync off (the default).** Everything lives in IndexedDB in your own browser, on your own
+device. The app makes no network requests at all beyond loading its own files. There is no
+account, no server, no telemetry, no analytics, no crash reporting, no ads, and no third-party
+scripts — no CDN, no web fonts, no tracking pixels. The entire app, including the SQLite engine
+used to read Things exports, is bundled and served from this repo's GitHub Pages site. You can
+verify that claim the same way I do: load the app, open your browser's Network tab, and watch it
+talk to nobody.
+
+**With sync on.** You create your own **private** GitHub repository and a fine-grained personal
+access token scoped to *only that one repo*. The app writes a single JSON file there and reads it
+back on other devices. `api.github.com` is the only host it ever contacts. Nothing routes through
+me or any service of mine, because there is no server in this design at all — your devices talk
+to your repo directly.
+
+Being straight about the trade-offs, since "private" deserves precision:
+
+- **GitHub can read the contents of private repositories.** They're private from the public, not
+  encrypted end-to-end. If your task list contains something you wouldn't want a cloud provider
+  to hold, don't sync it — the app is fully functional offline.
+- **Keep the data repo private.** A public one would publish your entire task list. The app can't
+  stop you from changing that setting on GitHub's side.
+- **Git history keeps everything.** Deleting a task removes it from the current file, but earlier
+  commits still contain it. Deleting the repo is the only way to erase that history.
+- **The access token is stored in plaintext** in the app's IndexedDB, which is how any browser
+  app holds a credential it needs to reuse. Scope it to the single data repo so a leak can't
+  reach anything else, and revoke it on GitHub if a device is lost.
+- **Anyone with your unlocked device can read your tasks**, exactly like any other app on it.
+  There's no separate app lock.
+
+**Import stays local too.** The Things importer parses your database file in the browser with a
+bundled WebAssembly build of SQLite. Your Things data is never uploaded anywhere — it goes from
+the file you picked straight into local storage.
+
+If you'd rather trust the code than the paragraphs above, the entire network layer is one file —
+[`src/lib/sync/githubClient.ts`](src/lib/sync/githubClient.ts). Every `fetch` in the codebase is
+in it, and every URL it builds points at `api.github.com`.

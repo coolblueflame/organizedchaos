@@ -4,7 +4,9 @@
  */
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
-import { BULK_LINES, QUIPS, STREAK_LINES, TIMEBOX_LINES, WORK_PERIOD_LINES } from './content/quips';
+import {
+  BULK_LINES, QUIPS, STREAK_LINES, TIMEBOX_LINES, UNBLOCK_LINES, WORK_PERIOD_LINES,
+} from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
 
@@ -66,8 +68,13 @@ export const REGISTRY: EggDef[] = [
     id: 'bulk-line', weight: 60, triggers: ['bulkActed'], cooldownMs: HOUR / 4,
     present: (c) => ({ kind: 'note', emoji: '💥', accent: 'cyan', text: pick(BULK_LINES, c.rng) }),
   },
+  {
+    id: 'unblock-line', weight: 60, triggers: ['taskUnblocked'],
+    present: (c) => ({ kind: 'note', emoji: '🗝', accent: 'green', text: pick(UNBLOCK_LINES, c.rng) }),
+  },
   unlockEgg('boxer', ['timeboxFinished'], () => true),
   unlockEgg('shepherd', ['taskDragged'], () => true),
+  unlockEgg('keymaster', ['taskUnblocked'], () => true),
 
   // Trivia — persistent score, sparse by design.
   {
