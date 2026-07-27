@@ -10,6 +10,7 @@
   import { app } from '../state/app.svelte';
   import type { Task } from '../domain/types';
   import TaskEditor from './TaskEditor.svelte';
+  import Glyph from './Glyph.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -201,7 +202,7 @@
       + add another
     </button>
     <button class="start" data-testid="quick-add-start" onclick={() => void startNow()}>
-      ▶ start now
+      <Glyph name="play" size={10} /> start now
     </button>
     <button data-testid="quick-add-done" onclick={() => void close()}>done</button>
   </div>
@@ -209,6 +210,8 @@
 </section>
 
 <style>
+  .actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
   .backdrop { position: fixed; inset: 0; background: rgba(4, 6, 10, 0.6); z-index: 190; }
   .sheet {
     position: fixed; z-index: 200;

@@ -13,6 +13,7 @@
   import type { SortMode } from '../domain/types';
   import GroupedTasks from './GroupedTasks.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
+  import Glyph from './Glyph.svelte';
 
   let { id }: { id: string } = $props();
 
@@ -98,7 +99,7 @@
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>{list?.title ?? '…'}</h1>
     <button class="dice" data-testid="list-randomize" aria-label="randomize from this list"
-      onclick={() => navigate({ name: 'randomizer', listId: id })}>🎲</button>
+      onclick={() => navigate({ name: 'randomizer', listId: id })}><Glyph name="dice" size={15} /></button>
     <button class="sort" data-testid="list-sort" onclick={cycleSort}>
       sort: {list?.sortMode ?? 'priority'}
     </button>
@@ -121,6 +122,8 @@
 </main>
 
 <style>
+  .dice { display: inline-flex; align-items: center; justify-content: center; }
+
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }

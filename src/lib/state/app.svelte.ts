@@ -472,6 +472,40 @@ export class AppStore {
     // Did this open a door? Reported first, so freeing blocked work is the
     // headline and the ordinary completion quip is what the governor drops.
     const freed = newlyUnblocked(id, this.state.tasks);
+
+    // Register the undo NOW, not at the end.
+    //
+    // The patch above already removed the row from the screen, but everything
+    // below is awaited — recurrence bookkeeping, clearing the current task,
+    // possibly drawing the next one. Pushing the undo entry after all that left
+    // a window where the task had visibly vanished and Cmd+Z did nothing,
+    // because the stack was still empty. Rare by hand, reliably hit by a test
+    // that completes and undoes as fast as it can, and it got likelier as the
+    // app grew. The closure only reads state captured before this point, so it
+    // is safe to arm early; the later steps are all things undo reverses.
+    const freedNote = freed.length === 0 ? ''
+      : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
+      : ` — unblocked ${freed.length} tasks`;
+    this.pushUndo(`Completed "${before?.name || 'task'}"${freedNote}`, async () => {
+      // Put the clock back too, or an undone completion silently forgets how
+      // long the task had already been running.
+      await this.patchTask(id, {
+        completedAt: undefined,
+        inProgress: before?.inProgress ?? false,
+        startedAt: before?.startedAt,
+        activeMs: before?.activeMs,
+      });
+      // Un-arm any recurrence this completion scheduled, so it can't respawn.
+      if (before?.recurrenceId) {
+        await this.updateRecurring(before.recurrenceId, { nextSpawnAt: priorSpawnAt });
+      }
+      if (wasCurrent) {
+        await this.repo.setCurrentTask(priorCurrent);
+        this.state.currentTask = priorCurrent;
+        this.state.currentTaskUpdatedAt = Date.now();
+      }
+    });
+
     if (freed.length > 0) {
       this.fireEgg('taskUnblocked');
       if (freed.length >= 3) this.grantUnlockAndShow('load-bearing');
@@ -509,33 +543,6 @@ export class AppStore {
       if (next) await this.acceptTask(next.id);
     }
 
-    // Finishing this may have freed work that was waiting on it. Say so in the
-    // completion's own toast rather than a second one: the freed task was
-    // invisible to the randomizer until now, and a competing toast would
-    // displace the Undo the user might actually want.
-    const freedNote = freed.length === 0 ? ''
-      : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
-      : ` — unblocked ${freed.length} tasks`;
-
-    this.pushUndo(`Completed "${before?.name || 'task'}"${freedNote}`, async () => {
-      // Put the clock back too, or an undone completion silently forgets how
-      // long the task had already been running.
-      await this.patchTask(id, {
-        completedAt: undefined,
-        inProgress: before?.inProgress ?? false,
-        startedAt: before?.startedAt,
-        activeMs: before?.activeMs,
-      });
-      // Un-arm any recurrence this completion scheduled, so it can't respawn.
-      if (before?.recurrenceId) {
-        await this.updateRecurring(before.recurrenceId, { nextSpawnAt: priorSpawnAt });
-      }
-      if (wasCurrent) {
-        await this.repo.setCurrentTask(priorCurrent);
-        this.state.currentTask = priorCurrent;
-        this.state.currentTaskUpdatedAt = Date.now();
-      }
-    });
   }
 
   async uncompleteTask(id: string): Promise<void> {

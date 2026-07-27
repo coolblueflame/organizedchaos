@@ -10,6 +10,7 @@
   import { type HoursRule, ALL_DAYS, WEEKDAYS, WEEKEND, hoursRules } from '../domain/schedule';
   import { projectPriority, remainingEstimateHours } from '../domain/project';
   import { formatDuration } from '../domain/stats';
+  import Glyph from './Glyph.svelte';
 
   let { list, onclose }: { list: List; onclose: () => void } = $props();
 
@@ -146,7 +147,7 @@
     {#if rules.length > 0}
       <label class="opt">
         <input type="checkbox" data-testid="list-settings-urgent" bind:checked={urgent} />
-        <span>⚡ let MAX-priority tasks through outside these hours</span>
+        <span class="with-glyph"><Glyph name="bolt" size={11} /> let MAX-priority tasks through outside these hours</span>
       </label>
     {/if}
   </section>
@@ -160,6 +161,8 @@
 </section>
 
 <style>
+  .with-glyph { display: inline-flex; align-items: center; gap: 6px; }
+
   .backdrop { position: fixed; inset: 0; background: rgba(4, 6, 10, 0.6); z-index: 190; }
   .sheet {
     position: fixed; z-index: 200; left: 50%; transform: translateX(-50%);

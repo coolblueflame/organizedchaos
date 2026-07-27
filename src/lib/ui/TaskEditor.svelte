@@ -181,7 +181,7 @@
   <div class="flow-row">
     <button class="flow" data-testid="task-make-current"
       onclick={() => { flush(); void app.acceptTask(task.id).then(() => navigate({ name: 'home' })); }}>
-      ▶ make current
+      <Glyph name="play" size={10} /> make current
     </button>
     <button class="flow" class:active={task.inProgress} data-testid="task-inprogress-toggle"
       onclick={() => void app.setInProgress(task.id, !task.inProgress)}>

@@ -20,6 +20,7 @@
   import InstallBanner from './InstallBanner.svelte';
   import WorkPeriod from './WorkPeriod.svelte';
   import { haptic } from './fx/haptics';
+  import Glyph from './Glyph.svelte';
 
   let quickAddOpen = $state(false);
 
@@ -137,7 +138,7 @@
             {#if describeWindow(l)}
               <span class="window" class:asleep={!isListActiveAt(l, new Date())}
                 title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
-                {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}{#if l.urgentOverridesHours}&nbsp;⚡{/if}
+                <Glyph name={isListActiveAt(l, new Date()) ? 'dice' : 'moon'} size={10} /> {describeWindow(l)}{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
               </span>
             {/if}
             <span class="count">{countFor(l.id)}</span>
@@ -160,7 +161,7 @@
 
   <div class="footer-links">
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
-      ▶ In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
+      <Glyph name="play" size={10} /> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
     </button>
     <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
       ↻ Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
@@ -169,7 +170,7 @@
       ✓ Completed
     </button>
     <button data-testid="settings-link" onclick={() => navigate({ name: 'settings' })}>
-      ⚙ Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
+      <Glyph name="settings" size={11} /> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
     </button>
   </div>
 </main>
@@ -182,6 +183,9 @@
 <Companion />
 
 <style>
+  /* Inline glyphs sit on the text baseline row rather than below it. */
+  .window, .footer-links button { display: inline-flex; align-items: center; gap: 5px; }
+
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   .wordmark { font-family: var(--font-mono); font-size: 1.5rem; margin: 0; font-weight: 600; }
   .accent { color: var(--acc-purple); }

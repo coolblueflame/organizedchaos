@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
   import { install } from './install.svelte';
+  import Glyph from './Glyph.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -47,7 +48,7 @@
 
   {#if install.canPromptDirectly}
     <button class="cta" data-testid="install-now" onclick={() => void installNow()}>
-      ⬇ install it now
+      <Glyph name="install" size={13} /> install it now
     </button>
     <p class="aside">Your browser can do this in one tap — no menu digging required.</p>
   {/if}
@@ -98,6 +99,8 @@
 </section>
 
 <style>
+  .cta { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+
   .backdrop {
     position: fixed; inset: 0; z-index: 300;
     background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px);

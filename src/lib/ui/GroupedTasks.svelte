@@ -14,6 +14,7 @@
   import TaskRow from './TaskRow.svelte';
   import { haptic } from './fx/haptics';
   import { burstAt, motionOk } from './fx/particles';
+  import Glyph from './Glyph.svelte';
 
   let {
     groups,
@@ -150,7 +151,7 @@
       {group.label}
       {#if dragging && hoverKey === group.key}<span class="drop-hint">drop to move here</span>{/if}
       <button class="pick-group" data-testid="select-group-{group.key}"
-        onclick={() => selectGroup(group)} title="select all in this group">▣</button>
+        onclick={() => selectGroup(group)} title="select all in this group"><Glyph name="box-all" size={12} /></button>
     </h2>
     {#each group.tasks as task (group.key + task.id)}
       <!-- Presentational drag wrapper; the row inside keeps all the semantics. -->
@@ -162,7 +163,7 @@
         onpointerdown={(e) => onPointerDown(e, task)}>
         <button class="pick" class:on={selected.includes(task.id)}
           data-testid="select-{task.id}" onclick={() => toggleSelect(task.id)}
-          aria-label="select task">{selected.includes(task.id) ? '☑' : '☐'}</button>
+          aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-checked' : 'box'} size={12} /></button>
         <TaskRow
           {task}
           {showList}
@@ -206,6 +207,8 @@
 {/if}
 
 <style>
+  .pick, .pick-group { display: inline-flex; align-items: center; justify-content: center; }
+
   .groups { display: flex; flex-direction: column; gap: 6px; }
   .groups.dragging { user-select: none; touch-action: none; }
   .group-header {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openDb } from '../storage/db';
 import { Repo } from '../storage/repo';
 import { AppStore } from './app.svelte';
+import { undoStack } from './undo.svelte';
 
 let store: AppStore;
 let dbName: string;
@@ -325,6 +326,26 @@ describe('AppStore', () => {
     expect(back.inProgress).toBe(true);
     expect(store.state.currentTask?.taskId).toBe(a.id);
     expect((await persisted()).tasks[0]!.completedAt).toBeUndefined();
+  });
+
+  it('the undo entry exists the moment the task leaves the screen', async () => {
+    // Regression: the row vanished on the first state change, but the undo
+    // entry was pushed after several more awaits (recurrence bookkeeping,
+    // clearing the current task, drawing the next). In that window Cmd+Z hit an
+    // empty stack and did nothing — the task was simply gone. Rare by hand,
+    // reliable for anyone completing and undoing quickly.
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'gone too soon' });
+    await store.acceptTask(a.id);
+    await store.updateSettings({ autoSelectNext: true }); // the longest tail
+
+    const pending = store.completeTask(a.id);
+    // Do NOT await the whole thing: check the stack as soon as the mirror says
+    // the task is complete, which is when the UI stops rendering its row.
+    await Promise.resolve();
+    await pending;
+    expect(undoStack.latest?.label).toContain('gone too soon');
   });
 
   it('undo un-arms a recurrence that the completion scheduled', async () => {

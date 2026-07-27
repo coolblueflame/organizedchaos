@@ -8,6 +8,7 @@
   import { UNLOCKS } from '../eggs/content/extras';
   import SyncHowTo from './SyncHowTo.svelte';
   import { install } from './install.svelte';
+  import Glyph from './Glyph.svelte';
 
   let howToOpen = $state(false);
 
@@ -104,8 +105,8 @@
 
   <section class="group">
     <h2>backup & data</h2>
-    <button data-testid="settings-export" onclick={exportBackup}>⬇ export everything as JSON</button>
-    <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })}>⬆ import from Things</button>
+    <button data-testid="settings-export" onclick={exportBackup} class="with-glyph"><Glyph name="install" size={11} /> export everything as JSON</button>
+    <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })} class="with-glyph"><Glyph name="upload" size={11} /> import from Things</button>
     <p class="hint">device storage:
       {#if app.persistentStorage === 'granted'}persistent ✓ (the browser won't evict your data)
       {:else if app.persistentStorage === 'denied'}best-effort — install to the home screen to lock it in
@@ -138,7 +139,7 @@
     <ul class="discoveries" data-testid="discoveries">
       {#each UNLOCKS as u (u.id)}
         <li class:found={app.eggUnlocks.includes(u.id)}>
-          {#if app.eggUnlocks.includes(u.id)}🏆 {u.label}{:else}❓ ??? <span class="disc-hint">({u.hint})</span>{/if}
+          {#if app.eggUnlocks.includes(u.id)}<Glyph name="award" size={11} /> {u.label}{:else}<Glyph name="locked" size={11} /> ??? <span class="disc-hint">({u.hint})</span>{/if}
         </li>
       {/each}
     </ul>
@@ -152,6 +153,10 @@
 {/if}
 
 <style>
+  .with-glyph { display: inline-flex; align-items: center; gap: 6px; }
+
+  .discoveries li { display: flex; align-items: center; gap: 6px; }
+
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }

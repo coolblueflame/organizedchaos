@@ -11,12 +11,13 @@
 -->
 <script lang="ts">
   import { install } from './install.svelte';
+  import Glyph from './Glyph.svelte';
 </script>
 
 {#if install.shouldOfferBanner}
   <div class="banner" data-testid="install-banner">
     <span class="text">
-      📲 Put this on your home screen — full screen, offline, sturdier storage.
+      <Glyph name="install" size={12} /> Put this on your home screen — full screen, offline, sturdier storage.
     </span>
     <button class="how" data-testid="install-banner-how" onclick={() => install.openHowTo()}>
       {install.canPromptDirectly ? 'install' : 'how?'}
@@ -27,6 +28,8 @@
 {/if}
 
 <style>
+  .text { display: inline-flex; align-items: center; gap: 6px; }
+
   .banner {
     display: flex; align-items: center; gap: 8px;
     background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 10px;

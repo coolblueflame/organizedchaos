@@ -4,6 +4,7 @@
   import { navigate } from './router.svelte';
   import { completionCounts } from '../domain/stats';
   import { motionOk } from './fx/particles';
+  import Glyph from './Glyph.svelte';
 
   const counts = $derived(completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour));
 
@@ -45,11 +46,13 @@
     </span>
   {/each}
   {#if app.eggStreak >= 3}
-    <span class="flame" title="{app.eggStreak}-day streak">🔥<span class="flame-n">{app.eggStreak}</span></span>
+    <span class="flame" title="{app.eggStreak}-day streak"><Glyph name="flame" size={11} /><span class="flame-n">{app.eggStreak}</span></span>
   {/if}
 </button>
 
 <style>
+  .flame { display: inline-flex; align-items: center; gap: 2px; }
+
   .strip {
     width: 100%; display: flex; justify-content: space-between; gap: 4px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 10px;

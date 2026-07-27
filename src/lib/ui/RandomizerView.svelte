@@ -23,6 +23,7 @@
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
+  import Glyph from './Glyph.svelte';
 
   let { listId }: { listId?: string } = $props();
 
@@ -252,7 +253,7 @@
               ? `scheduled ${describeWindow(l)}${l.urgentOverridesHours ? ' · urgent still gets through' : ''}`
               : undefined}
             onclick={() => toggleListFilter(l.id)}>
-            {#if asleepLists.includes(l.id) && !ignoringHours}{l.urgentOverridesHours ? '🌙⚡ ' : '🌙 '}{/if}{l.title}
+            {#if asleepLists.includes(l.id) && !ignoringHours}<Glyph name="moon" size={9} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={9} />{/if}&nbsp;{/if}{l.title}
           </button>
         {/each}
       </div>
@@ -361,14 +362,14 @@
         <p>// you've skipped everything in the pool</p>
         <button class="reset" data-testid="draw-reset-skips" onclick={resetSkips}>reset skips</button>
       {:else if hoursAreTheProblem}
-        <p>// everything left is on a list that's off the clock right now 🌙</p>
+        <p class="with-glyph">// everything left is on a list that's off the clock right now <Glyph name="moon" size={11} /></p>
         <button class="reset" data-testid="draw-ignore-hours" onclick={ignoreHours}>roll anyway</button>
       {:else if app.workPeriodHoursLeft() !== null}
-        <p>// nothing fits the time left in your work period ⏱</p>
+        <p class="with-glyph">// nothing fits the time left in your work period <Glyph name="period" size={11} /></p>
         <button class="reset" data-testid="draw-end-period"
           onclick={() => void app.endWorkPeriod().then(redraw)}>end the period and roll anyway</button>
       {:else if blockersAreTheProblem}
-        <p data-testid="draw-all-blocked">// everything left is waiting on another task ⛔</p>
+        <p class="with-glyph" data-testid="draw-all-blocked">// everything left is waiting on another task <Glyph name="blocked" size={11} /></p>
         <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>
       {:else}
         <p>// pool empty — everything's done, filtered out, or snoozed until 4am</p>
@@ -379,6 +380,8 @@
 </main>
 
 <style>
+  .with-glyph { display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--dim); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }

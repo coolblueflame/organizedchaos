@@ -11,6 +11,7 @@
   import { haptic } from './fx/haptics';
   import Timebox from './Timebox.svelte';
   import { completionCounts, elapsedSoFar, formatElapsed } from '../domain/stats';
+  import Glyph from './Glyph.svelte';
 
   /** Completing THE current task is the app's biggest moment — confetti-grade. */
   function completeCurrent(e: MouseEvent, taskId: string) {
@@ -63,7 +64,7 @@
   {#key task.id}
   <section class="card sheen-once" data-testid="current-task-card">
     <div class="head">
-      <span class="eyebrow">▶ current task</span>
+      <span class="eyebrow"><Glyph name="play" size={9} /> current task</span>
       <button class="clear" data-testid="current-clear" onclick={() => void app.clearCurrent()}
         aria-label="clear current task">✕</button>
     </div>
@@ -98,6 +99,8 @@
 {/if}
 
 <style>
+  .eyebrow { display: inline-flex; align-items: center; gap: 5px; }
+
   .card {
     background: var(--bg1); border: 1px solid var(--acc-cyan); border-radius: 12px;
     padding: 14px; margin-bottom: 16px;

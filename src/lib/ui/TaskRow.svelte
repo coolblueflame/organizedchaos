@@ -237,7 +237,7 @@
         {#if task.deadline && !completedMode}
           <span class="deadline" class:overdue>{shortDate(task.deadline)}</span>
         {/if}
-        {#if escalated}<span class="flame" title="escalated by deadline">▲</span>{/if}
+        {#if escalated}<span class="flame"><Glyph name="escalate" size={10} title="escalated by deadline" /></span>{/if}
         <span class="prio {effective}"></span>
       </span>
     </button>
@@ -257,6 +257,8 @@
 </div>
 
 <style>
+  .flame { display: inline-flex; align-items: center; }
+
   .row {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
     padding: 0 10px;
