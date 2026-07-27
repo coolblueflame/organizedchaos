@@ -10,6 +10,7 @@ import {
 import { nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
+import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import { SyncEngine, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
@@ -494,11 +495,23 @@ export class AppStore {
     }
     // Auto-select (2026-07-26 request): finishing THE current task rolls the next one.
     if (wasCurrent && !opts.bulk && this.state.settings.autoSelectNext) {
-      const next = drawTask(this.state.tasks, this.state.settings, new Date(), Math.random);
+      const next = drawTask(
+        this.state.tasks, this.state.settings, new Date(), Math.random, undefined, undefined,
+        blockLifts(this.state.tasks, this.state.settings, new Date()),
+      );
       if (next) await this.acceptTask(next.id);
     }
 
-    this.pushUndo(`Completed "${before?.name || 'task'}"`, async () => {
+    // Finishing this may have freed work that was waiting on it. Say so in the
+    // completion's own toast rather than a second one: the freed task was
+    // invisible to the randomizer until now, and a competing toast would
+    // displace the Undo the user might actually want.
+    const freed = newlyUnblocked(id, this.state.tasks);
+    const freedNote = freed.length === 0 ? ''
+      : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
+      : ` — unblocked ${freed.length} tasks`;
+
+    this.pushUndo(`Completed "${before?.name || 'task'}"${freedNote}`, async () => {
       // Put the clock back too, or an undone completion silently forgets how
       // long the task had already been running.
       await this.patchTask(id, {

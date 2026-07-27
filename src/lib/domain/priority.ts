@@ -42,18 +42,22 @@ export function effectivePriority(
 /** True when the deadline is what's driving the tier — the UI shows a flame for these. */
 /**
  * The tier a task actually competes at: its own effective priority, lifted by
- * any pressure its list's project deadline is applying (spec §4 + project
- * escalation). Pass `null`/undefined when the list has no deadline.
+ * whichever outside pressure is strongest — its list's project deadline
+ * (domain/project.ts) or the work waiting on it (domain/blocking.ts). Pass
+ * `null`/undefined for either when it does not apply.
  */
 export function drawPriority(
   task: Pick<Task, 'deadline' | 'estimateHours' | 'priority'>,
   settings: Settings,
   now: Date,
   projectTier?: Priority | null,
+  blockLift?: Priority | null,
 ): Priority {
-  const own = effectivePriority(task, settings, now);
-  if (!projectTier) return own;
-  return priorityRank(projectTier) > priorityRank(own) ? projectTier : own;
+  let best = effectivePriority(task, settings, now);
+  for (const lift of [projectTier, blockLift]) {
+    if (lift && priorityRank(lift) > priorityRank(best)) best = lift;
+  }
+  return best;
 }
 
 export function isEscalated(

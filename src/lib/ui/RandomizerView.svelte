@@ -19,6 +19,7 @@
   import { shuffleReveal } from './fx/shuffle';
   import { describeWindow, isListActiveAt, tasksBlockedByHours } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
+  import { blockLifts } from '../domain/blocking';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
@@ -117,10 +118,12 @@
   const projectTiers = $derived(
     projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
   );
+  /** Blockers inherit the urgency of whatever is waiting on them (§blocking). */
+  const lifts = $derived(blockLifts(app.state.tasks, app.state.settings, new Date()));
 
   function redraw() {
     drawn = drawTask(
-      app.state.tasks, app.state.settings, new Date(), Math.random, scope(), projectTiers,
+      app.state.tasks, app.state.settings, new Date(), Math.random, scope(), projectTiers, lifts,
     );
     if (drawn) {
       drawSeq += 1;

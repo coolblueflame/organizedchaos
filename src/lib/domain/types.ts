@@ -107,6 +107,13 @@ export interface Task extends Base {
   timeboxMinutes?: number;
   /** When the running timebox expires; absent when no timer is running. */
   timeboxEndsAt?: number;
+  /**
+   * Ids of tasks that must be finished before this one can be worked on
+   * (2026-07-27 request). While any of them is still open the randomizer skips
+   * this task, and each blocker is drawn at the priority of the work it is
+   * holding up. See domain/blocking.ts.
+   */
+  blockedBy?: string[];
 }
 
 export interface Tag extends Base {

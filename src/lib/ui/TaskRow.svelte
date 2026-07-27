@@ -37,6 +37,15 @@
     task.deadline !== undefined &&
     daysUntilDeadline(task.deadline, now, app.state.settings.rolloverHour) < 0,
   );
+  // Only recomputed when this task's own blockedBy changes, not on every edit
+  // anywhere: the id list is the cheap thing to watch, the lookup the costly one.
+  const blockerCount = $derived(
+    (task.blockedBy ?? []).filter((id) => {
+      const b = app.state.tasks.find((t) => t.id === id);
+      return b !== undefined && !b.deleted && b.completedAt === undefined;
+    }).length,
+  );
+  const blocked = $derived(blockerCount > 0);
   const listTitle = $derived(app.state.lists.find((l) => l.id === task.listId)?.title);
   const rowTags = $derived(task.tagIds
     .map((id) => app.state.tags.find((t) => t.id === id))
@@ -168,6 +177,10 @@
             ⧗ {formatElapsed(activeMs(task)!)}
           </span>
         {/if}
+        {#if blocked && !completedMode}
+          <span class="blocked-mark" data-testid="blocked-mark-{task.id}"
+            title="waiting on {blockerCount} unfinished task{blockerCount === 1 ? '' : 's'} — the randomizer will skip it">⛔</span>
+        {/if}
         {#if !completedMode && task.timeboxMinutes}
           <span class="done-at" title="timeboxed to {task.timeboxMinutes} minutes on accept">⏳</span>
         {/if}
@@ -244,6 +257,7 @@
   .done-at { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
+  .blocked-mark { font-size: 0.62rem; opacity: 0.85; }
   .prio { width: 8px; height: 8px; border-radius: 50%; }
   .prio.someday { background: var(--dim); opacity: 0.4; }
   .prio.low { background: var(--acc-blue); }

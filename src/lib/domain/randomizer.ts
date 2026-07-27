@@ -6,6 +6,7 @@
  * The rng is injected so tests are deterministic and the UI can add drama.
  */
 import { drawPriority, effectivePriority } from './priority';
+import { isBlocked } from './blocking';
 import { priorityRank, type Priority, type Settings, type Task } from './types';
 
 export interface DrawScope {
@@ -26,14 +27,17 @@ export interface DrawScope {
 }
 
 /**
- * Who's in the pool. "Not Today" (notTodayUntil) affects ONLY this — snoozed
- * tasks remain fully visible in lists, sort views, and In Progress (spec §4).
+ * Who's in the pool. "Not Today" (notTodayUntil) and unfinished blockers affect
+ * ONLY this — snoozed and blocked tasks remain fully visible in lists, sort
+ * views, and In Progress (spec §4).
  */
 export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Task[] {
   const ts = now.getTime();
   const listFilter = scope?.listIds !== undefined ? new Set(scope.listIds) : null;
   const tagFilter = scope?.tagIds?.length ? new Set(scope.tagIds) : null;
   const excluded = scope?.excludeIds?.length ? new Set(scope.excludeIds) : null;
+  // Blockers may live outside the scoped lists, so resolve against everything.
+  const index = new Map(tasks.map((t) => [t.id, t]));
   return tasks.filter(
     (t) =>
       !t.deleted &&
@@ -41,7 +45,8 @@ export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Ta
       (t.notTodayUntil === undefined || t.notTodayUntil <= ts) &&
       (listFilter === null || listFilter.has(t.listId)) &&
       (tagFilter === null || t.tagIds.some((id) => tagFilter.has(id))) &&
-      (excluded === null || !excluded.has(t.id)),
+      (excluded === null || !excluded.has(t.id)) &&
+      !isBlocked(t, index),
   );
 }
 
@@ -61,6 +66,8 @@ export function drawTask(
   scope?: DrawScope,
   /** Per-list pressure from project deadlines (see domain/project.ts). */
   projectTiers?: Map<string, Priority>,
+  /** Per-task pressure from work that is blocked on it (see domain/blocking.ts). */
+  lifts?: Map<string, Priority>,
 ): Task | null {
   let pool = eligibleForDraw(tasks, now, scope);
   if (scope?.maxEstimateHours !== undefined) {
@@ -73,16 +80,20 @@ export function drawTask(
   if (pool.length === 0) return null;
 
   const tierOf = (t: Task) =>
-    priorityRank(drawPriority(t, settings, now, projectTiers?.get(t.listId)));
+    priorityRank(drawPriority(t, settings, now, projectTiers?.get(t.listId), lifts?.get(t.id)));
   const topRank = Math.max(...pool.map(tierOf));
   const tier = pool.filter((t) => tierOf(t) === topRank);
 
   // Tasks that reached this tier on their own merit go before ones a project
   // deadline lifted here — finishing those shrinks the project's estimate and
-  // relieves the pressure naturally.
-  const intrinsic = tier.filter(
-    (t) => priorityRank(effectivePriority(t, settings, now)) === topRank,
-  );
+  // relieves the pressure naturally. A blocker counts as intrinsic: doing it is
+  // the ONLY route to the work waiting behind it, so it competes on equal
+  // footing with tasks that are natively this urgent.
+  const intrinsic = tier.filter((t) => {
+    const own = priorityRank(effectivePriority(t, settings, now));
+    const lift = lifts?.get(t.id);
+    return Math.max(own, lift ? priorityRank(lift) : 0) === topRank;
+  });
   const candidates = intrinsic.length > 0 ? intrinsic : tier;
 
   const weightOf = (t: Task) => (t.inProgress ? IN_PROGRESS_WEIGHT : 1);

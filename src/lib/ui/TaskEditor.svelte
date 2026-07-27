@@ -9,6 +9,7 @@
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
   import TagPicker from './TagPicker.svelte';
+  import BlockedBy from './BlockedBy.svelte';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import { describeRecurrence } from './recurrenceText';
   import { activeMs, formatElapsed } from '../domain/stats';
@@ -158,6 +159,8 @@
         onchange={(e) => setEstimate(e.currentTarget.value)} />
     </label>
   </div>
+
+  <BlockedBy {task} />
 
   {#if recurOpen}
     <RecurrenceEditor

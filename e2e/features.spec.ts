@@ -156,6 +156,57 @@ test('selecting a whole group and moving it to another list', async ({ page }) =
   await expect(page.getByText('movable', { exact: true })).toBeVisible();
 });
 
+test('a blocked task is skipped by the draw until its blocker is done', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Deps');
+  await addTask(page, 'buy paint');
+  await addTask(page, 'paint the fence');
+
+  // "paint the fence" is Max but waits on the Medium "buy paint".
+  await page.getByText('paint the fence', { exact: true }).click();
+  await page.getByTestId('priority-max').click();
+  // Changing priority moves the row to another group; its 220ms slide-out
+  // means the old row (and its editor) is briefly still in the DOM.
+  await page.waitForTimeout(300);
+  await page.getByTestId('blocked-by-toggle').click();
+  await page.getByTestId('blocked-by-input').fill('buy');
+  await page.getByTestId(/^blocked-by-pick-/).first().click();
+  await expect(page.getByTestId('blocked-by-count')).toHaveText('1');
+  await page.getByTestId('task-collapse').last().click();
+
+  // Despite being the only Max task, it never comes up — the blocker does.
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('buy paint');
+
+  // Finish the blocker; the fence is now drawable and says what it freed.
+  await page.getByTestId('draw-accept').click();
+  await page.getByTestId('current-complete').click();
+  await expect(page.getByTestId('undo-toast')).toContainText('unblocked "paint the fence"');
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('paint the fence');
+});
+
+test('the blocked-by picker refuses tasks that would make a loop', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Loops');
+  await addTask(page, 'alpha');
+  await addTask(page, 'beta');
+
+  // beta waits on alpha…
+  await page.getByText('beta', { exact: true }).click();
+  await page.getByTestId('blocked-by-toggle').click();
+  await page.getByTestId('blocked-by-input').fill('alpha');
+  await page.getByTestId(/^blocked-by-pick-/).first().click();
+  await page.getByTestId('task-collapse').last().click();
+
+  // …so alpha may not wait on beta, and the picker simply doesn't offer it.
+  await page.getByText('alpha', { exact: true }).click();
+  await page.getByTestId('blocked-by-toggle').click();
+  await page.getByTestId('blocked-by-input').fill('beta');
+  await expect(page.getByTestId(/^blocked-by-pick-/)).toHaveCount(0);
+});
+
 test('timebox counts down on the current task and can be cleared', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Boxed');
