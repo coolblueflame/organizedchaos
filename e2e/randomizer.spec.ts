@@ -116,6 +116,40 @@ test('scheduled hours keep an off-clock list out of the draw, with an override',
   await expect(page.getByTestId('draw-card')).toContainText('daytime task');
 });
 
+test('urgent override lets MAX-priority through while the list is off the clock', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  await seed(page, ['routine thing']);
+
+  // add an urgent one alongside it
+  await page.getByTestId(/^list-row-/).first().click();
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('the server is on fire');
+  await page.getByTestId('priority-max').click();
+  // Bumping priority re-sorts the list, remounting the row — let the outro
+  // finish so the old node's button isn't still in the DOM.
+  await page.waitForTimeout(300);
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  // office hours + "urgent still gets through"
+  const listRow = page.getByTestId(/^list-row-/).first();
+  const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId(`list-hours-${listId}`).click();
+  await page.getByTestId('list-hours-from').fill('09:00');
+  await page.getByTestId('list-hours-to').fill('17:00');
+  await page.getByTestId('list-hours-urgent').check();
+  await page.getByTestId('list-hours-save').click();
+
+  // At 22:00 the routine task is asleep, but the fire still gets drawn —
+  // repeatedly, because it's the only eligible task in the pool.
+  for (let i = 0; i < 3; i++) {
+    await page.getByTestId('big-button').click();
+    await expect(page.getByTestId('draw-card')).toContainText('the server is on fire');
+    await page.getByTestId('back').click();
+  }
+});
+
 test('a list is drawable inside its scheduled hours', async ({ page }) => {
   await page.clock.setFixedTime(new Date(new Date().setHours(11, 0, 0, 0)));
   await seed(page, ['daytime task']);

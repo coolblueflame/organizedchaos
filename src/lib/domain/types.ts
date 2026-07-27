@@ -39,6 +39,11 @@ export interface List extends Base {
    */
   activeFrom?: string;
   activeTo?: string;
+  /**
+   * When the list is outside its window, let its MAX-priority tasks through
+   * anyway — "off the clock, unless something's on fire."
+   */
+  urgentOverridesHours?: boolean;
   /** Source Things project/area uuid — makes re-imports idempotent (spec §9). */
   thingsUuid?: string;
 }

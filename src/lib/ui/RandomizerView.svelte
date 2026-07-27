@@ -16,25 +16,38 @@
   import { burstFromElement, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
   import { shuffleReveal } from './fx/shuffle';
-  import { describeWindow, isListActiveAt } from '../domain/schedule';
+  import { describeWindow, isListActiveAt, tasksBlockedByHours } from '../domain/schedule';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
 
   let { listId }: { listId?: string } = $props();
 
-  // Lists that are outside their scheduled hours right now. Rolling from a
-  // specific list is an explicit choice, so scoped entry ignores schedules.
+  // Rolling from a specific list is an explicit choice, so scoped entry
+  // ignores schedules entirely.
   // svelte-ignore state_referenced_locally
-  const asleepLists = listId
-    ? []
-    : app.state.lists.filter((l) => !isListActiveAt(l, new Date())).map((l) => l.id);
+  let ignoringHours = $state(Boolean(listId));
+
+  // Which lists are off the clock right now (for the 🌙 chip hints).
+  const asleepLists = $derived(
+    app.state.lists.filter((l) => !isListActiveAt(l, new Date())).map((l) => l.id),
+  );
+
+  /**
+   * Tasks the clock is holding back. Computed per TASK, not per list, so a
+   * list can be asleep while its urgent work still gets through.
+   */
+  const blockedByHours = $derived(
+    ignoringHours
+      ? []
+      : tasksBlockedByHours(app.state.tasks, app.state.lists, app.state.settings, new Date()),
+  );
 
   // List filter is an OMIT set: empty = all lists in (Ben's "all minus a few").
-  // Seeded from the schedule; the scoped 🎲 entry omits everything else.
+  // Purely manual now — the schedule works through blockedByHours instead.
   // svelte-ignore state_referenced_locally
   let omittedLists = $state<string[]>(
-    listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [...asleepLists],
+    listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [],
   );
   let filterTags = $state<string[]>([]);
   let notNow = $state<string[]>([]);
@@ -48,7 +61,7 @@
       ? app.state.lists.filter((l) => !omittedLists.includes(l.id)).map((l) => l.id)
       : undefined,
     tagIds: filterTags,
-    excludeIds: notNow,
+    excludeIds: [...notNow, ...blockedByHours],
   });
 
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
@@ -121,26 +134,19 @@
   /** Would anything be drawable if we forgot the session skips? */
   const skipsAreTheProblem = $derived.by(() => {
     if (drawn !== null) return false;
-    const without = { ...scope(), excludeIds: [] };
+    const without = { ...scope(), excludeIds: [...blockedByHours] };
     return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
   });
 
-  /** Empty only because some lists are off the clock right now? */
+  /** Empty only because the clock is holding things back? */
   const hoursAreTheProblem = $derived.by(() => {
-    if (drawn !== null || asleepLists.length === 0) return false;
-    const stillOmitted = asleepLists.filter((id) => omittedLists.includes(id));
-    if (stillOmitted.length === 0) return false;
-    const ignoringHours = {
-      ...scope(),
-      listIds: app.state.lists
-        .filter((l) => !omittedLists.includes(l.id) || asleepLists.includes(l.id))
-        .map((l) => l.id),
-    };
-    return eligibleForDraw(app.state.tasks, new Date(), ignoringHours).length > 0;
+    if (drawn !== null || blockedByHours.length === 0) return false;
+    const without = { ...scope(), excludeIds: [...notNow] };
+    return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
   });
 
   function ignoreHours() {
-    omittedLists = omittedLists.filter((id) => !asleepLists.includes(id));
+    ignoringHours = true;
     notNow = [];
     redraw();
   }
@@ -215,9 +221,11 @@
         {#each app.state.lists as l (l.id)}
           <button class="chip list-chip" class:on={!omittedLists.includes(l.id)}
             data-testid="draw-filter-list-{l.id}"
-            title={describeWindow(l) ? `scheduled ${describeWindow(l)}` : undefined}
+            title={describeWindow(l)
+              ? `scheduled ${describeWindow(l)}${l.urgentOverridesHours ? ' · urgent still gets through' : ''}`
+              : undefined}
             onclick={() => toggleListFilter(l.id)}>
-            {#if asleepLists.includes(l.id)}🌙 {/if}{l.title}
+            {#if asleepLists.includes(l.id) && !ignoringHours}{l.urgentOverridesHours ? '🌙⚡ ' : '🌙 '}{/if}{l.title}
           </button>
         {/each}
       </div>

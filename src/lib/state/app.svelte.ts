@@ -245,8 +245,13 @@ export class AppStore {
   }
 
   /** Set (or clear, with no args) the list's randomizer hours. */
-  async setListHours(id: string, activeFrom?: string, activeTo?: string): Promise<void> {
-    await this.patchList(id, { activeFrom, activeTo });
+  async setListHours(
+    id: string,
+    activeFrom?: string,
+    activeTo?: string,
+    urgentOverridesHours?: boolean,
+  ): Promise<void> {
+    await this.patchList(id, { activeFrom, activeTo, urgentOverridesHours });
   }
 
   private async patchList(id: string, patch: Partial<List>): Promise<void> {

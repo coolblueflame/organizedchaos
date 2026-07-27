@@ -6,7 +6,8 @@
  * Scope is deliberately narrow: hours only ever affect the randomizer's
  * default pool. Lists, sort views, and the current task ignore them entirely.
  */
-import type { List } from './types';
+import { effectivePriority } from './priority';
+import type { List, Settings, Task } from './types';
 
 /** 'HH:MM' → minutes since local midnight. */
 function toMinutes(hhmm: string): number {
@@ -31,6 +32,32 @@ export function isListActiveAt(list: List, now: Date): boolean {
   return from < to
     ? current >= from && current < to
     : current >= from || current < to; // wraps past midnight
+}
+
+/**
+ * Which tasks the clock is currently holding back. A list outside its window
+ * blocks everything it owns — except, when `urgentOverridesHours` is set, its
+ * MAX-priority work (effective priority, so a deadline that escalated a task
+ * to max gets through too).
+ *
+ * Returned as task ids so the caller can fold them into the draw's exclusions;
+ * scheduling never hides anything outside the randomizer.
+ */
+export function tasksBlockedByHours(
+  tasks: Task[],
+  lists: List[],
+  settings: Settings,
+  now: Date,
+): string[] {
+  const byId = new Map(lists.map((l) => [l.id, l]));
+  const blocked: string[] = [];
+  for (const task of tasks) {
+    const list = byId.get(task.listId);
+    if (!list || isListActiveAt(list, now)) continue;
+    if (list.urgentOverridesHours && effectivePriority(task, settings, now) === 'max') continue;
+    blocked.push(task.id);
+  }
+  return blocked;
 }
 
 /** Compact label for the UI, e.g. "9:00–17:00"; null when unscheduled. */

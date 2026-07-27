@@ -45,6 +45,7 @@
   let hoursId = $state<string | null>(null);
   let hoursFrom = $state('09:00');
   let hoursTo = $state('17:00');
+  let hoursUrgent = $state(false);
 
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
@@ -99,16 +100,17 @@
     hoursId = l.id;
     hoursFrom = l.activeFrom ?? '09:00';
     hoursTo = l.activeTo ?? '17:00';
+    hoursUrgent = l.urgentOverridesHours ?? false;
     menuFor = null;
   }
 
   async function saveHours() {
-    if (hoursId) await app.setListHours(hoursId, hoursFrom, hoursTo);
+    if (hoursId) await app.setListHours(hoursId, hoursFrom, hoursTo, hoursUrgent);
     hoursId = null;
   }
 
   async function clearHours() {
-    if (hoursId) await app.setListHours(hoursId, undefined, undefined);
+    if (hoursId) await app.setListHours(hoursId, undefined, undefined, undefined);
     hoursId = null;
   }
 
@@ -166,14 +168,18 @@
               <input type="time" data-testid="list-hours-to" bind:value={hoursTo} />
               <button class="hours-btn" data-testid="list-hours-save" onclick={saveHours}>set</button>
               <button class="hours-btn" data-testid="list-hours-clear" onclick={clearHours}>any time</button>
+              <label class="hours-toggle">
+                <input type="checkbox" data-testid="list-hours-urgent" bind:checked={hoursUrgent} />
+                <span class="hours-label">⚡ let MAX-priority through anyway</span>
+              </label>
             </div>
           {:else}
             <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
               <span class="list-title">{l.title}</span>
               {#if describeWindow(l)}
                 <span class="window" class:asleep={!isListActiveAt(l, new Date())}
-                  title="the randomizer draws from this list {describeWindow(l)}">
-                  {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}
+                  title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
+                  {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}{#if l.urgentOverridesHours}&nbsp;⚡{/if}
                 </span>
               {/if}
               <span class="count">{countFor(l.id)}</span>
@@ -270,6 +276,8 @@
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
     padding: 4px 10px; cursor: pointer;
   }
+  .hours-toggle { display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; }
+  .hours-toggle input { width: 15px; height: 15px; accent-color: var(--acc-yellow); }
   .menu-btn {
     background: none; border: none; color: var(--dim); font-size: 1.1rem;
     cursor: pointer; padding: 0 10px;

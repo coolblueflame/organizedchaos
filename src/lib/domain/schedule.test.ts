@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { List } from './types';
-import { describeWindow, hasWindow, isListActiveAt } from './schedule';
+import { DEFAULT_SETTINGS, type List, type Priority, type Task } from './types';
+import { describeWindow, hasWindow, isListActiveAt, tasksBlockedByHours } from './schedule';
 
 const list = (over: Partial<List> = {}): List => ({
   id: 'L1', title: 'L', sortMode: 'priority',
@@ -46,6 +46,52 @@ describe('isListActiveAt', () => {
     const degenerate = list({ activeFrom: '09:00', activeTo: '09:00' });
     expect(hasWindow(degenerate)).toBe(false);
     expect(isListActiveAt(degenerate, at('03:00'))).toBe(true);
+  });
+});
+
+describe('tasksBlockedByHours', () => {
+  const settings = { ...DEFAULT_SETTINGS };
+  const night = at('22:00');
+  let n = 0;
+  const task = (over: Partial<Task> & { priority: Priority; listId: string }): Task => ({
+    id: `t${n++}`, name: 't', notes: '', tagIds: [], inProgress: false,
+    createdAt: 0, updatedAt: 0, deleted: false, ...over,
+  });
+
+  it('blocks nothing for lists with no window, or lists currently awake', () => {
+    const always = list({ id: 'A' });
+    const awake = list({ id: 'B', activeFrom: '20:00', activeTo: '23:00' });
+    const tasks = [task({ listId: 'A', priority: 'low' }), task({ listId: 'B', priority: 'low' })];
+    expect(tasksBlockedByHours(tasks, [always, awake], settings, night)).toEqual([]);
+  });
+
+  it('blocks everything on an asleep list without the override', () => {
+    const work = list({ id: 'W', activeFrom: '09:00', activeTo: '17:00' });
+    const low = task({ listId: 'W', priority: 'low' });
+    const max = task({ listId: 'W', priority: 'max' });
+    expect(tasksBlockedByHours([low, max], [work], settings, night).sort())
+      .toEqual([low.id, max.id].sort());
+  });
+
+  it('lets MAX-priority through on an asleep list WITH the override', () => {
+    const work = list({ id: 'W', activeFrom: '09:00', activeTo: '17:00', urgentOverridesHours: true });
+    const low = task({ listId: 'W', priority: 'low' });
+    const high = task({ listId: 'W', priority: 'high' });
+    const max = task({ listId: 'W', priority: 'max' });
+    expect(tasksBlockedByHours([low, high, max], [work], settings, night).sort())
+      .toEqual([low.id, high.id].sort());
+  });
+
+  it('counts EFFECTIVE priority, so an overdue task escalates through the override', () => {
+    const work = list({ id: 'W', activeFrom: '09:00', activeTo: '17:00', urgentOverridesHours: true });
+    // manually "low", but overdue → effective max
+    const overdue = task({ listId: 'W', priority: 'low', deadline: '2026-07-01' });
+    expect(tasksBlockedByHours([overdue], [work], settings, night)).toEqual([]);
+  });
+
+  it('blocks tasks whose list is gone only when the list exists (orphans pass through)', () => {
+    const orphan = task({ listId: 'missing', priority: 'low' });
+    expect(tasksBlockedByHours([orphan], [], settings, night)).toEqual([]);
   });
 });
 
