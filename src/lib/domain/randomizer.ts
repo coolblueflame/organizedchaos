@@ -24,6 +24,12 @@ export interface DrawScope {
    * MAX-priority work is exempt — an emergency doesn't care about your window.
    */
   maxEstimateHours?: number;
+  /**
+   * Diagnostic only: keep tasks whose blockers are unfinished. The UI uses
+   * this to tell "there is nothing left" apart from "everything left is
+   * waiting on something else" — never to actually draw one.
+   */
+  includeBlocked?: boolean;
 }
 
 /**
@@ -46,7 +52,7 @@ export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Ta
       (listFilter === null || listFilter.has(t.listId)) &&
       (tagFilter === null || t.tagIds.some((id) => tagFilter.has(id))) &&
       (excluded === null || !excluded.has(t.id)) &&
-      !isBlocked(t, index),
+      (scope?.includeBlocked === true || !isBlocked(t, index)),
   );
 }
 

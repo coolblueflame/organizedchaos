@@ -152,6 +152,19 @@
     return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
   });
 
+  /**
+   * Empty only because everything left is waiting on something else? Worth
+   * naming: a blocked task is invisible to the draw but still sitting in the
+   * user's lists, so "pool empty" alone reads as a bug.
+   */
+  const blockersAreTheProblem = $derived.by(() => {
+    if (drawn !== null) return false;
+    // Only `includeBlocked` changes, so a true result isolates blocking as
+    // the cause — the skip and hours cases are already ruled out above.
+    const relaxed = { ...scope(), includeBlocked: true };
+    return eligibleForDraw(app.state.tasks, new Date(), relaxed).length > 0;
+  });
+
   /** Empty only because the clock is holding things back? */
   const hoursAreTheProblem = $derived.by(() => {
     if (drawn !== null || blockedByHours.length === 0) return false;
@@ -354,6 +367,9 @@
         <p>// nothing fits the time left in your work period ⏱</p>
         <button class="reset" data-testid="draw-end-period"
           onclick={() => void app.endWorkPeriod().then(redraw)}>end the period and roll anyway</button>
+      {:else if blockersAreTheProblem}
+        <p data-testid="draw-all-blocked">// everything left is waiting on another task ⛔</p>
+        <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>
       {:else}
         <p>// pool empty — everything's done, filtered out, or snoozed until 4am</p>
         <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>

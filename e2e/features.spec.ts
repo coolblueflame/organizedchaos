@@ -187,6 +187,28 @@ test('a blocked task is skipped by the draw until its blocker is done', async ({
   await expect(page.getByTestId('draw-card')).toContainText('paint the fence');
 });
 
+test('a list-scoped draw explains itself when everything there is blocked', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Waiting');
+  await addTask(page, 'needs the other thing');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Elsewhere');
+  await addTask(page, 'the other thing');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Waiting' }).click();
+  await page.getByText('needs the other thing', { exact: true }).click();
+  await page.getByTestId('blocked-by-toggle').click();
+  await page.getByTestId('blocked-by-input').fill('the other thing');
+  await page.getByTestId(/^blocked-by-pick-/).first().click();
+  await page.getByTestId('task-collapse').last().click();
+
+  // Rolling from THIS list can't reach the blocker, so say so rather than
+  // claiming the pool is empty — the task is right there on screen.
+  await page.getByTestId('list-randomize').click();
+  await expect(page.getByTestId('draw-all-blocked')).toBeVisible();
+});
+
 test('the blocked-by picker refuses tasks that would make a loop', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Loops');
