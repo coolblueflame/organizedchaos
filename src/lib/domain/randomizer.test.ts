@@ -76,11 +76,30 @@ describe('drawTask — tier selection', () => {
     expect(drawTask([overdueLow, plainHigh], DEFAULT_SETTINGS, now, firstRng)!.id).toBe(overdueLow.id);
   });
 
-  it('prefers in-progress tasks within the tier', () => {
+  it('weights in-progress tasks heavily but not absolutely', () => {
     const fresh = task({ priority: 'high' });
     const started = task({ priority: 'high', inProgress: true });
+    const pool = [fresh, started];
+
+    // Weights are 1 (fresh) then 5 (started) over a total of 6: a roll below
+    // 1/6 lands on the fresh task, anything above it on the started one.
+    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.05)!.id).toBe(fresh.id);
+    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.5)!.id).toBe(started.id);
+
+    // Over many uniform draws the started task should dominate ~5:1.
+    let startedHits = 0;
+    for (let i = 0; i < 600; i++) {
+      if (drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id === started.id) startedHits += 1;
+    }
+    expect(startedHits).toBeGreaterThan(420); // ≈83% expected, allow slack
+    expect(startedHits).toBeLessThan(600);    // but never a hard lock
+  });
+
+  it('priority still beats in-progress across tiers', () => {
+    const startedHigh = task({ priority: 'high', inProgress: true });
+    const freshMax = task({ priority: 'max' });
     for (let i = 0; i < 20; i++) {
-      expect(drawTask([fresh, started], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(started.id);
+      expect(drawTask([startedHigh, freshMax], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(freshMax.id);
     }
   });
 
@@ -96,8 +115,10 @@ describe('drawTask — tier selection', () => {
 
   it('reaches every candidate in the tier (seeded sweep)', () => {
     const pool = [task({ priority: 'max' }), task({ priority: 'max' }), task({ priority: 'max' })];
+    // Mid-bucket seeds (equal weights, total 3): 0.1→first, 0.5→second, 0.9→third.
     const seen = new Set<string>();
-    for (let i = 0; i < 30; i++) seen.add(drawTask(pool, DEFAULT_SETTINGS, now, () => (i % 3) / 3)!.id);
+    const seeds = [0.1, 0.5, 0.9];
+    for (let i = 0; i < 30; i++) seen.add(drawTask(pool, DEFAULT_SETTINGS, now, () => seeds[i % 3]!)!.id);
     expect(seen.size).toBe(3);
   });
 });

@@ -244,14 +244,9 @@ export class AppStore {
     await this.patchList(id, { sortMode });
   }
 
-  /** Set (or clear, with no args) the list's randomizer hours. */
-  async setListHours(
-    id: string,
-    activeFrom?: string,
-    activeTo?: string,
-    urgentOverridesHours?: boolean,
-  ): Promise<void> {
-    await this.patchList(id, { activeFrom, activeTo, urgentOverridesHours });
+  /** Whole-list edit from the settings sheet (name, group, deadline, hours). */
+  async updateList(id: string, patch: Partial<List>): Promise<void> {
+    await this.patchList(id, patch);
   }
 
   private async patchList(id: string, patch: Partial<List>): Promise<void> {
@@ -309,6 +304,11 @@ export class AppStore {
    * any await) so callers that immediately inspect state — e.g. the pristine
    * check behind rapid entry — can never race the IndexedDB write.
    */
+  /** Move a task to another list (the move control on the task editor). */
+  async moveTask(id: string, listId: string): Promise<void> {
+    await this.patchTask(id, { listId });
+  }
+
   async patchTask(id: string, patch: Partial<Task>): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
     if (task) Object.assign(task, patch, { updatedAt: Date.now() });
@@ -560,7 +560,14 @@ export class AppStore {
    * than the local one (so re-imports never clobber local edits). All Things-
    * uuid cross-references are remapped to app ids. One transaction.
    */
-  async importThings(mapped: MappedImport): Promise<MappedImport['counts']> {
+  async importThings(
+    mapped: MappedImport,
+    opts: { countHistoryInTotals?: boolean } = {},
+  ): Promise<MappedImport['counts']> {
+    if (opts.countHistoryInTotals) {
+      // Opted in: treat imported completions as ordinary completions.
+      mapped = { ...mapped, tasks: mapped.tasks.map((t) => ({ ...t, importedHistory: undefined })) };
+    }
     const snap = await this.repo.loadSnapshot();
     const idMap = new Map<string, string>();
 

@@ -33,11 +33,14 @@
     }
   }
 
+  /** Ben's default: start the scoreboard fresh, keep the history in the graphs. */
+  let countHistory = $state(false);
+
   async function runImport() {
     if (!mapped) return;
     step = 'importing';
     try {
-      await app.importThings(mapped);
+      await app.importThings(mapped, { countHistoryInTotals: countHistory });
       step = mapped.review.length > 0 ? 'review' : 'done';
     } catch (err) {
       error = `Import failed: ${err instanceof Error ? err.message : err}`;
@@ -86,6 +89,17 @@
         <li><b>{mapped.counts.tags}</b> tags (Things tags + headings)</li>
         <li><b>{mapped.counts.templates}</b> recurring tasks{#if mapped.review.length}&nbsp;(will ask you to double-check them){/if}</li>
       </ul>
+      {#if mapped.counts.completedTasks > 0}
+        <label class="opt">
+          <input type="checkbox" data-testid="import-count-history" bind:checked={countHistory} />
+          <span>
+            count those {mapped.counts.completedTasks} finished tasks toward my totals
+            <em>{countHistory
+              ? 'your lifetime score starts at ' + mapped.counts.completedTasks
+              : 'off: the scoreboard starts fresh, but the history still shows in your graphs'}</em>
+          </span>
+        </label>
+      {/if}
       {#if error}<p class="error">{error}</p>{/if}
       <button class="primary" data-testid="import-run" onclick={runImport}>import everything</button>
     </section>
@@ -139,6 +153,9 @@
     padding: 12px; cursor: pointer;
   }
   .error { color: var(--acc-magenta); font-size: 0.8rem; margin: 0; }
+  .opt { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; cursor: pointer; }
+  .opt input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--acc-green); }
+  .opt em { display: block; color: var(--dim); font-style: normal; font-size: 0.75rem; margin-top: 2px; }
   input[type='file'] { color: var(--dim); font-size: 0.85rem; }
   .review-row { display: flex; flex-direction: column; gap: 8px; }
   .review-msg {

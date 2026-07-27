@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type List, type Priority, type Task } from './types';
-import { describeWindow, hasWindow, isListActiveAt, tasksBlockedByHours } from './schedule';
+import {
+  describeWindow, hasWindow, isListActiveAt, tasksBlockedByHours, WEEKDAYS, WEEKEND,
+} from './schedule';
 
 const list = (over: Partial<List> = {}): List => ({
   id: 'L1', title: 'L', sortMode: 'priority',
@@ -46,6 +48,58 @@ describe('isListActiveAt', () => {
     const degenerate = list({ activeFrom: '09:00', activeTo: '09:00' });
     expect(hasWindow(degenerate)).toBe(false);
     expect(isListActiveAt(degenerate, at('03:00'))).toBe(true);
+  });
+});
+
+describe('weekday rules', () => {
+  // 2026-07-15 is a Wednesday; 2026-07-18 a Saturday.
+  const wed = (t: string) => new Date(`2026-07-15T${t}:00`);
+  const sat = (t: string) => new Date(`2026-07-18T${t}:00`);
+
+  it('office hours on weekdays only', () => {
+    const office = list({ hours: [{ days: WEEKDAYS, from: '09:00', to: '17:00' }] });
+    expect(isListActiveAt(office, wed('12:00'))).toBe(true);
+    expect(isListActiveAt(office, wed('20:00'))).toBe(false);
+    expect(isListActiveAt(office, sat('12:00'))).toBe(false);
+  });
+
+  it('different windows on different days, via multiple rules', () => {
+    const chores = list({
+      hours: [
+        { days: WEEKDAYS, from: '18:00', to: '21:00' }, // evenings in the week
+        { days: WEEKEND, from: '10:00', to: '16:00' },  // daytime at weekends
+      ],
+    });
+    expect(isListActiveAt(chores, wed('19:00'))).toBe(true);
+    expect(isListActiveAt(chores, wed('12:00'))).toBe(false);
+    expect(isListActiveAt(chores, sat('12:00'))).toBe(true);
+    expect(isListActiveAt(chores, sat('19:00'))).toBe(false);
+  });
+
+  it('a window that wraps midnight belongs to the day it STARTED on', () => {
+    const nightShift = list({ hours: [{ days: [5], from: '22:00', to: '02:00' }] }); // Friday nights
+    const fri = (t: string) => new Date(`2026-07-17T${t}:00`);
+    expect(isListActiveAt(nightShift, fri('23:00'))).toBe(true);
+    expect(isListActiveAt(nightShift, sat('01:00'))).toBe(true);  // spillover into Saturday
+    expect(isListActiveAt(nightShift, sat('03:00'))).toBe(false);
+    expect(isListActiveAt(nightShift, sat('23:00'))).toBe(false); // Saturday night is not Friday's
+  });
+
+  it('still honours the pre-rules activeFrom/activeTo shape', () => {
+    const legacy = list({ activeFrom: '09:00', activeTo: '17:00' });
+    expect(isListActiveAt(legacy, wed('12:00'))).toBe(true);
+    expect(isListActiveAt(legacy, sat('12:00'))).toBe(true); // all-week by definition
+    expect(isListActiveAt(legacy, wed('20:00'))).toBe(false);
+  });
+
+  it('describes rules readably', () => {
+    expect(describeWindow(list({ hours: [{ days: WEEKDAYS, from: '09:00', to: '17:00' }] })))
+      .toBe('weekdays 9:00–17:00');
+    expect(describeWindow(list({ hours: [{ days: WEEKEND, from: '10:00', to: '16:00' }] })))
+      .toBe('weekends 10:00–16:00');
+    expect(describeWindow(list({ hours: [{ days: [1, 3], from: '08:00', to: '09:00' }] })))
+      .toBe('MoWe 8:00–9:00');
+    expect(describeWindow(list())).toBeNull();
   });
 });
 

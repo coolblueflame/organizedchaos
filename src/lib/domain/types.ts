@@ -40,10 +40,21 @@ export interface List extends Base {
   activeFrom?: string;
   activeTo?: string;
   /**
+   * Weekday-aware windows (supersedes activeFrom/activeTo, which is still read
+   * for older data). Each rule covers a set of weekdays and a time range.
+   */
+  hours?: import('./schedule').HoursRule[];
+  /**
    * When the list is outside its window, let its MAX-priority tasks through
    * anyway — "off the clock, unless something's on fire."
    */
   urgentOverridesHours?: boolean;
+  /**
+   * Project deadline: the whole list should be finished by this local date.
+   * Escalates every task in the list based on the list's TOTAL remaining
+   * estimate rather than each task's own (spec §4, project escalation).
+   */
+  deadline?: string;
   /** Source Things project/area uuid — makes re-imports idempotent (spec §9). */
   thingsUuid?: string;
 }
@@ -73,6 +84,12 @@ export interface Task extends Base {
    * than its name. Drives the row dot and the randomizer's fill-in prompts.
    */
   needsReview?: boolean;
+  /**
+   * Completed work that came in from an import and shouldn't inflate the
+   * scoreboard. It still lives in the app and still feeds the over-time
+   * graphs — it just isn't counted as something YOU finished here.
+   */
+  importedHistory?: boolean;
 }
 
 export interface Tag extends Base {

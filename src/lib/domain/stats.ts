@@ -11,6 +11,9 @@ import type { Task } from './types';
 const doneTasks = (tasks: Task[]) =>
   tasks.filter((t) => !t.deleted && t.completedAt !== undefined);
 
+/** Counters only credit work finished IN this app, not imported history. */
+const scoredTasks = (tasks: Task[]) => doneTasks(tasks).filter((t) => !t.importedHistory);
+
 /** Monday-first start of the ISO week containing the given day key. */
 function weekStartKey(dayKey: string): string {
   const [y, m, d] = dayKey.split('-').map(Number);
@@ -29,7 +32,7 @@ export function completionCounts(tasks: Task[], now: Date, rolloverHour: number)
   const thisMonth = todayKey.slice(0, 7);
   const thisYear = todayKey.slice(0, 4);
   const counts: CompletionCounts = { today: 0, week: 0, month: 0, year: 0, lifetime: 0 };
-  for (const t of doneTasks(tasks)) {
+  for (const t of scoredTasks(tasks)) {
     const key = appDayKey(new Date(t.completedAt!), rolloverHour);
     counts.lifetime += 1;
     if (key === todayKey) counts.today += 1;

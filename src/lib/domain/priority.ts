@@ -40,6 +40,22 @@ export function effectivePriority(
 }
 
 /** True when the deadline is what's driving the tier — the UI shows a flame for these. */
+/**
+ * The tier a task actually competes at: its own effective priority, lifted by
+ * any pressure its list's project deadline is applying (spec §4 + project
+ * escalation). Pass `null`/undefined when the list has no deadline.
+ */
+export function drawPriority(
+  task: Pick<Task, 'deadline' | 'estimateHours' | 'priority'>,
+  settings: Settings,
+  now: Date,
+  projectTier?: Priority | null,
+): Priority {
+  const own = effectivePriority(task, settings, now);
+  if (!projectTier) return own;
+  return priorityRank(projectTier) > priorityRank(own) ? projectTier : own;
+}
+
 export function isEscalated(
   task: Pick<Task, 'deadline' | 'estimateHours' | 'priority'>,
   settings: Settings,

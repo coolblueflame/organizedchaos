@@ -13,10 +13,12 @@
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
   import PrioritySelect from './PrioritySelect.svelte';
+  import TaskEditor from './TaskEditor.svelte';
   import { burstFromElement, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
   import { shuffleReveal } from './fx/shuffle';
   import { describeWindow, isListActiveAt, tasksBlockedByHours } from '../domain/schedule';
+  import { projectPriorities } from '../domain/project';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
@@ -52,6 +54,7 @@
   let filterTags = $state<string[]>([]);
   let notNow = $state<string[]>([]);
   let drawn = $state<Task | null>(null);
+  let editingDraw = $state(false);
   let displayName = $state('');
   let drawSeq = $state(0);      // keys the card so the sheen replays per draw
   let accepting = $state(false);
@@ -109,8 +112,14 @@
     }
   }
 
+  const projectTiers = $derived(
+    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
+  );
+
   function redraw() {
-    drawn = drawTask(app.state.tasks, app.state.settings, new Date(), Math.random, scope());
+    drawn = drawTask(
+      app.state.tasks, app.state.settings, new Date(), Math.random, scope(), projectTiers,
+    );
     if (drawn) {
       drawSeq += 1;
       shuffleReveal(drawn.name || 'untitled', (text) => (displayName = text));
@@ -297,7 +306,11 @@
           drawn from: {drawnTier.toUpperCase()}{#if drawnEscalated}&nbsp;▲ deadline-escalated{/if}
         </p>
       {/if}
-      <h2 class="task-name">{displayName}</h2>
+      <button class="task-name-btn" data-testid="draw-edit-toggle"
+        onclick={() => { editingDraw = !editingDraw; if (editingDraw) void app.markReviewed(drawn!.id); }}>
+        <h2 class="task-name">{displayName}</h2>
+        <span class="edit-hint">{editingDraw ? '▴ done editing' : '✎ tweak it'}</span>
+      </button>
       {#if drawnList}<p class="list-name">in {drawnList.title}</p>{/if}
       {#if drawn.notes}<p class="notes">{drawn.notes.slice(0, 200)}</p>{/if}
       <div class="meta">
@@ -308,6 +321,12 @@
         {#if drawn.estimateHours}<span class="pill">~{drawn.estimateHours}h</span>{/if}
         {#if drawn.inProgress}<span class="pill started">in progress</span>{/if}
       </div>
+
+      {#if editingDraw}
+        <div class="draw-editor">
+          <TaskEditor task={drawn} oncollapse={() => (editingDraw = false)} />
+        </div>
+      {/if}
     </section>
     {/key}
 
@@ -384,6 +403,13 @@
     color-scheme: dark; width: 100%;
   }
   .task-name { font-size: 1.4rem; margin: 0 0 4px; }
+  .task-name-btn {
+    background: none; border: none; padding: 0; text-align: left; width: 100%;
+    color: inherit; cursor: pointer; display: block;
+  }
+  .edit-hint { color: var(--dim); font-family: var(--font-mono); font-size: 0.65rem; }
+  .task-name-btn:hover .edit-hint { color: var(--acc-cyan); }
+  .draw-editor { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
   .list-name { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0 0 10px; }
   .notes { color: var(--dim); font-size: 0.85rem; margin: 0 0 10px; white-space: pre-line; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

@@ -25,6 +25,23 @@ async function seed(page: import('@playwright/test').Page, names: string[]) {
   await page.getByTestId('back').click();
 }
 
+/** Set a single all-week hours window on a list via its settings sheet. */
+async function setHours(
+  page: import('@playwright/test').Page,
+  listId: string,
+  from: string,
+  to: string,
+  opts: { urgent?: boolean } = {},
+) {
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId('hours-add').click();
+  await page.getByTestId('hours-rule-0-from').fill(from);
+  await page.getByTestId('hours-rule-0-to').fill(to);
+  if (opts.urgent) await page.getByTestId('list-settings-urgent').check();
+  await page.getByTestId('list-settings-save').click();
+  await expect(page.getByTestId('list-settings')).toHaveCount(0);
+}
+
 test('draw → accept → current task card survives reload → complete', async ({ page }) => {
   await seed(page, ['alpha']);
   await page.getByTestId('big-button').click();
@@ -72,8 +89,23 @@ test('in-progress task is preferred by the draw', async ({ page }) => {
   await page.getByTestId('task-make-current').click(); // lands on home with card
   await expect(page.getByTestId('current-task-card')).toContainText('started');
   await page.getByTestId('current-clear').click(); // no longer current, still inProgress
-  await page.getByTestId('big-button').click();
-  await expect(page.getByTestId('draw-card')).toContainText('started'); // deterministic preference
+
+  // In-progress is weighted 5:1, not guaranteed (the exact odds are unit-tested),
+  // so assert it surfaces across a handful of rolls rather than on any single one.
+  let sawStarted = false;
+  for (let i = 0; i < 6 && !sawStarted; i++) {
+    await page.getByTestId('big-button').click();
+    try {
+      // expect() retries, which also rides out the slot-machine name reveal —
+      // reading textContent directly would catch scrambled characters.
+      await expect(page.getByTestId('draw-card')).toContainText('started', { timeout: 2000 });
+      sawStarted = true;
+    } catch {
+      // this roll landed on the other task
+    }
+    await page.getByTestId('back').click();
+  }
+  expect(sawStarted).toBe(true);
 });
 
 test('omitting a list chip excludes it from the global draw', async ({ page }) => {
@@ -99,14 +131,10 @@ test('scheduled hours keep an off-clock list out of the draw, with an override',
   await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
   await seed(page, ['daytime task']);
 
-  // Give "Pool" working hours via the list menu
+  // Give "Pool" working hours via its settings sheet
   const listRow = page.getByTestId(/^list-row-/).first();
   const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
-  await page.getByTestId(`list-menu-${listId}`).click();
-  await page.getByTestId(`list-hours-${listId}`).click();
-  await page.getByTestId('list-hours-from').fill('09:00');
-  await page.getByTestId('list-hours-to').fill('17:00');
-  await page.getByTestId('list-hours-save').click();
+  await setHours(page, listId, '09:00', '17:00');
   await expect(listRow).toContainText('9:00–17:00');
 
   // At 22:00 the global draw skips it, but offers to roll anyway
@@ -134,12 +162,7 @@ test('urgent override lets MAX-priority through while the list is off the clock'
   // office hours + "urgent still gets through"
   const listRow = page.getByTestId(/^list-row-/).first();
   const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
-  await page.getByTestId(`list-menu-${listId}`).click();
-  await page.getByTestId(`list-hours-${listId}`).click();
-  await page.getByTestId('list-hours-from').fill('09:00');
-  await page.getByTestId('list-hours-to').fill('17:00');
-  await page.getByTestId('list-hours-urgent').check();
-  await page.getByTestId('list-hours-save').click();
+  await setHours(page, listId, '09:00', '17:00', { urgent: true });
 
   // At 22:00 the routine task is asleep, but the fire still gets drawn —
   // repeatedly, because it's the only eligible task in the pool.
@@ -155,11 +178,7 @@ test('a list is drawable inside its scheduled hours', async ({ page }) => {
   await seed(page, ['daytime task']);
   const listRow = page.getByTestId(/^list-row-/).first();
   const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
-  await page.getByTestId(`list-menu-${listId}`).click();
-  await page.getByTestId(`list-hours-${listId}`).click();
-  await page.getByTestId('list-hours-from').fill('09:00');
-  await page.getByTestId('list-hours-to').fill('17:00');
-  await page.getByTestId('list-hours-save').click();
+  await setHours(page, listId, '09:00', '17:00');
 
   await page.getByTestId('big-button').click();
   await expect(page.getByTestId('draw-card')).toContainText('daytime task');

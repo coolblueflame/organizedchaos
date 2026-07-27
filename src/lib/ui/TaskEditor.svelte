@@ -66,7 +66,20 @@
     touched();
   }
 
+  // Same two-stage arming as the row's delete — a mis-tap in here was deleting
+  // immediately, which is exactly the friction this was supposed to add.
+  let deleteArmed = $state(false);
+  let armTimer: ReturnType<typeof setTimeout> | undefined;
+
   function remove() {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      clearTimeout(armTimer);
+      armTimer = setTimeout(() => (deleteArmed = false), 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    deleteArmed = false;
     flush();
     void app.removeTask(task.id); // the store records the undo
   }
@@ -106,6 +119,16 @@
     onchange={(p) => { void app.patchTask(task.id, { priority: p }); touched(); }} />
 
   <TagPicker selected={task.tagIds} ontoggle={toggleTag} />
+
+  <label class="move">
+    <span>list</span>
+    <select data-testid="task-move-list" value={task.listId}
+      onchange={(e) => { void app.moveTask(task.id, e.currentTarget.value); touched(); }}>
+      {#each app.state.lists as l (l.id)}
+        <option value={l.id}>{l.title}</option>
+      {/each}
+    </select>
+  </label>
 
   <div class="fields">
     <label>
@@ -158,7 +181,9 @@
   </div>
 
   <div class="actions">
-    <button class="danger" data-testid="task-delete-{task.id}" onclick={remove}>delete</button>
+    <button class="danger" class:armed={deleteArmed} data-testid="task-delete-{task.id}" onclick={remove}>
+      {deleteArmed ? 'tap again to delete' : 'delete'}
+    </button>
     <button data-testid="task-collapse" onclick={() => { flush(); oncollapse(); }}>done</button>
   </div>
   {/if}
@@ -172,6 +197,12 @@
     font-family: var(--font-sans);
   }
   .notes:focus { color: var(--text); border-color: var(--acc-blue); }
+  .move { display: flex; align-items: center; gap: 8px; }
+  .move span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .move select {
+    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 6px 8px; font-size: 0.82rem;
+  }
   .fields { display: flex; gap: 12px; }
   .fields label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .fields span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
@@ -204,4 +235,5 @@
   }
   .actions button:hover { background: var(--bg2); }
   .danger { color: var(--acc-magenta); }
+  .danger.armed { background: var(--acc-magenta); color: var(--bg0); font-weight: 700; }
 </style>

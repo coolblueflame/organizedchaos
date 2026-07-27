@@ -29,6 +29,17 @@ describe('completionCounts', () => {
     expect(c).toEqual({ today: 1, week: 3, month: 5, year: 6, lifetime: 7 });
   });
 
+  it('imported history stays out of the scoreboard but still feeds the graphs', () => {
+    const mine = doneAt('2026-07-15T10:00:00');
+    const imported = { ...doneAt('2026-07-15T09:00:00'), importedHistory: true };
+    const counts = completionCounts([mine, imported], now, 4);
+    expect(counts).toMatchObject({ today: 1, lifetime: 1 });
+
+    // …but the over-time series still shows the full history
+    const series = completionSeries([mine, imported], 'day', 1, now, 4);
+    expect(series[0]!.count).toBe(2);
+  });
+
   it('ignores open and deleted tasks', () => {
     const open = task({ priority: 'low' });
     const ghost = { ...doneAt('2026-07-15T10:00:00'), deleted: true };

@@ -9,6 +9,8 @@
   import { toast } from './toast.svelte';
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
+  import { projectPriorities } from '../domain/project';
+  import ListSettings from './ListSettings.svelte';
   import type { List } from '../domain/types';
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
@@ -41,14 +43,10 @@
   let newListOpen = $state(false);
   let newListInput = $state<HTMLInputElement | null>(null);
   let newListTitle = $state('');
-  let menuFor = $state<string | null>(null);
-  let renamingId = $state<string | null>(null);
-  let editText = $state('');
-  let regroupingId = $state<string | null>(null);
-  let hoursId = $state<string | null>(null);
-  let hoursFrom = $state('09:00');
-  let hoursTo = $state('17:00');
-  let hoursUrgent = $state(false);
+  let settingsForId = $state<string | null>(null);
+  const settingsFor = $derived(
+    settingsForId ? app.state.lists.find((l) => l.id === settingsForId) ?? null : null,
+  );
 
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
@@ -77,51 +75,9 @@
     navigate({ name: 'list', id: list.id });
   }
 
-  function startRename(l: List) {
-    renamingId = l.id;
-    editText = l.title;
-    menuFor = null;
-  }
-
-  async function finishRename() {
-    if (renamingId && editText.trim()) await app.renameList(renamingId, editText.trim());
-    renamingId = null;
-  }
-
-  function startRegroup(l: List) {
-    regroupingId = l.id;
-    editText = l.areaGroup ?? '';
-    menuFor = null;
-  }
-
-  async function finishRegroup() {
-    if (regroupingId) await app.regroupList(regroupingId, editText.trim() || undefined);
-    regroupingId = null;
-  }
-
-  function startHours(l: List) {
-    hoursId = l.id;
-    hoursFrom = l.activeFrom ?? '09:00';
-    hoursTo = l.activeTo ?? '17:00';
-    hoursUrgent = l.urgentOverridesHours ?? false;
-    menuFor = null;
-  }
-
-  async function saveHours() {
-    if (hoursId) await app.setListHours(hoursId, hoursFrom, hoursTo, hoursUrgent);
-    hoursId = null;
-  }
-
-  async function clearHours() {
-    if (hoursId) await app.setListHours(hoursId, undefined, undefined, undefined);
-    hoursId = null;
-  }
-
-  async function deleteList(l: List) {
-    menuFor = null;
-    if (!window.confirm(`Delete "${l.title}" and its open tasks?`)) return;
-    await app.removeList(l.id); // the store records the undo
-  }
+  const projectTiers = $derived(
+    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
+  );
 
   $effect(() => {
     if (newListOpen) newListInput?.focus();
@@ -164,51 +120,24 @@
       {/if}
       {#each lists as l (l.id)}
         <div class="list-row" data-testid="list-row-{l.id}">
-          {#if renamingId === l.id}
-            <!-- svelte-ignore a11y_autofocus -->
-            <input class="inline-edit" autofocus bind:value={editText}
-              onblur={finishRename}
-              onkeydown={(e) => { if (e.key === 'Enter') finishRename(); if (e.key === 'Escape') renamingId = null; }} />
-          {:else if regroupingId === l.id}
-            <!-- svelte-ignore a11y_autofocus -->
-            <input class="inline-edit" autofocus bind:value={editText} placeholder="group name (empty = none)"
-              onblur={finishRegroup}
-              onkeydown={(e) => { if (e.key === 'Enter') finishRegroup(); if (e.key === 'Escape') regroupingId = null; }} />
-          {:else if hoursId === l.id}
-            <div class="hours-row" data-testid="list-hours-editor">
-              <span class="hours-label">🎲 draws from</span>
-              <input type="time" data-testid="list-hours-from" bind:value={hoursFrom} />
-              <span class="hours-label">to</span>
-              <input type="time" data-testid="list-hours-to" bind:value={hoursTo} />
-              <button class="hours-btn" data-testid="list-hours-save" onclick={saveHours}>set</button>
-              <button class="hours-btn" data-testid="list-hours-clear" onclick={clearHours}>any time</button>
-              <label class="hours-toggle">
-                <input type="checkbox" data-testid="list-hours-urgent" bind:checked={hoursUrgent} />
-                <span class="hours-label">⚡ let MAX-priority through anyway</span>
-              </label>
-            </div>
-          {:else}
-            <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
-              <span class="list-title">{l.title}</span>
-              {#if describeWindow(l)}
-                <span class="window" class:asleep={!isListActiveAt(l, new Date())}
-                  title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
-                  {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}{#if l.urgentOverridesHours}&nbsp;⚡{/if}
-                </span>
-              {/if}
-              <span class="count">{countFor(l.id)}</span>
-            </button>
-            <button class="menu-btn" data-testid="list-menu-{l.id}"
-              onclick={() => (menuFor = menuFor === l.id ? null : l.id)}>⋯</button>
-            {#if menuFor === l.id}
-              <div class="menu">
-                <button onclick={() => startRename(l)}>Rename</button>
-                <button onclick={() => startRegroup(l)}>Group…</button>
-                <button data-testid="list-hours-{l.id}" onclick={() => startHours(l)}>Hours…</button>
-                <button class="danger" data-testid="list-delete-{l.id}" onclick={() => deleteList(l)}>Delete</button>
-              </div>
+          <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
+            <span class="list-title">{l.title}</span>
+            {#if l.deadline}
+              {@const tier = projectTiers.get(l.id)}
+              <span class="project {tier ?? 'low'}" title="project deadline {l.deadline}">
+                ▤ {l.deadline.slice(5)}
+              </span>
             {/if}
-          {/if}
+            {#if describeWindow(l)}
+              <span class="window" class:asleep={!isListActiveAt(l, new Date())}
+                title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
+                {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}{#if l.urgentOverridesHours}&nbsp;⚡{/if}
+              </span>
+            {/if}
+            <span class="count">{countFor(l.id)}</span>
+          </button>
+          <button class="menu-btn" data-testid="list-menu-{l.id}"
+            onclick={() => (settingsForId = l.id)} aria-label="list settings">⋯</button>
         </div>
       {/each}
     {/each}
@@ -240,6 +169,9 @@
 </main>
 {#if quickAddOpen}
   <QuickAdd onclose={() => (quickAddOpen = false)} />
+{/if}
+{#if settingsFor}
+  <ListSettings list={settingsFor} onclose={() => (settingsForId = null)} />
 {/if}
 <Companion />
 
@@ -292,40 +224,18 @@
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.65rem;
   }
   .window.asleep { color: var(--dim); }
-  .hours-row {
-    flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 8px; padding: 10px;
+  .project {
+    margin-left: auto; margin-right: 8px;
+    font-family: var(--font-mono); font-size: 0.65rem; color: var(--dim);
   }
-  .hours-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
-  .hours-row input {
-    background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--text); font-family: var(--font-mono); font-size: 0.8rem;
-    padding: 4px 6px; color-scheme: dark;
-  }
-  .hours-btn {
-    background: none; border: 1px solid var(--line); border-radius: 6px;
-    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
-    padding: 4px 10px; cursor: pointer;
-  }
-  .hours-toggle { display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; }
-  .hours-toggle input { width: 15px; height: 15px; accent-color: var(--acc-yellow); }
+  .project.medium { color: var(--acc-green); }
+  .project.high { color: var(--acc-orange); }
+  .project.max { color: var(--acc-magenta); font-weight: 700; }
   .menu-btn {
     background: none; border: none; color: var(--dim); font-size: 1.1rem;
     cursor: pointer; padding: 0 10px;
   }
-  .menu {
-    position: absolute; right: 0; top: 100%; z-index: 10;
-    background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
-    display: flex; flex-direction: column; min-width: 130px; overflow: hidden;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  }
-  .menu button {
-    background: none; border: none; color: var(--text); padding: 10px 14px;
-    text-align: left; cursor: pointer; font-size: 0.85rem;
-  }
-  .menu button:hover { background: var(--bg1); }
-  .menu .danger { color: var(--acc-magenta); }
-
+  .menu-btn:hover { color: var(--text); }
   .inline-edit {
     flex: 1; background: var(--bg2); border: 1px solid var(--acc-blue); border-radius: 8px;
     color: var(--text); padding: 14px; font-size: 0.95rem; outline: none;

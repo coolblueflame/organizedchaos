@@ -322,6 +322,9 @@ export function mapThings(rows: ThingsRows): MappedImport {
       // Open imports arrive untriaged — Things has no priority/estimate to carry
       // over, so each wants a once-over. Finished history needs nothing.
       needsReview: t.status === 3 ? undefined : true,
+      // Finished-in-Things work is history, not this app's scoreboard. The
+      // importer clears this when the user opts to count it.
+      importedHistory: t.status === 3 ? true : undefined,
       recurrenceId: t.repeatingTemplate ?? undefined,
       ...stamp(t.creationDate, t.userModificationDate),
     }));
