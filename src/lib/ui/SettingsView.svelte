@@ -6,6 +6,9 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { UNLOCKS } from '../eggs/content/extras';
+  import SyncHowTo from './SyncHowTo.svelte';
+
+  let howToOpen = $state(false);
 
   let owner = $state('coolblueflame');
   let repoName = $state('organizedchaos-data');
@@ -64,6 +67,9 @@
         <input data-testid="settings-token" type="password" bind:value={token} placeholder="github_pat_…" /></label>
       <button class="primary" data-testid="settings-connect" disabled={connecting || !token.trim()} onclick={connect}>
         {connecting ? 'connecting…' : 'connect + sync'}
+      </button>
+      <button class="link" data-testid="sync-howto-open" onclick={() => (howToOpen = true)}>
+        how do I make the repo and token? →
       </button>
       {#if connectError}<p class="error" data-testid="settings-connect-error">{connectError}</p>{/if}
     {:else}
@@ -124,6 +130,10 @@
   <p class="about">organized chaos v{__APP_VERSION__} — a todo list with a gambling problem</p>
 </main>
 
+{#if howToOpen}
+  <SyncHowTo onclose={() => (howToOpen = false)} />
+{/if}
+
 <style>
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
@@ -163,6 +173,10 @@
   .row button { flex: 1; }
   .error { color: var(--acc-magenta); font-size: 0.8rem; margin: 0; }
   .about { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; text-align: center; margin-top: 20px; }
+  .link {
+    background: none; border: none; color: var(--acc-blue); cursor: pointer;
+    font-size: 0.78rem; padding: 2px; text-align: left; text-decoration: underline;
+  }
   .discoveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .discoveries li { color: var(--dim); font-size: 0.82rem; }
   .discoveries li.found { color: var(--text); }

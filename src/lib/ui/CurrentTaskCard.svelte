@@ -8,6 +8,8 @@
   import { navigate } from './router.svelte';
   import { confettiAt, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
+  import Timebox from './Timebox.svelte';
+  import { elapsedSoFar, formatElapsed } from '../domain/stats';
 
   /** Completing THE current task is the app's biggest moment — confetti-grade. */
   function completeCurrent(e: MouseEvent, taskId: string) {
@@ -51,6 +53,15 @@
       <span class="name">{task.name || 'untitled'}</span>
       {#if listTitle}<span class="list">in {listTitle}</span>{/if}
     </button>
+    <div class="timebox-row">
+      <Timebox {task} />
+      {#if task.startedAt || task.activeAccumulatedMs}
+        <span class="elapsed" title="time actually spent working on this">
+          ⧗ {formatElapsed(elapsedSoFar(task))} in
+        </span>
+      {/if}
+    </div>
+
     <div class="actions">
       <button class="done" data-testid="current-complete" onclick={(e) => completeCurrent(e, task!.id)}>
         ✓ done
@@ -86,6 +97,8 @@
   }
   .name { display: block; font-size: 1.1rem; font-weight: 600; }
   .list { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
+  .timebox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .elapsed { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .actions { display: flex; gap: 8px; }
   .done {
     flex: 2; background: var(--bg2); border: 1px solid var(--acc-green); border-radius: 8px;

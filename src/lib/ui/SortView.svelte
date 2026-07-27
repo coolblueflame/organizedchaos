@@ -6,8 +6,11 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
-  import { groupByDate, groupByPriority, groupByTag } from '../domain/views';
-  import TaskRow from './TaskRow.svelte';
+  import {
+    groupByDate, groupByPriority, groupByTag, subSortGroups,
+    SUB_SORT_LABELS, type SubSort,
+  } from '../domain/views';
+  import GroupedTasks from './GroupedTasks.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
 
   let { mode }: { mode: 'date' | 'priority' | 'tag' } = $props();
@@ -24,29 +27,27 @@
     if (mode === 'tag') return groupByTag(app.state.tasks, app.state.tags, app.state.settings, now);
     return groupByPriority(app.state.tasks, app.state.settings, now);
   });
+
+  let subSort = $state<SubSort>('smart');
+  const SUB_CYCLE: SubSort[] = ['smart', 'alpha', 'created', 'newest'];
+  const cycleSubSort = () => {
+    subSort = SUB_CYCLE[(SUB_CYCLE.indexOf(subSort) + 1) % SUB_CYCLE.length]!;
+  };
+  const sortedGroups = $derived(subSortGroups(groups, subSort));
 </script>
 
 <main>
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>{titles[mode]}</h1>
+    <button class="sub" data-testid="sort-subsort" onclick={cycleSubSort}
+      title="order within each group">↳ {SUB_SORT_LABELS[subSort]}</button>
   </header>
 
-  <section class="groups">
-    {#each groups as group (group.key)}
-      <h2 class="group-header">{group.label}</h2>
-      {#each group.tasks as task (group.key + task.id)}
-        <TaskRow {task} showList expanded={editingTaskId === task.id}
-          ontoggle={() => {
-            editingTaskId = editingTaskId === task.id ? null : task.id;
-            if (editingTaskId) void app.markReviewed(task.id);
-          }} />
-      {/each}
-    {/each}
-    {#if groups.length === 0}
-      <p class="empty">// nothing to sort yet</p>
-    {/if}
-  </section>
+  <GroupedTasks groups={sortedGroups} {mode} showList bind:editingTaskId />
+  {#if groups.length === 0}
+    <p class="empty">// nothing to sort yet</p>
+  {/if}
 </main>
 
 <style>
@@ -54,10 +55,5 @@
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
-  .groups { display: flex; flex-direction: column; gap: 6px; }
-  .group-header {
-    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
-    text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 2px; font-weight: 600;
-  }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; }
 </style>

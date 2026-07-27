@@ -62,6 +62,9 @@ export class AppStore {
     // Materialize any recurrences that came due while the app was closed.
     await this.runSpawnSweep();
     this.ready = true;
+    const period = await this.repo.getKv<number | null>('workPeriod');
+    this.workPeriodEndsAt = period && period > Date.now() ? period : null;
+
     // Resume sync if this device is connected; first pull runs behind the UI.
     const auth = await this.repo.getSyncAuth();
     if (auth) {
@@ -126,8 +129,18 @@ export class AppStore {
       completionsToday: counts.today,
       lifetimeCompletions: counts.lifetime,
     });
+    if (!presentation) {
+      this.syncEggMirrors();
+      return;
+    }
+    // Earned awards must be RECORDED, not merely announced — otherwise they
+    // never reach the discoveries list and could be "won" repeatedly.
+    if (presentation.kind === 'unlock' && !this.eggs.grantUnlock(presentation.unlockId)) {
+      this.syncEggMirrors();
+      return; // already had it; don't celebrate twice
+    }
     this.syncEggMirrors();
-    if (presentation) presenter.show(presentation);
+    presenter.show(presentation);
   }
 
   recordTrivia(correct: boolean): void {
@@ -347,8 +360,36 @@ export class AppStore {
       ? this.state.templates.find((t) => t.id === before.recurrenceId)?.nextSpawnAt
       : undefined;
 
-    await this.patchTask(id, { completedAt: Date.now(), inProgress: false });
+    const finishedAt = Date.now();
+    // Time counts ONLY when finishing something you were actively working on.
+    // Ticking it off the list — or completing it after pausing — records nothing,
+    // because that stretch was never tracked to completion.
+    const tracked = task?.inProgress && task.startedAt !== undefined
+      ? (task.activeAccumulatedMs ?? 0) + (finishedAt - task.startedAt)
+      : undefined;
+
+    await this.patchTask(id, {
+      completedAt: finishedAt,
+      inProgress: false,
+      startedAt: undefined,
+      timeboxEndsAt: undefined,
+      ...(tracked && tracked > 0 ? { activeMs: tracked } : {}),
+    });
     this.fireEgg('taskCompleted');
+
+    // Feed the recurring template's rolling average of how long it really takes.
+    if (before?.recurrenceId && tracked !== undefined) {
+      const tpl = this.state.templates.find((t) => t.id === before.recurrenceId && !t.deleted);
+      const elapsed = tracked;
+      if (tpl && elapsed > 0) {
+        const n = tpl.completedInstances ?? 0;
+        const mean = tpl.avgActiveMs ?? 0;
+        await this.updateRecurring(tpl.id, {
+          avgActiveMs: Math.round((mean * n + elapsed) / (n + 1)),
+          completedInstances: n + 1,
+        });
+      }
+    }
     if (wasCurrent) await this.clearCurrent();
     // Arm after-completion recurrence: "come back X after done" (spec §5).
     const tpl = task?.recurrenceId
@@ -425,7 +466,17 @@ export class AppStore {
 
   /** Accepting a draw: task becomes THE current task and is flagged in-progress. */
   async acceptTask(taskId: string): Promise<void> {
-    await this.patchTask(taskId, { inProgress: true });
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    // Stamp the clock the first time it's picked up — that's what "completed
+    // in" measures. Re-accepting later keeps the original start.
+    const startedAt = task?.startedAt ?? Date.now();
+    // A timebox set on the task (or inherited from its template) starts now.
+    const minutes = task?.timeboxMinutes;
+    await this.patchTask(taskId, {
+      inProgress: true,
+      startedAt,
+      ...(minutes ? { timeboxEndsAt: Date.now() + minutes * 60_000 } : {}),
+    });
     const ref = { taskId, acceptedAt: Date.now() };
     await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
@@ -467,8 +518,69 @@ export class AppStore {
     this.requestSync();
   }
 
+  /**
+   * Starting banks nothing; pausing banks the stretch just worked. Resuming
+   * later continues the count from where it left off.
+   */
   async setInProgress(taskId: string, flag: boolean): Promise<void> {
-    await this.patchTask(taskId, { inProgress: flag });
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    if (flag) {
+      await this.patchTask(taskId, {
+        inProgress: true,
+        ...(task.startedAt === undefined ? { startedAt: Date.now() } : {}),
+      });
+      return;
+    }
+    const banked = (task.activeAccumulatedMs ?? 0) +
+      (task.startedAt ? Date.now() - task.startedAt : 0);
+    await this.patchTask(taskId, {
+      inProgress: false,
+      startedAt: undefined,
+      activeAccumulatedMs: banked > 0 ? banked : undefined,
+      timeboxEndsAt: undefined, // the clock stops with the work
+    });
+  }
+
+  /**
+   * A work period: a wider window during which the randomizer only offers
+   * tasks whose estimate fits the time remaining (emergencies excepted).
+   * Device-local — it describes what YOU are doing right now, not your data.
+   */
+  workPeriodEndsAt = $state<number | null>(null);
+
+  async startWorkPeriod(minutes: number): Promise<void> {
+    this.workPeriodEndsAt = Date.now() + minutes * 60_000;
+    await this.repo.setKv('workPeriod', this.workPeriodEndsAt);
+  }
+
+  async endWorkPeriod(): Promise<void> {
+    this.workPeriodEndsAt = null;
+    await this.repo.setKv('workPeriod', null);
+  }
+
+  /** Hours left in the period, or null when none is running / it's over. */
+  workPeriodHoursLeft(now = Date.now()): number | null {
+    if (!this.workPeriodEndsAt) return null;
+    const ms = this.workPeriodEndsAt - now;
+    return ms > 0 ? ms / 3_600_000 : null;
+  }
+
+  /** Start (or restart) a countdown on a task; minutes 0 clears it. */
+  async startTimebox(taskId: string, minutes: number): Promise<void> {
+    await this.patchTask(taskId, {
+      timeboxMinutes: minutes > 0 ? minutes : undefined,
+      timeboxEndsAt: minutes > 0 ? Date.now() + minutes * 60_000 : undefined,
+    });
+  }
+
+  async clearTimebox(taskId: string): Promise<void> {
+    await this.patchTask(taskId, { timeboxEndsAt: undefined });
+  }
+
+  /** Add or clear the default timebox a recurring task hands its instances. */
+  async setTemplateTimebox(templateId: string, minutes: number | undefined): Promise<void> {
+    await this.updateRecurring(templateId, { timeboxMinutes: minutes });
   }
 
   /**

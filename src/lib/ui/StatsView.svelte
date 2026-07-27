@@ -6,7 +6,8 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import {
-    burdenSeries, completionSeries, formatDuration, totalEstimateHours,
+    averageActiveMs, burdenSeries, completionSeries, formatDuration, formatElapsed,
+    totalEstimateHours,
   } from '../domain/stats';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
   import BarChart from './charts/BarChart.svelte';
@@ -21,6 +22,7 @@
     app.state.tasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
 
   const estimateHours = $derived(totalEstimateHours(app.state.tasks));
+  const avgActive = $derived(averageActiveMs(app.state.tasks));
 
   const burden = $derived.by(() => {
     const tasks = app.state.tasks;
@@ -48,6 +50,15 @@
         is assumed to take 1 hour.</p>
     {/if}
   </section>
+
+  {#if avgActive !== null}
+    <section class="panel hero" data-testid="stats-average-time">
+      <span class="hero-label">average time to finish a task</span>
+      <span class="hero-num small">{formatElapsed(avgActive)}</span>
+      <p class="assumption">measured from when you accept a task to when you complete it,
+        across everything you've finished here</p>
+    </section>
+  {/if}
 
   <section class="panel">
     <div class="panel-head">
@@ -103,6 +114,7 @@
   .hero { display: flex; flex-direction: column; gap: 4px; }
   .hero-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
   .hero-num { color: var(--acc-purple); font-family: var(--font-mono); font-size: 2rem; font-weight: 700; }
+  .hero-num.small { color: var(--acc-cyan); font-size: 1.5rem; }
   .info { background: none; border: none; color: var(--acc-blue); cursor: pointer; font-size: 0.8rem; padding: 0 2px; }
   .assumption { color: var(--dim); font-size: 0.8rem; margin: 4px 0 0; }
   .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }

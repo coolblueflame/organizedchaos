@@ -90,6 +90,23 @@ export interface Task extends Base {
    * graphs — it just isn't counted as something YOU finished here.
    */
   importedHistory?: boolean;
+  /**
+   * Start of the CURRENT working stretch; set while in progress, cleared when
+   * paused. Time only counts when you're actually working on something.
+   */
+  startedAt?: number;
+  /** Time banked from earlier stretches, before the current one. */
+  activeAccumulatedMs?: number;
+  /**
+   * Final tracked duration, written only when a task is completed while in
+   * progress. Ticking something off the list without ever working on it (or
+   * after pausing) records nothing — that time was never tracked.
+   */
+  activeMs?: number;
+  /** Minutes to spend on it; set per task, or inherited from its template. */
+  timeboxMinutes?: number;
+  /** When the running timebox expires; absent when no timer is running. */
+  timeboxEndsAt?: number;
 }
 
 export interface Tag extends Base {
@@ -119,6 +136,11 @@ export interface RecurrenceTemplate extends Base {
   /** When set, spawned tasks get `deadline = spawn day + offset` (spec §5). */
   deadlineOffsetDays?: number;
   paused: boolean;
+  /** Default timebox handed to each spawned instance. */
+  timeboxMinutes?: number;
+  /** Rolling average of how long instances actually take, and the sample count. */
+  avgActiveMs?: number;
+  completedInstances?: number;
   /** Next moment the spawn sweep should materialize an instance; unset = not armed. */
   nextSpawnAt?: number;
   lastSpawnedTaskId?: string;

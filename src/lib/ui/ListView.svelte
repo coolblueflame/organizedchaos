@@ -6,9 +6,12 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
-  import { groupByDate, groupByPriority, groupByTag } from '../domain/views';
+  import {
+    groupByDate, groupByPriority, groupByTag, subSortGroups,
+    SUB_SORT_LABELS, type SubSort,
+  } from '../domain/views';
   import type { SortMode } from '../domain/types';
-  import TaskRow from './TaskRow.svelte';
+  import GroupedTasks from './GroupedTasks.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
 
   let { id }: { id: string } = $props();
@@ -27,6 +30,13 @@
     if (mode === 'tag') return groupByTag(listTasks, app.state.tags, app.state.settings, now);
     return groupByPriority(listTasks, app.state.settings, now);
   });
+
+  let subSort = $state<SubSort>('smart');
+  const SUB_CYCLE: SubSort[] = ['smart', 'alpha', 'created', 'newest'];
+  const cycleSubSort = () => {
+    subSort = SUB_CYCLE[(SUB_CYCLE.indexOf(subSort) + 1) % SUB_CYCLE.length]!;
+  };
+  const sortedGroups = $derived(subSortGroups(groups, subSort));
 
   async function cycleSort() {
     if (!list) return;
@@ -92,21 +102,20 @@
     <button class="sort" data-testid="list-sort" onclick={cycleSort}>
       sort: {list?.sortMode ?? 'priority'}
     </button>
+    <button class="sort" data-testid="list-subsort" onclick={cycleSubSort}
+      title="order within each group">
+      ↳ {SUB_SORT_LABELS[subSort]}
+    </button>
   </header>
 
-  <section class="groups">
-    {#each groups as group (group.key)}
-      <h2 class="group-header">{group.label}</h2>
-      {#each group.tasks as task (group.key + task.id)}
-        <TaskRow {task} expanded={editingTaskId === task.id}
-          ontoggle={() => toggle(task.id)}
-          onenter={(name) => void chainNext(name)} />
-      {/each}
-    {/each}
-    {#if groups.length === 0}
-      <p class="empty">// nothing here yet</p>
-    {/if}
-  </section>
+  <GroupedTasks
+    groups={sortedGroups}
+    mode={list?.sortMode ?? 'priority'}
+    bind:editingTaskId
+    onenter={(name) => void chainNext(name)} />
+  {#if groups.length === 0}
+    <p class="empty">// nothing here yet</p>
+  {/if}
 
   <button class="new-task" data-testid="new-task" onclick={newTask}>+ new todo</button>
 </main>
@@ -125,11 +134,6 @@
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
     padding: 6px 10px; cursor: pointer;
-  }
-  .groups { display: flex; flex-direction: column; gap: 6px; }
-  .group-header {
-    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
-    text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 2px; font-weight: 600;
   }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; }
   .new-task {

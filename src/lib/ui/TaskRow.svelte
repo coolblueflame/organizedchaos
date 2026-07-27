@@ -8,6 +8,7 @@
   import { toast } from './toast.svelte';
   import { isEscalated, effectivePriority } from '../domain/priority';
   import { daysUntilDeadline } from '../domain/time';
+  import { activeMs, formatElapsed } from '../domain/stats';
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
   import TaskEditor from './TaskEditor.svelte';
@@ -161,6 +162,14 @@
         {/each}
         {#if showCompletedAt && task.completedAt}
           <span class="done-at">✓ {new Date(task.completedAt).toLocaleDateString()}</span>
+        {/if}
+        {#if completedMode && activeMs(task)}
+          <span class="done-at" title="time from picking it up to finishing">
+            ⧗ {formatElapsed(activeMs(task)!)}
+          </span>
+        {/if}
+        {#if !completedMode && task.timeboxMinutes}
+          <span class="done-at" title="timeboxed to {task.timeboxMinutes} minutes on accept">⏳</span>
         {/if}
         {#if task.deadline && !completedMode}
           <span class="deadline" class:overdue>{shortDate(task.deadline)}</span>

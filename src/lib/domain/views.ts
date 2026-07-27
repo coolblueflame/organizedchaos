@@ -8,6 +8,38 @@ import { PRIORITIES, priorityRank, type Priority, type Settings, type Tag, type 
 
 export interface TaskGroup { key: string; label: string; tasks: Task[] }
 
+/** How tasks are ordered WITHIN a group (the group order itself is fixed). */
+export type SubSort = 'smart' | 'alpha' | 'created' | 'newest';
+
+export const SUB_SORT_LABELS: Record<SubSort, string> = {
+  smart: 'smart',
+  alpha: 'a–z',
+  created: 'oldest',
+  newest: 'newest',
+};
+
+/**
+ * Applies the chosen within-group order. 'smart' keeps whatever the grouper
+ * decided (priority/deadline-aware), which is the default everywhere.
+ */
+export function applySubSort(tasks: Task[], sub: SubSort): Task[] {
+  if (sub === 'smart') return tasks;
+  const sorted = [...tasks];
+  if (sub === 'alpha') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  } else if (sub === 'created') {
+    sorted.sort((a, b) => a.createdAt - b.createdAt);
+  } else {
+    sorted.sort((a, b) => b.createdAt - a.createdAt);
+  }
+  return sorted;
+}
+
+export function subSortGroups(groups: TaskGroup[], sub: SubSort): TaskGroup[] {
+  if (sub === 'smart') return groups;
+  return groups.map((g) => ({ ...g, tasks: applySubSort(g.tasks, sub) }));
+}
+
 /** Open (not completed) tasks only — the input every list/sort view starts from. */
 export function openTasks(tasks: Task[]): Task[] {
   return tasks.filter((t) => !t.deleted && t.completedAt === undefined);

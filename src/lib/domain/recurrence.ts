@@ -87,6 +87,7 @@ export function sweepSpawns(
         priority: tpl.priority,
         tagIds: [...tpl.tagIds],
         estimateHours: tpl.estimateHours,
+        timeboxMinutes: tpl.timeboxMinutes,
         deadline:
           tpl.deadlineOffsetDays === undefined
             ? undefined

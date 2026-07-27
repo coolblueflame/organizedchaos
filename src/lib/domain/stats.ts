@@ -108,6 +108,40 @@ export function formatDuration(hours: number): string {
   return parts.length ? parts.join(' ') : '0h';
 }
 
+/**
+ * Tracked working time for a finished task — only present when it was
+ * completed while actually in progress (see Task.activeMs).
+ */
+export function activeMs(task: Task): number | null {
+  return task.activeMs && task.activeMs > 0 ? task.activeMs : null;
+}
+
+/** Live elapsed time including the stretch currently running. */
+export function elapsedSoFar(task: Task, now = Date.now()): number {
+  const banked = task.activeAccumulatedMs ?? 0;
+  return task.startedAt ? banked + (now - task.startedAt) : banked;
+}
+
+/** Mean time-to-finish across everything that was timed. Null until there's data. */
+export function averageActiveMs(tasks: Task[]): number | null {
+  const timed = tasks
+    .filter((t) => !t.deleted && !t.importedHistory && t.completedAt !== undefined)
+    .map(activeMs)
+    .filter((ms): ms is number => ms !== null);
+  if (timed.length === 0) return null;
+  return Math.round(timed.reduce((a, b) => a + b, 0) / timed.length);
+}
+
+/** "2h 5m" / "45m" / "30s" — short human duration for elapsed times. */
+export function formatElapsed(ms: number): string {
+  const totalMinutes = Math.round(ms / 60_000);
+  if (totalMinutes < 1) return `${Math.max(1, Math.round(ms / 1000))}s`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
 export interface BurdenPoint { key: string; hours: number }
 
 /**

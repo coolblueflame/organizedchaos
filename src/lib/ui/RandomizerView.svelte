@@ -65,6 +65,8 @@
       : undefined,
     tagIds: filterTags,
     excludeIds: [...notNow, ...blockedByHours],
+    // A running work period narrows the pool to what actually fits.
+    maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
   });
 
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
@@ -345,6 +347,10 @@
       {:else if hoursAreTheProblem}
         <p>// everything left is on a list that's off the clock right now 🌙</p>
         <button class="reset" data-testid="draw-ignore-hours" onclick={ignoreHours}>roll anyway</button>
+      {:else if app.workPeriodHoursLeft() !== null}
+        <p>// nothing fits the time left in your work period ⏱</p>
+        <button class="reset" data-testid="draw-end-period"
+          onclick={() => void app.endWorkPeriod().then(redraw)}>end the period and roll anyway</button>
       {:else}
         <p>// pool empty — everything's done, filtered out, or snoozed until 4am</p>
         <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>

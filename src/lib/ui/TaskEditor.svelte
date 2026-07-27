@@ -11,6 +11,7 @@
   import TagPicker from './TagPicker.svelte';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import { describeRecurrence } from './recurrenceText';
+  import { activeMs, formatElapsed } from '../domain/stats';
   import type { RecurrenceMode } from '../domain/types';
 
   let { task, oncollapse, compact = false }: {
@@ -140,6 +141,16 @@
         onchange={(e) => setDeadline(e.currentTarget.value)} />
     </label>
     <label>
+      <span>timebox (min)</span>
+      <input type="number" data-testid="task-timebox-input" min="1" step="5"
+        value={task.timeboxMinutes ?? ''} placeholder="none"
+        onchange={(e) => {
+          const m = parseInt(e.currentTarget.value, 10);
+          void app.patchTask(task.id, { timeboxMinutes: m > 0 ? m : undefined });
+          touched();
+        }} />
+    </label>
+    <label>
       <span>estimate (h)</span>
       <input type="number" data-testid="task-estimate-input" min="0.5" step="0.5"
         value={task.estimateHours ?? ''} placeholder="1"
@@ -178,6 +189,10 @@
   {#if !compact}
   <div class="meta">
     created {fmt(task.createdAt)}{#if task.completedAt}&nbsp;· completed {fmt(task.completedAt)}{/if}
+    {#if activeMs(task)}&nbsp;· took {formatElapsed(activeMs(task)!)}{/if}
+    {#if template?.completedInstances}
+      &nbsp;· averages {formatElapsed(template.avgActiveMs ?? 0)} over {template.completedInstances}
+    {/if}
   </div>
 
   <div class="actions">

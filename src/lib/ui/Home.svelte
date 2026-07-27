@@ -17,6 +17,7 @@
   import StatsStrip from './StatsStrip.svelte';
   import Companion from '../eggs/Companion.svelte';
   import QuickAdd from './QuickAdd.svelte';
+  import WorkPeriod from './WorkPeriod.svelte';
   import { haptic } from './fx/haptics';
 
   let quickAddOpen = $state(false);
@@ -91,6 +92,8 @@
   <StatsStrip />
 
   <CurrentTaskCard />
+
+  <WorkPeriod />
 
   <button class="big-button" data-testid="big-button" onclick={bigButton}>
     {phrase}

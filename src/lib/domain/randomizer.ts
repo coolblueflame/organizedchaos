@@ -18,6 +18,11 @@ export interface DrawScope {
   tagIds?: string[];
   /** Session-only "Not Now" skips — guarantees re-rolls surface a different task. */
   excludeIds?: string[];
+  /**
+   * Work-period fit: only offer tasks estimated to fit in the time left.
+   * MAX-priority work is exempt — an emergency doesn't care about your window.
+   */
+  maxEstimateHours?: number;
 }
 
 /**
@@ -57,7 +62,14 @@ export function drawTask(
   /** Per-list pressure from project deadlines (see domain/project.ts). */
   projectTiers?: Map<string, Priority>,
 ): Task | null {
-  const pool = eligibleForDraw(tasks, now, scope);
+  let pool = eligibleForDraw(tasks, now, scope);
+  if (scope?.maxEstimateHours !== undefined) {
+    const fits = scope.maxEstimateHours;
+    pool = pool.filter(
+      (t) =>
+        effectivePriority(t, settings, now) === 'max' || (t.estimateHours ?? 1) <= fits,
+    );
+  }
   if (pool.length === 0) return null;
 
   const tierOf = (t: Task) =>

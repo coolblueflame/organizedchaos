@@ -140,6 +140,90 @@ describe('AppStore', () => {
     expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
   });
 
+  it('records working time when a task is finished while in progress', async () => {
+    vi.setSystemTime(new Date('2026-07-27T09:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    expect(store.state.tasks[0]!.startedAt).toBe(new Date('2026-07-27T09:00:00').getTime());
+
+    vi.setSystemTime(new Date('2026-07-27T09:25:00'));
+    await store.completeTask(a.id);
+    expect(store.state.tasks[0]!.activeMs).toBe(25 * 60_000);
+  });
+
+  it('ticking a task off without ever working on it records no time', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.completeTask(a.id);
+    expect(store.state.tasks[0]!.activeMs).toBeUndefined();
+  });
+
+  it('pausing banks the stretch, and resuming continues from there', async () => {
+    vi.setSystemTime(new Date('2026-07-27T09:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+
+    await store.setInProgress(a.id, true);
+    vi.setSystemTime(new Date('2026-07-27T09:10:00'));
+    await store.setInProgress(a.id, false); // 10 minutes banked
+    expect(store.state.tasks[0]!.activeAccumulatedMs).toBe(10 * 60_000);
+    expect(store.state.tasks[0]!.startedAt).toBeUndefined();
+
+    vi.setSystemTime(new Date('2026-07-27T11:00:00')); // two hours away, not counted
+    await store.setInProgress(a.id, true);
+    vi.setSystemTime(new Date('2026-07-27T11:05:00'));
+    await store.completeTask(a.id);
+    expect(store.state.tasks[0]!.activeMs).toBe(15 * 60_000); // 10 + 5, not the gap
+  });
+
+  it('completing after pausing discards the time — it was never tracked to the end', async () => {
+    vi.setSystemTime(new Date('2026-07-27T09:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.setInProgress(a.id, true);
+    vi.setSystemTime(new Date('2026-07-27T09:30:00'));
+    await store.setInProgress(a.id, false);
+    await store.completeTask(a.id); // ticked off the list later
+    expect(store.state.tasks[0]!.activeMs).toBeUndefined();
+  });
+
+  it('a task timebox starts its countdown on accept and clears on completion', async () => {
+    vi.setSystemTime(new Date('2026-07-27T09:00:00'));
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { timeboxMinutes: 15 });
+    await store.acceptTask(a.id);
+    expect(store.state.tasks[0]!.timeboxEndsAt).toBe(new Date('2026-07-27T09:15:00').getTime());
+
+    await store.completeTask(a.id);
+    expect(store.state.tasks[0]!.timeboxEndsAt).toBeUndefined();
+  });
+
+  it('recurring templates learn how long their instances really take', async () => {
+    vi.setSystemTime(new Date('2026-07-27T09:00:00'));
+    const list = await store.addList('L');
+    const first = await store.addTask(list.id);
+    const tpl = await store.createRecurring(first.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+
+    await store.acceptTask(first.id);
+    vi.setSystemTime(new Date('2026-07-27T09:20:00')); // 20 minutes
+    await store.completeTask(first.id);
+    let saved = store.state.templates.find((t) => t.id === tpl.id)!;
+    expect(saved.completedInstances).toBe(1);
+    expect(saved.avgActiveMs).toBe(20 * 60_000);
+
+    // a second, slower instance pulls the average up to 30 minutes
+    const second = await store.addTask(list.id);
+    await store.patchTask(second.id, { recurrenceId: tpl.id });
+    await store.acceptTask(second.id);
+    vi.setSystemTime(new Date('2026-07-27T10:00:00')); // 40 minutes
+    await store.completeTask(second.id);
+    saved = store.state.templates.find((t) => t.id === tpl.id)!;
+    expect(saved.completedInstances).toBe(2);
+    expect(saved.avgActiveMs).toBe(30 * 60_000);
+  });
+
   it('undo restores a completed task, its in-progress flag, and its current-task slot', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);

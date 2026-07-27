@@ -52,6 +52,30 @@ describe('eligibleForDraw', () => {
   });
 });
 
+describe('work-period fit', () => {
+  it('only offers tasks that fit the time left, except max-priority ones', () => {
+    const quick = task({ priority: 'medium', estimateHours: 0.25 });
+    const long = task({ priority: 'medium', estimateHours: 3 });
+    const urgentLong = task({ priority: 'max', estimateHours: 8 });
+
+    // 20 minutes left: the 3h task is out, the emergency still isn't
+    const scope = { maxEstimateHours: 0.34 };
+    for (let i = 0; i < 15; i++) {
+      const got = drawTask([quick, long, urgentLong], DEFAULT_SETTINGS, now, Math.random, scope)!;
+      expect(got.id).toBe(urgentLong.id); // max tier wins outright
+    }
+    const withoutUrgent = drawTask([quick, long], DEFAULT_SETTINGS, now, Math.random, scope)!;
+    expect(withoutUrgent.id).toBe(quick.id);
+  });
+
+  it('a missing estimate counts as an hour', () => {
+    const unestimated = task({ priority: 'low' });
+    expect(drawTask([unestimated], DEFAULT_SETTINGS, now, firstRng, { maxEstimateHours: 0.5 })).toBeNull();
+    expect(drawTask([unestimated], DEFAULT_SETTINGS, now, firstRng, { maxEstimateHours: 1 })!.id)
+      .toBe(unestimated.id);
+  });
+});
+
 describe('drawTask — tier selection', () => {
   it('only draws from the highest non-empty effective tier', () => {
     const med = task({ priority: 'medium' });

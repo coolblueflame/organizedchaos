@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type Priority, type Tag, type Task } from './types';
-import { groupByDate, groupByPriority, groupByTag, groupCompleted, openTasks } from './views';
+import {
+  groupByDate, groupByPriority, groupByTag, groupCompleted, openTasks, subSortGroups,
+} from './views';
 
 const now = new Date('2026-07-15T12:00:00');
 
@@ -68,6 +70,26 @@ describe('groupByTag', () => {
     const plain = task({ priority: 'low' });
     const groups = groupByTag([plain], [unused], DEFAULT_SETTINGS, now);
     expect(groups.map((g) => g.key)).toEqual(['untagged']);
+  });
+});
+
+describe('sub-sorting within groups', () => {
+  const zeta = task({ priority: 'low', name: 'zeta', createdAt: 100 });
+  const alpha = task({ priority: 'low', name: 'Alpha', createdAt: 300 });
+  const mid = task({ priority: 'low', name: 'mid', createdAt: 200 });
+  const group = [{ key: 'g', label: 'g', tasks: [zeta, alpha, mid] }];
+
+  it('smart leaves the grouper’s order alone', () => {
+    expect(subSortGroups(group, 'smart')[0]!.tasks.map((t) => t.name)).toEqual(['zeta', 'Alpha', 'mid']);
+  });
+
+  it('alphabetical ignores case', () => {
+    expect(subSortGroups(group, 'alpha')[0]!.tasks.map((t) => t.name)).toEqual(['Alpha', 'mid', 'zeta']);
+  });
+
+  it('oldest and newest order by creation', () => {
+    expect(subSortGroups(group, 'created')[0]!.tasks.map((t) => t.name)).toEqual(['zeta', 'mid', 'Alpha']);
+    expect(subSortGroups(group, 'newest')[0]!.tasks.map((t) => t.name)).toEqual(['Alpha', 'mid', 'zeta']);
   });
 });
 

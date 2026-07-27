@@ -91,6 +91,22 @@ describe('EggEngine', () => {
     expect(e.handle('taskCompleted', { completionsToday: 6 })).not.toBeNull();
   });
 
+  it('an unlock presentation carries an id the caller can record', async () => {
+    // Regression: awards were shown but never granted, so they never appeared
+    // in the discoveries list and could fire again.
+    const registry: EggDef[] = [{
+      id: 'award', weight: 1, triggers: ['taskCompleted'],
+      present: () => ({ kind: 'unlock', unlockId: 'first-blood', label: 'First!' }),
+    }];
+    const e = makeEngine([0, 0], registry);
+    await e.ready;
+    const p = e.handle('taskCompleted', {});
+    expect(p).toMatchObject({ kind: 'unlock', unlockId: 'first-blood' });
+    expect(e.grantUnlock('first-blood')).toBe(true);
+    expect(e.unlocks).toContain('first-blood');
+    expect(e.grantUnlock('first-blood')).toBe(false); // second time is a no-op
+  });
+
   it('trivia stats, unlocks (idempotent), and story stage persist', async () => {
     const e = makeEngine([0]);
     await e.ready;
