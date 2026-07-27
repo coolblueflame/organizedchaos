@@ -42,6 +42,8 @@
   import StatsView from './lib/ui/StatsView.svelte';
   import SearchView from './lib/ui/SearchView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
+  import InstallHowTo from './lib/ui/InstallHowTo.svelte';
+  import { install } from './lib/ui/install.svelte';
   import FxLayer from './lib/ui/fx/FxLayer.svelte';
   import DelightLayer from './lib/eggs/DelightLayer.svelte';
 
@@ -109,6 +111,11 @@
   {/if}
 {/if}
 <UndoToast />
+<!-- Mounted app-wide, not with the banner: Settings can open it long after
+     the banner has been dismissed. -->
+{#if install.howToOpen}
+  <InstallHowTo onclose={() => (install.howToOpen = false)} />
+{/if}
 <DelightLayer />
 <FxLayer />
 

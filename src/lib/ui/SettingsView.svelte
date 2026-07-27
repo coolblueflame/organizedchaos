@@ -7,6 +7,7 @@
   import { navigate } from './router.svelte';
   import { UNLOCKS } from '../eggs/content/extras';
   import SyncHowTo from './SyncHowTo.svelte';
+  import { install } from './install.svelte';
 
   let howToOpen = $state(false);
 
@@ -50,6 +51,22 @@
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Settings</h1>
   </header>
+
+  <section class="group">
+    <h2>this device</h2>
+    <p class="hint">
+      {#if install.installed}
+        Running from your home screen — full screen, offline, and storage the browser
+        is far less likely to clear.
+      {:else}
+        Add Organized Chaos to your home screen and it opens full screen, works offline,
+        and gets sturdier storage for your tasks.
+      {/if}
+    </p>
+    <button class="link" data-testid="install-howto-open" onclick={() => install.openHowTo()}>
+      {install.installed ? 'how installing works →' : 'how do I add it to my home screen? →'}
+    </button>
+  </section>
 
   <section class="group">
     <h2>sync</h2>

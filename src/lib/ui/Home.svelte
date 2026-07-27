@@ -17,6 +17,7 @@
   import StatsStrip from './StatsStrip.svelte';
   import Companion from '../eggs/Companion.svelte';
   import QuickAdd from './QuickAdd.svelte';
+  import InstallBanner from './InstallBanner.svelte';
   import WorkPeriod from './WorkPeriod.svelte';
   import { haptic } from './fx/haptics';
 
@@ -88,6 +89,8 @@
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
   <p class="tagline">// a todo list with a gambling problem</p>
+
+  <InstallBanner />
 
   <StatsStrip />
 
