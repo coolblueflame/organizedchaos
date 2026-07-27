@@ -16,6 +16,13 @@ route is: iPhone backup on your PC → extract one file → drop it into the app
    `things-main.sqlite`. You'll get a preview (lists, open tasks, completed history, tags,
    recurring), then a one-tap review pass of the decoded recurring tasks.
 
+On the preview screen there's one decision to make: **"count imported completions towards my
+totals"**. Left off (the default), your today/week/month/year/lifetime scoreboard starts from
+zero here while the imported history still feeds the over-time graphs — so the charts show
+your whole Things past, but the counters only ever reflect work you finished in Organized
+Chaos. Turn it on if you'd rather the lifetime number include everything you ever did in
+Things.
+
 Notes:
 - Everything parses on-device in the browser; the file is never uploaded anywhere.
 - Your completed history imports with real dates — the stats/graphs will reflect your whole
