@@ -66,6 +66,8 @@ let client: FakeClient;
 let local: RemoteSnapshot;
 let saved: RemoteSnapshot[];
 
+let slept: number[];
+
 function makeEngine() {
   return new SyncEngine({
     client,
@@ -75,6 +77,7 @@ function makeEngine() {
       saved.push(s);
     },
     debounceMs: 0,
+    sleep: async (ms) => { slept.push(ms); }, // no real waiting in tests
   });
 }
 
@@ -82,6 +85,7 @@ beforeEach(() => {
   client = new FakeClient();
   local = snap();
   saved = [];
+  slept = [];
 });
 
 describe('SyncEngine', () => {
@@ -126,6 +130,15 @@ describe('SyncEngine', () => {
     await engine.syncNow();
     expect(engine.status).toBe('idle');
     expect(client.activeTasks().map((t) => t.name)).toContain('mine');
+  });
+
+  it('backs off before each retry (GitHub reads are eventually consistent)', async () => {
+    local = snap({ tasks: [task({ priority: 'high' })] });
+    client.conflictNext = 2;
+    const engine = makeEngine();
+    await engine.syncNow();
+    expect(engine.status).toBe('idle');
+    expect(slept).toEqual([250, 750]); // one wait per retry, increasing
   });
 
   it('gives up after repeated conflicts with status error', async () => {

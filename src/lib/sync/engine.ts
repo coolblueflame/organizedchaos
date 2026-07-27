@@ -23,9 +23,20 @@ export interface EngineDeps {
   saveLocal: (snap: RemoteSnapshot) => Promise<void>;
   debounceMs?: number;
   now?: () => Date;
+  /** Test seam for the retry backoff. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
-const MAX_CONFLICT_RETRIES = 3;
+/**
+ * Backoff between conflict retries. GitHub's Contents API is eventually
+ * consistent — verified live 2026-07-26: a GET issued immediately after a
+ * successful PUT can still return the PREVIOUS content and sha. Retrying
+ * instantly just re-reads the same stale view and burns an attempt, so each
+ * retry waits a beat first. (A stale read can never lose data — the merge is
+ * union + newest-wins — it only costs us a conflict.)
+ */
+const RETRY_BACKOFF_MS = [250, 750, 1750];
+const MAX_CONFLICT_RETRIES = RETRY_BACKOFF_MS.length + 1;
 
 export class SyncEngine {
   status: SyncStatus = 'idle';
@@ -38,9 +49,11 @@ export class SyncEngine {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private running = false;
   private pending = false;
+  private sleep: (ms: number) => Promise<void>;
 
   constructor(private deps: EngineDeps) {
     this.debounceMs = deps.debounceMs ?? 4000;
+    this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   private setStatus(status: SyncStatus, detail = ''): void {
@@ -75,6 +88,7 @@ export class SyncEngine {
         if (attempt >= MAX_CONFLICT_RETRIES) {
           throw new ConflictError('unresolved after retries');
         }
+        await this.sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 1750);
       }
       this.lastSyncAt = Date.now();
       this.setStatus('idle');
