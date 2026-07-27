@@ -117,12 +117,20 @@
     }
   });
 
-  /** The deliberate second tap: select-all so retyping still replaces it. */
-  function onNameTap() {
-    if (coarsePointer && nameEl && document.activeElement !== nameEl) {
-      nameEl.focus();
-      nameEl.select();
-    }
+  /**
+   * The deliberate tap that finally focuses the field selects its text, so
+   * retyping still replaces the name. Hooked to focus rather than click on
+   * purpose: the browser focuses an input on pointer-down, so by click time it
+   * is already active and "was it focused before?" can no longer be asked.
+   * Focus fires once per session, so tapping again to move the caret behaves
+   * normally instead of re-selecting everything under your finger.
+   */
+  function onNameFocus() {
+    if (!coarsePointer) return;
+    // Deferred by a tick: focus arrives on pointer-down, and the pointer-up
+    // that follows collapses any selection to a caret where you tapped. This
+    // runs after that, so the selection survives.
+    setTimeout(() => nameEl?.select(), 0);
   }
 
   function complete() {
@@ -182,7 +190,7 @@
         bind:value={nameDraft}
         oninput={queueNameSave}
         onblur={() => void flushName()}
-        onclick={onNameTap}
+        onfocus={onNameFocus}
         onkeydown={onNameKey} />
     {:else}
     <button class="body" onclick={ontoggle}>

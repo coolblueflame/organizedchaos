@@ -45,6 +45,11 @@ test('opening a named task does not grab focus on touch, but does with a mouse',
     expect(focused).toBe(false);
     await input.click();
     await expect(input).toBeFocused();
+    // …and that deliberate tap selects the name, so retyping replaces it.
+    const selected = await input.evaluate(
+      (el: HTMLInputElement) => el.value.slice(el.selectionStart ?? 0, el.selectionEnd ?? 0),
+    );
+    expect(selected).toBe('existing task');
   } else {
     expect(focused).toBe(true);
   }
