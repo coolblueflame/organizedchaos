@@ -179,3 +179,33 @@ test('the grip is what picks a task up', async ({ page, browserName }) => {
   const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
   await expect(page.getByTestId(`drag-${id}`)).toBeVisible();
 });
+
+test('the date field is sized by CSS, not by native chrome', async ({ page, browserName }) => {
+  test.skip(browserName !== 'webkit', 'the quirk is a Safari one');
+  // iOS Safari sizes date inputs from their native chrome and ignores
+  // width:100%, so the field spilled past the edge of the editor while every
+  // other input behaved (reported 2026-07-28). Dropping the native appearance
+  // makes it an ordinary box.
+  //
+  // Honest limit: THIS browser sizes date inputs correctly, so the overflow
+  // itself cannot be reproduced here. What is worth pinning is that the rule
+  // reaches the element at all — mis-scope it and this goes red.
+  await reset(page);
+  await makeListWithTask(page, 'Dates', 'when is it due');
+  await page.getByText('when is it due', { exact: true }).click();
+
+  const date = page.getByTestId('task-deadline-input');
+  const styles = await date.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { appearance: cs.appearance, minWidth: cs.minWidth };
+  });
+  expect(styles.appearance, 'native chrome must be off on touch').toBe('none');
+  expect(styles.minWidth).toBe('0px');
+
+  // And it stays inside the editor it lives in.
+  const inside = await date.evaluate((el) => {
+    const editor = el.closest('.editor')!;
+    return el.getBoundingClientRect().right <= editor.getBoundingClientRect().right + 1;
+  });
+  expect(inside, 'the date field should not overflow the editor').toBe(true);
+});

@@ -67,6 +67,31 @@ body {
  * smaller than that, so on touch devices the fields — and only the fields —
  * step up to 16px. Everything else keeps its density.
  */
+/*
+ * Date and time inputs are the one control that refuses to fit.
+ *
+ * iOS Safari sizes them from their native chrome, not from the CSS box: they
+ * carry an intrinsic minimum width that `width: 100%` and `min-width: 0` do
+ * not override, and the 16px font below makes that minimum wider still. The
+ * result is a field that spills past the edge of its container while every
+ * other input behaves. Dropping the native appearance makes them size like
+ * ordinary boxes; tapping still opens the system picker, only the platform's
+ * own chrome goes.
+ *
+ * Scoped to touch on purpose — desktop browsers size these correctly and get
+ * to keep their visible calendar button. Note this is NOT reproducible in
+ * Playwright's webkit, which sizes date inputs like any other field, so the
+ * proof of this one is on a real device.
+ */
+@media (pointer: coarse) {
+  input[type='date'], input[type='time'], input[type='datetime-local'] {
+    appearance: none;
+    -webkit-appearance: none;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 @media (pointer: coarse) {
   input, textarea, select {
     /*
