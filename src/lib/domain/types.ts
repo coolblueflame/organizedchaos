@@ -62,6 +62,12 @@ export interface Task extends Base {
   recurrenceId?: string;
   /** Original Things UUID — makes re-imports idempotent (spec §9). */
   thingsUuid?: string;
+  /**
+   * "Not triaged yet" flag: set on import and on manual creation, cleared the
+   * moment the user deliberately opens the task or touches any field other
+   * than its name. Drives the row dot and the randomizer's fill-in prompts.
+   */
+  needsReview?: boolean;
 }
 
 export interface Tag extends Base {

@@ -103,6 +103,8 @@ describe('mapThings', () => {
     expect(byName('anytime')!.priority).toBe('medium');
     expect(byName('deadlined')!.deadline).toBe('2018-07-20');
     expect(byName('done')!.completedAt).toBe(cocoaToMs(700));
+    expect(byName('anytime')!.needsReview).toBe(true);      // open imports want a once-over
+    expect(byName('done')!.needsReview).toBeUndefined();    // finished history does not
     expect(byName('canceled')).toBeUndefined();
     expect(byName('trashed')).toBeUndefined();
     expect(m.counts.completedTasks).toBe(1);

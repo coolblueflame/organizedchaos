@@ -138,6 +138,10 @@
       <span class="name" class:done={completedMode}>{task.name || 'untitled'}</span>
       {#if showList && listTitle}<span class="list-tag">{listTitle}</span>{/if}
       <span class="badges">
+        {#if task.needsReview && !completedMode}
+          <span class="review-dot" data-testid="needs-review-{task.id}"
+            title="not triaged yet — open it or set a field"></span>
+        {/if}
         {#each rowTags as t (t.id)}
           <span class="tag-dot" style="background: {tagColor(t.colorIndex)}"></span>
         {/each}
@@ -203,6 +207,10 @@
   .list-tag { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; flex: none; }
   .badges { margin-left: auto; display: flex; align-items: center; gap: 5px; flex: none; }
   .tag-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .review-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--acc-yellow); box-shadow: 0 0 5px var(--acc-yellow);
+  }
   .deadline { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }

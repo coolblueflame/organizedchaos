@@ -287,7 +287,8 @@ export class AppStore {
   /** Blank medium-priority task; the UI opens its editor with the name focused. */
   async addTask(listId: string): Promise<Task> {
     const task = await this.repo.createTask({
-      listId, name: '', notes: '', priority: 'medium', tagIds: [], inProgress: false,
+      listId, name: '', notes: '', priority: 'medium', tagIds: [],
+      inProgress: false, needsReview: true,
     });
     this.state.tasks.push(task);
     this.requestSync();
@@ -317,7 +318,9 @@ export class AppStore {
     const untouched =
       t.name.trim() === '' && t.notes.trim() === '' && t.priority === 'medium' &&
       t.tagIds.length === 0 && t.deadline === undefined && t.estimateHours === undefined &&
-      t.recurrenceId === undefined && !t.inProgress && t.completedAt === undefined;
+      t.recurrenceId === undefined && !t.inProgress && t.completedAt === undefined &&
+      // A cleared review flag means a field was deliberately touched — keep it.
+      t.needsReview === true;
     if (!untouched) return false;
     await this.removeTask(taskId);
     return true;
@@ -401,6 +404,24 @@ export class AppStore {
 
   async setInProgress(taskId: string, flag: boolean): Promise<void> {
     await this.patchTask(taskId, { inProgress: flag });
+  }
+
+  /**
+   * Mark a task triaged. Called when the user deliberately opens it or touches
+   * any field but the name. No-ops when already reviewed, so it never churns
+   * updatedAt (which would make it lose sync merges it should have won).
+   */
+  async markReviewed(taskId: string): Promise<void> {
+    const t = this.state.tasks.find((x) => x.id === taskId);
+    if (!t?.needsReview) return;
+    await this.patchTask(taskId, { needsReview: false });
+  }
+
+  /** Open tasks still awaiting a once-over — the fill-in prompt's pool. */
+  tasksNeedingReview(): Task[] {
+    return this.state.tasks.filter(
+      (t) => t.needsReview && !t.deleted && t.completedAt === undefined,
+    );
   }
 
   // ── recurrence (spec §5) ─────────────────────────────────────────────────

@@ -319,6 +319,9 @@ export function mapThings(rows: ThingsRows): MappedImport {
       deadline: t.deadline !== null ? unpackThingsDate(t.deadline) : undefined,
       inProgress: false,
       completedAt: t.status === 3 && t.stopDate !== null ? cocoaToMs(t.stopDate) : undefined,
+      // Open imports arrive untriaged — Things has no priority/estimate to carry
+      // over, so each wants a once-over. Finished history needs nothing.
+      needsReview: t.status === 3 ? undefined : true,
       recurrenceId: t.repeatingTemplate ?? undefined,
       ...stamp(t.creationDate, t.userModificationDate),
     }));

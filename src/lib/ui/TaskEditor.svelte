@@ -29,7 +29,18 @@
   }
   function flush() {
     clearTimeout(saveTimer);
-    if (notes !== task.notes) void app.patchTask(task.id, { notes });
+    if (notes !== task.notes) {
+      void app.patchTask(task.id, { notes });
+      touched();
+    }
+  }
+
+  /**
+   * Any deliberate interaction with a field OTHER than the name counts as
+   * triage — even re-picking the value it already had (that's a decision).
+   */
+  function touched() {
+    void app.markReviewed(task.id);
   }
 
   function toggleTag(tagId: string) {
@@ -37,15 +48,18 @@
       ? task.tagIds.filter((id) => id !== tagId)
       : [...task.tagIds, tagId];
     void app.patchTask(task.id, { tagIds });
+    touched();
   }
 
   function setDeadline(value: string) {
     void app.patchTask(task.id, { deadline: value || undefined });
+    touched();
   }
 
   function setEstimate(value: string) {
     const hours = parseFloat(value);
     void app.patchTask(task.id, { estimateHours: hours > 0 ? hours : undefined });
+    touched();
   }
 
   function remove() {
@@ -68,6 +82,7 @@
     } else {
       await app.createRecurring(task.id, mode, deadlineOffsetDays);
     }
+    touched();
     recurOpen = false;
   }
 
@@ -84,7 +99,8 @@
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
     rows="2" bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
 
-  <PrioritySelect value={task.priority} onchange={(p) => void app.patchTask(task.id, { priority: p })} />
+  <PrioritySelect value={task.priority}
+    onchange={(p) => { void app.patchTask(task.id, { priority: p }); touched(); }} />
 
   <TagPicker selected={task.tagIds} ontoggle={toggleTag} />
 

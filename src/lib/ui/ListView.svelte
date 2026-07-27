@@ -56,6 +56,8 @@
     }
     const prev = editingTaskId;
     editingTaskId = taskId;
+    // Deliberately opening a task counts as giving it the once-over.
+    void app.markReviewed(taskId);
     if (prev) void app.discardIfPristine(prev);
   }
 

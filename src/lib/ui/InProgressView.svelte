@@ -19,7 +19,10 @@
   <section class="groups">
     {#each started as task (task.id)}
       <TaskRow {task} showList expanded={editingTaskId === task.id}
-        ontoggle={() => (editingTaskId = editingTaskId === task.id ? null : task.id)} />
+        ontoggle={() => {
+          editingTaskId = editingTaskId === task.id ? null : task.id;
+          if (editingTaskId) void app.markReviewed(task.id);
+        }} />
     {/each}
     {#if started.length === 0}
       <p class="empty">// nothing in flight — hit the big button</p>

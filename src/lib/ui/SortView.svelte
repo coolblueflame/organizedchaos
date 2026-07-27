@@ -34,7 +34,10 @@
       <h2 class="group-header">{group.label}</h2>
       {#each group.tasks as task (group.key + task.id)}
         <TaskRow {task} showList expanded={editingTaskId === task.id}
-          ontoggle={() => (editingTaskId = editingTaskId === task.id ? null : task.id)} />
+          ontoggle={() => {
+            editingTaskId = editingTaskId === task.id ? null : task.id;
+            if (editingTaskId) void app.markReviewed(task.id);
+          }} />
       {/each}
     {/each}
     {#if groups.length === 0}

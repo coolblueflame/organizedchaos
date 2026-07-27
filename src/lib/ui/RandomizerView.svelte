@@ -12,6 +12,7 @@
   import { effectivePriority, isEscalated } from '../domain/priority';
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
+  import PrioritySelect from './PrioritySelect.svelte';
   import { burstFromElement, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
   import { shuffleReveal } from './fx/shuffle';
@@ -50,6 +51,28 @@
     excludeIds: notNow,
   });
 
+  // Triage prompts: occasionally surface an untriaged task so the backlog gets
+  // organized a bit at a time instead of in one grim pass. Once per visit.
+  let triage = $state<Task | null>(null);
+  let triageOffered = false;
+
+  function maybeOfferTriage(): void {
+    if (triageOffered) return;
+    const pool = app.tasksNeedingReview();
+    if (pool.length === 0) return;
+    const automated = typeof navigator !== 'undefined' && navigator.webdriver;
+    const forced = automated && localStorage.getItem('OC_EGG_FORCE') === 'triage';
+    if (automated ? !forced : Math.random() > 0.18) return;
+    triageOffered = true;
+    triage = pool[Math.floor(Math.random() * pool.length)]!;
+  }
+
+  function finishTriage() {
+    if (triage) void app.markReviewed(triage.id);
+    triage = null;
+    redraw();
+  }
+
   // Transient bonus draws (spec §12): appear only when the day earned one or the
   // pool is calm; NEVER persisted unless explicitly accepted. Once per visit.
   let selfCare = $state<string | null>(null);
@@ -79,7 +102,8 @@
       drawSeq += 1;
       shuffleReveal(drawn.name || 'untitled', (text) => (displayName = text));
     }
-    maybeOfferSelfCare();
+    maybeOfferTriage();
+    if (!triage) maybeOfferSelfCare();
   }
 
   /** Accepting materializes it as a REAL task — that's the consent (spec §12). */
@@ -213,7 +237,39 @@
     {/if}
   </div>
 
-  {#if selfCare}
+  {#if triage}
+    <section class="card triage sheen-once" data-testid="draw-triage">
+      <p class="tier fillin">✎ fill in this one</p>
+      <h2 class="task-name">{triage.name || 'untitled'}</h2>
+      <p class="list-name">
+        from {app.state.lists.find((l) => l.id === triage!.listId)?.title ?? 'your lists'}
+        · a quick once-over and it's properly in the system
+      </p>
+      <div class="triage-fields">
+        <PrioritySelect value={triage.priority}
+          onchange={(p) => void app.patchTask(triage!.id, { priority: p })} />
+        <div class="triage-row">
+          <label><span>deadline</span>
+            <input type="date" data-testid="triage-deadline" value={triage.deadline ?? ''}
+              oninput={(e) => void app.patchTask(triage!.id, { deadline: e.currentTarget.value || undefined })} />
+          </label>
+          <label><span>estimate (h)</span>
+            <input type="number" min="0.5" step="0.5" placeholder="1" data-testid="triage-estimate"
+              value={triage.estimateHours ?? ''}
+              oninput={(e) => void app.patchTask(triage!.id, {
+                estimateHours: parseFloat(e.currentTarget.value) > 0 ? parseFloat(e.currentTarget.value) : undefined,
+              })} />
+          </label>
+        </div>
+      </div>
+    </section>
+    <div class="actions">
+      <button class="accept" data-testid="triage-done" onclick={finishTriage}>done — roll for real</button>
+      <div class="secondary">
+        <button data-testid="triage-skip" onclick={() => { triage = null; redraw(); }}>skip for now</button>
+      </div>
+    </div>
+  {:else if selfCare}
     <section class="card selfcare sheen-once" data-testid="draw-selfcare">
       <p class="tier bonus">✦ bonus roll</p>
       <h2 class="task-name">{selfCare}</h2>
@@ -308,6 +364,17 @@
   .tier.max { color: var(--acc-magenta); }
   .tier.bonus { color: var(--acc-yellow); }
   .selfcare { border-color: var(--acc-yellow); }
+  .tier.fillin { color: var(--acc-yellow); }
+  .triage { border-color: var(--acc-yellow); }
+  .triage-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .triage-row { display: flex; gap: 12px; }
+  .triage-row label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .triage-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .triage-row input {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
+    color-scheme: dark; width: 100%;
+  }
   .task-name { font-size: 1.4rem; margin: 0 0 4px; }
   .list-name { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0 0 10px; }
   .notes { color: var(--dim); font-size: 0.85rem; margin: 0 0 10px; white-space: pre-line; }

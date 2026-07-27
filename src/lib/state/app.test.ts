@@ -140,6 +140,37 @@ describe('AppStore', () => {
     expect(store.state.tasks.find((t) => t.id === a.id)!.inProgress).toBe(true);
   });
 
+  it('new tasks start untriaged; markReviewed clears it and is idempotent', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    expect(a.needsReview).toBe(true);
+    expect(store.tasksNeedingReview().map((t) => t.id)).toEqual([a.id]);
+
+    await store.markReviewed(a.id);
+    expect(store.state.tasks[0]!.needsReview).toBe(false);
+    expect((await persisted()).tasks[0]!.needsReview).toBe(false);
+
+    // A second call must not bump updatedAt — that would cost sync merges.
+    const stamp = store.state.tasks[0]!.updatedAt;
+    await store.markReviewed(a.id);
+    expect(store.state.tasks[0]!.updatedAt).toBe(stamp);
+  });
+
+  it('completed tasks never sit in the triage pool', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.completeTask(a.id);
+    expect(store.tasksNeedingReview()).toHaveLength(0);
+  });
+
+  it('a task whose field was touched survives the pristine sweep', async () => {
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.markReviewed(a.id); // stands in for "tapped a priority chip"
+    expect(await store.discardIfPristine(a.id)).toBe(false);
+    expect(store.state.tasks).toHaveLength(1);
+  });
+
   it('autoSelectNext ON: completing the current task draws and accepts the next', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);
