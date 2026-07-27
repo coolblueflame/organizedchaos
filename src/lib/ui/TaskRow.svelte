@@ -213,8 +213,17 @@
           </span>
         {/if}
         {#if hasNotes}
+          <!-- Drawn, not typed: an emoji here renders differently on every OS
+               and drags a colour cartoon into a monochrome row. This inherits
+               the badge colour and looks the same everywhere. -->
           <span class="notes-mark" data-testid="has-notes-{task.id}"
-            title="has a description — expand to read it">🗒</span>
+            title="has a description — expand to read it">
+            <svg viewBox="0 0 10 12" aria-hidden="true">
+              <rect x="0.5" y="0.5" width="9" height="11" rx="1.5" />
+              <line x1="3" y1="4.5" x2="7" y2="4.5" />
+              <line x1="3" y1="7.5" x2="6" y2="7.5" />
+            </svg>
+          </span>
         {/if}
         {#if blocked && !completedMode}
           <span class="blocked-mark" data-testid="blocked-mark-{task.id}"
@@ -297,7 +306,11 @@
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
   .blocked-mark { font-size: 0.62rem; opacity: 0.85; }
-  .notes-mark { font-size: 0.62rem; opacity: 0.75; }
+  .notes-mark { display: inline-flex; align-items: center; color: var(--dim); }
+  .notes-mark svg {
+    width: 9px; height: 11px; display: block;
+    fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round;
+  }
   .prio { width: 8px; height: 8px; border-radius: 50%; }
   .prio.someday { background: var(--dim); opacity: 0.4; }
   .prio.low { background: var(--acc-blue); }
