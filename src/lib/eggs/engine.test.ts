@@ -26,8 +26,13 @@ function makeEngine(rngValues: number[], registry = REG) {
     load: async () => saved,
     save: async (s) => { saved = s; },
     baseChance: { taskCompleted: 1, screenVisited: 1, appOpened: 1, drawAccepted: 1, drawSkipped: 1, bigButtonPressed: 1 },
+    // These tests are about per-entry cooldowns and caps, so the whole global
+    // governor is switched off — including the per-event gaps and ceilings,
+    // which have their own coverage in distribution.test.ts.
     minGapMs: 0,
+    eventGapMs: {},
     maxPerDayGlobal: 100,
+    maxPerDayByEvent: {},
   });
 }
 

@@ -8,11 +8,13 @@
   import { toast } from './toast.svelte';
   import { isEscalated, effectivePriority } from '../domain/priority';
   import { daysUntilDeadline } from '../domain/time';
-  import { activeMs, formatElapsed } from '../domain/stats';
+  import { activeMs, completionCounts, formatElapsed } from '../domain/stats';
   import type { Task } from '../domain/types';
   import { tagColor } from './tagColors';
   import TaskEditor from './TaskEditor.svelte';
-  import { burstFromElement, motionOk } from './fx/particles';
+  import Glyph from './Glyph.svelte';
+  import { motionOk } from './fx/particles';
+  import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
 
   let {
@@ -138,7 +140,10 @@
     completing = true;
     // Juice is garnish — the mutation below runs even if fx throw (spec P5).
     try {
-      if (checkEl) burstFromElement(checkEl, { colors: ['#7ee787', '#56d4dd', '#e3b341'] });
+      if (checkEl) {
+        const done = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
+        celebrateFromElement(checkEl, { completionsToday: done.today + 1 });
+      }
       haptic('success');
     } catch { /* never block completion on fx */ }
     setTimeout(() => void app.completeTask(task.id), motionOk() ? 280 : 0);
@@ -213,24 +218,21 @@
           </span>
         {/if}
         {#if hasNotes}
-          <!-- Drawn, not typed: an emoji here renders differently on every OS
-               and drags a colour cartoon into a monochrome row. This inherits
-               the badge colour and looks the same everywhere. -->
-          <span class="notes-mark" data-testid="has-notes-{task.id}"
-            title="has a description — expand to read it">
-            <svg viewBox="0 0 10 12" aria-hidden="true">
-              <rect x="0.5" y="0.5" width="9" height="11" rx="1.5" />
-              <line x1="3" y1="4.5" x2="7" y2="4.5" />
-              <line x1="3" y1="7.5" x2="6" y2="7.5" />
-            </svg>
+          <span class="mark" data-testid="has-notes-{task.id}">
+            <Glyph name="notes" size={11} title="has a description — expand to read it" />
           </span>
         {/if}
         {#if blocked && !completedMode}
-          <span class="blocked-mark" data-testid="blocked-mark-{task.id}"
-            title="waiting on {blockerCount} unfinished task{blockerCount === 1 ? '' : 's'} — the randomizer will skip it">⛔</span>
+          <span class="mark blocked-mark" data-testid="blocked-mark-{task.id}">
+            <Glyph name="blocked" size={11}
+              title="waiting on {blockerCount} unfinished task{blockerCount === 1 ? '' : 's'} — the randomizer will skip it" />
+          </span>
         {/if}
         {#if !completedMode && task.timeboxMinutes}
-          <span class="done-at" title="timeboxed to {task.timeboxMinutes} minutes on accept">⏳</span>
+          <span class="mark" data-testid="timeboxed-{task.id}">
+            <Glyph name="timebox" size={11}
+              title="timeboxed to {task.timeboxMinutes} minutes on accept" />
+          </span>
         {/if}
         {#if task.deadline && !completedMode}
           <span class="deadline" class:overdue>{shortDate(task.deadline)}</span>
@@ -305,12 +307,9 @@
   .done-at { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
-  .blocked-mark { font-size: 0.62rem; opacity: 0.85; }
-  .notes-mark { display: inline-flex; align-items: center; color: var(--dim); }
-  .notes-mark svg {
-    width: 9px; height: 11px; display: block;
-    fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round;
-  }
+  .mark { display: inline-flex; align-items: center; color: var(--dim); }
+  /* The one that means "you can't do this yet" earns a warmer colour. */
+  .blocked-mark { color: var(--acc-orange); }
   .prio { width: 8px; height: 8px; border-radius: 50%; }
   .prio.someday { background: var(--dim); opacity: 0.4; }
   .prio.low { background: var(--acc-blue); }

@@ -70,6 +70,8 @@ interface SeenRow { count: number; lastAt: number; day: string; dayCount: number
 
 export interface EggState {
   seen: Record<string, SeenRow>;
+  /** Per-event presentation counts for the current app-day (see ambient caps). */
+  presentedTodayBy?: Record<string, number>;
   trivia: { correct: number; total: number };
   unlocks: string[];
   storyStage: number;
@@ -82,7 +84,7 @@ export interface EggState {
 
 /** Factory, not a constant — nested objects must never be shared across instances. */
 const freshState = (): EggState => ({
-  seen: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
+  seen: {}, presentedTodayBy: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
   lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
   lastCompletionDay: '', streakDays: 0,
 });
@@ -98,7 +100,11 @@ export interface EngineDeps {
   baseChance?: Partial<Record<EggEvent, number>>;
   /** Global governor: minimum quiet time between presentations. */
   minGapMs?: number;
+  /** Per-event overrides of that quiet time (see EVENT_GAP). */
+  eventGapMs?: Partial<Record<EggEvent, number>>;
   maxPerDayGlobal?: number;
+  /** Per-event daily ceilings, so ambient events can't eat the whole budget. */
+  maxPerDayByEvent?: Partial<Record<EggEvent, number>>;
 }
 
 const DEFAULT_CHANCE: Record<EggEvent, number> = {
@@ -106,6 +112,32 @@ const DEFAULT_CHANCE: Record<EggEvent, number> = {
   screenVisited: 0.05, appOpened: 0.12, bigButtonPressed: 0.04,
   timeboxFinished: 0.6, workPeriodStarted: 0.35, bulkActed: 0.3, taskDragged: 0.05,
   taskUnblocked: 0.55,
+};
+
+/**
+ * Quiet time is not one number, because not every event deserves the same
+ * patience. Reported 2026-07-28: browsing the app produced more surprises than
+ * finishing tasks did. Two causes — screen visits vastly outnumber completions,
+ * so even a low per-event chance wins on volume, and both were competing for
+ * the same single governed slot, so wandering around actively stole moments
+ * from the work.
+ *
+ * Finishing something is the whole point of the app, so completions wait only
+ * briefly; ambient events (wandering, opening the app) wait much longer and
+ * are capped per day on top. Anything not listed falls back to minGapMs.
+ */
+const EVENT_GAP: Partial<Record<EggEvent, number>> = {
+  taskCompleted: 20_000,
+  taskUnblocked: 20_000,
+  timeboxFinished: 20_000,
+  screenVisited: 300_000,
+  appOpened: 300_000,
+};
+
+/** Ambient events get a hard daily ceiling well under the global one. */
+const EVENT_DAILY_CAP: Partial<Record<EggEvent, number>> = {
+  screenVisited: 4,
+  appOpened: 2,
 };
 
 export class EggEngine {
@@ -118,7 +150,9 @@ export class EggEngine {
   private saveFn: (s: EggState) => Promise<void>;
   private baseChance: Record<EggEvent, number>;
   private minGapMs: number;
+  private eventGapMs: Partial<Record<EggEvent, number>>;
   private maxPerDayGlobal: number;
+  private maxPerDayByEvent: Partial<Record<EggEvent, number>>;
 
   constructor(deps: EngineDeps) {
     this.registry = deps.registry;
@@ -128,7 +162,9 @@ export class EggEngine {
     this.saveFn = deps.save;
     this.baseChance = { ...DEFAULT_CHANCE, ...deps.baseChance };
     this.minGapMs = deps.minGapMs ?? 90_000;
+    this.eventGapMs = deps.eventGapMs ?? EVENT_GAP;
     this.maxPerDayGlobal = deps.maxPerDayGlobal ?? 14;
+    this.maxPerDayByEvent = deps.maxPerDayByEvent ?? EVENT_DAILY_CAP;
     this.ready = deps.load().then((s) => {
       if (s) {
         this.state = {
@@ -149,6 +185,12 @@ export class EggEngine {
 
   private persist(): void {
     void this.saveFn({ ...this.state });
+  }
+
+  /** How many times this event has already presented in the current app-day. */
+  private presentedTodayFor(event: EggEvent, day: string): number {
+    if (this.state.presentedDay !== day) return 0; // a new day wipes the tallies
+    return this.state.presentedTodayBy?.[event] ?? 0;
   }
 
   private touchStreak(day: string): void {
@@ -204,8 +246,11 @@ export class EggEngine {
     // because ambient delight must never become noise (spec §12).
     let pool = eligible.filter((egg) => egg.guaranteed);
     if (pool.length === 0) {
-      if (ts - this.state.lastPresentedAt < this.minGapMs) return null;
+      const gap = this.eventGapMs[ctx.event] ?? this.minGapMs;
+      if (ts - this.state.lastPresentedAt < gap) return null;
       if (presentedToday >= this.maxPerDayGlobal) return null;
+      const eventCap = this.maxPerDayByEvent[ctx.event];
+      if (eventCap !== undefined && this.presentedTodayFor(ctx.event, day) >= eventCap) return null;
       if (this.rng() > (this.baseChance[ctx.event] ?? 0)) return null;
       pool = eligible;
     }
@@ -225,6 +270,9 @@ export class EggEngine {
       day,
       dayCount: prior?.day === day ? (prior.dayCount ?? 0) + 1 : 1,
     };
+    const perEvent = this.state.presentedDay === day ? { ...this.state.presentedTodayBy } : {};
+    perEvent[ctx.event] = (perEvent[ctx.event] ?? 0) + 1;
+    this.state.presentedTodayBy = perEvent;
     this.state.lastPresentedAt = ts;
     this.state.presentedDay = day;
     this.state.presentedToday = presentedToday + 1;

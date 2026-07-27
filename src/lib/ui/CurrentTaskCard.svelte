@@ -6,16 +6,21 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
-  import { confettiAt, motionOk } from './fx/particles';
+  import { motionOk } from './fx/particles';
+  import { celebrateCompletion } from './fx/celebrate';
   import { haptic } from './fx/haptics';
   import Timebox from './Timebox.svelte';
-  import { elapsedSoFar, formatElapsed } from '../domain/stats';
+  import { completionCounts, elapsedSoFar, formatElapsed } from '../domain/stats';
 
   /** Completing THE current task is the app's biggest moment — confetti-grade. */
   function completeCurrent(e: MouseEvent, taskId: string) {
     try {
       const r = (e.currentTarget as Element).getBoundingClientRect();
-      confettiAt(r.left + r.width / 2, r.top + r.height / 2);
+      const done = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
+      celebrateCompletion(r.left + r.width / 2, r.top + r.height / 2, {
+        completionsToday: done.today + 1,
+        emphatic: true, // finishing THE current task is the app's biggest moment
+      });
       haptic('heavy');
     } catch { /* fx must never block completion */ }
     setTimeout(() => void app.completeTask(taskId), motionOk() ? 320 : 0);
@@ -34,6 +39,19 @@
   });
 
   const listTitle = $derived(task ? app.state.lists.find((l) => l.id === task!.listId)?.title : undefined);
+
+  /**
+   * The elapsed readout has to be driven by a clock, not by the task: nothing
+   * about the task changes while it runs, so Svelte had no reason to re-render
+   * and the card sat on whatever it said at mount ("1s in", forever). Ticks
+   * only while a stretch is actually running — a paused task's total is fixed.
+   */
+  let now = $state(Date.now());
+  $effect(() => {
+    if (!task?.startedAt) return;
+    const id = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(id);
+  });
 
   /** Idle-state verbs for the greyed-out no-current-task card (2026-07-26 request). */
   const CHILL = ['chillin’', 'vibing', 'relaxing', 'waiting…', 'idle', 'off the clock',
@@ -57,7 +75,7 @@
       <Timebox {task} />
       {#if task.startedAt || task.activeAccumulatedMs}
         <span class="elapsed" title="time actually spent working on this">
-          ⧗ {formatElapsed(elapsedSoFar(task))} in
+          ⧗ {formatElapsed(elapsedSoFar(task, now))} in
         </span>
       {/if}
     </div>

@@ -7,6 +7,7 @@
   import { app } from '../state/app.svelte';
   import { eligibleForDraw } from '../domain/randomizer';
   import { effectivePriority } from '../domain/priority';
+  import Glyph from './Glyph.svelte';
 
   const PRESETS = [20, 45, 90];
 
@@ -74,12 +75,13 @@
   </div>
 {:else}
   <button class="open" data-testid="work-period-open" onclick={() => (picking = true)}>
-    ⏱ start a work period
+    <Glyph name="period" size={12} /> start a work period
   </button>
 {/if}
 
 <style>
   .open {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
     width: 100%; background: none; border: 1px dashed var(--line); border-radius: 8px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
     padding: 8px; cursor: pointer; margin-bottom: 10px;

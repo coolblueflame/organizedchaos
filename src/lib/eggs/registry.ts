@@ -37,7 +37,9 @@ const unlockEgg = (
 export const REGISTRY: EggDef[] = [
   // The bread and butter: facts + quips on completions.
   {
-    id: 'fact', weight: 50, triggers: ['taskCompleted'],
+    // Also on screenVisited: trivia used to be the ONLY entry that could fire
+    // while browsing, so every single browse-triggered surprise was a quiz.
+    id: 'fact', weight: 50, triggers: ['taskCompleted', 'screenVisited'],
     present: (c) => ({ kind: 'note', emoji: '💡', text: pick(FACTS, c.rng) }),
   },
   {

@@ -120,25 +120,41 @@ export interface BurstOptions {
   count?: number;
   colors?: string[];
   power?: number;      // initial speed scale
+  /** Scales particle size — bigger reads as heavier, more celebratory. */
+  sizeScale?: number;
+  /** >1 makes particles hang around longer (divides the decay rate). */
+  lifeScale?: number;
+  /** Evenly space the angles instead of randomising, for a clean ring. */
+  ring?: boolean;
+  /** Upward bias applied on top of the radial velocity; defaults to 150. */
+  upward?: number;
+  /** Force a shape instead of the usual mix. */
+  shape?: 'dot' | 'square';
 }
 
 export function burstAt(x: number, y: number, opts: BurstOptions = {}): void {
   if (reduced || !ctx) return;
-  const { count = 14, colors = ACCENTS, power = 1 } = opts;
+  const {
+    count = 14, colors = ACCENTS, power = 1,
+    sizeScale = 1, lifeScale = 1, ring = false, upward = 150, shape,
+  } = opts;
   for (let i = 0; i < count && pool.length < MAX_PARTICLES; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = (120 + Math.random() * 260) * power;
+    // A ring wants even spacing; everything else looks better scattered.
+    const angle = ring
+      ? (i / count) * Math.PI * 2
+      : Math.random() * Math.PI * 2;
+    const speed = (120 + (ring ? 130 : Math.random() * 260)) * power;
     pool.push({
       x, y,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 150 * power, // bias upward — feels celebratory
+      vy: Math.sin(angle) * speed - upward * power, // bias upward — feels celebratory
       life: 1,
-      decay: 1.1 + Math.random() * 0.8,
-      size: 3 + Math.random() * 5,
+      decay: (1.1 + Math.random() * 0.8) / lifeScale,
+      size: (3 + Math.random() * 5) * sizeScale,
       color: colors[Math.floor(Math.random() * colors.length)]!,
       rot: Math.random() * Math.PI,
       spin: (Math.random() - 0.5) * 12,
-      shape: Math.random() < 0.35 ? 'dot' : 'square',
+      shape: shape ?? (Math.random() < 0.35 ? 'dot' : 'square'),
     });
   }
   ensureLoop();

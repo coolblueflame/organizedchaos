@@ -11,6 +11,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { wouldCycle } from '../domain/blocking';
+  import Glyph from './Glyph.svelte';
   import type { Task } from '../domain/types';
 
   let { task }: { task: Task } = $props();
@@ -61,7 +62,7 @@
 
 <div class="blocked" data-testid="blocked-by">
   <button class="head" data-testid="blocked-by-toggle" onclick={() => (open = !open)}>
-    <span class="label">⛔ blocked by</span>
+    <span class="label"><Glyph name="blocked" size={11} /> blocked by</span>
     {#if blockers.length > 0}
       <span class="tally" data-testid="blocked-by-count">{blockers.length}</span>
     {:else}
@@ -108,7 +109,7 @@
     padding: 7px 10px; cursor: pointer; text-align: left;
   }
   .head:hover { border-color: var(--acc-magenta); color: var(--acc-magenta); }
-  .label { flex: 1; }
+  .label { flex: 1; display: inline-flex; align-items: center; gap: 6px; }
   .tally {
     background: var(--acc-magenta); border-radius: 999px; color: var(--bg0);
     font-size: 0.62rem; font-weight: 700; padding: 1px 7px;

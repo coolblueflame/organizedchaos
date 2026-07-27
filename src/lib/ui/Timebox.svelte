@@ -13,6 +13,7 @@
   import type { Task } from '../domain/types';
   import { burstAt, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
+  import Glyph from './Glyph.svelte';
 
   let { task }: { task: Task } = $props();
 
@@ -127,11 +128,14 @@
     <button class="cancel" onclick={() => (picking = false)}>✕</button>
   </div>
 {:else}
-  <button class="start" data-testid="timebox-open" onclick={() => (picking = true)}>⏳ timebox</button>
+  <button class="start" data-testid="timebox-open" onclick={() => (picking = true)}>
+    <Glyph name="timebox" size={11} /> timebox
+  </button>
 {/if}
 
 <style>
   .start {
+    display: inline-flex; align-items: center; gap: 5px;
     background: none; border: 1px solid var(--line); border-radius: 8px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
     padding: 6px 10px; cursor: pointer;
