@@ -13,6 +13,7 @@
   import { PRIORITIES, type Priority, type Task } from '../domain/types';
   import TaskRow from './TaskRow.svelte';
   import { haptic } from './fx/haptics';
+  import { burstAt, motionOk } from './fx/particles';
 
   let {
     groups,
@@ -53,6 +54,16 @@
     selected = [];
     await app.bulkApply(ids, action, value);
     haptic('success');
+    // Scale the payoff to the size of the sweep — clearing eight at once should
+    // feel like more than clearing one.
+    if (ids.length >= 3 && action !== 'move' && motionOk()) {
+      try {
+        burstAt(window.innerWidth / 2, window.innerHeight * 0.75, {
+          count: Math.min(12 + ids.length * 4, 60),
+          power: 1 + Math.min(ids.length, 10) / 12,
+        });
+      } catch { /* fx never block the action */ }
+    }
     // A big sweep earns its own moment; otherwise leave it to the ambient roll.
     if (ids.length < 5 || !app.grantUnlockAndShow('sweeper')) app.fireEgg('bulkActed');
   }

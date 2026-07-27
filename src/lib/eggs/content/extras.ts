@@ -60,6 +60,10 @@ export const PET_LINES: readonly string[] = [
   'status report: streak warm, snacks low, morale MAXIMUM.',
   'when you finish tasks I get little sparkles. it tickles.',
   '*stares at your Someday list with big encouraging eyes*',
+  'I sat with the timebox while it counted. it gets lonely.',
+  'you cleared a whole GROUP at once. I have never been more impressed.',
+  'dragging tasks around is basically shepherding. you’re a shepherd now.',
+  'a work period means we go FAST. I have tiny legs but I will try.',
   'I named a dust bunny under the stats screen. his name is Kevin.',
   'today’s forecast: 100% chance of you being great.',
 ] as const;

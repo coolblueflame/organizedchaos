@@ -101,5 +101,6 @@ export const REGISTRY: EggDef[] = [
     return h >= 2 && h < 4;
   }),
   unlockEgg('century', ['taskCompleted'], (c) => c.lifetimeCompletions >= 100),
-  // quiz-whiz, konami, chaos-word are granted directly by their flows.
+  // quiz-whiz, konami, chaos-word, hatchling, sweeper and clairvoyant are
+  // granted directly by their own flows (grantUnlockAndShow), not rolled here.
 ];
