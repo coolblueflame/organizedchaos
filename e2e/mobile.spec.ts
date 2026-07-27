@@ -134,3 +134,48 @@ test('the editor fields wrap instead of overlapping on a narrow screen', async (
     }
   }
 });
+
+test('a finger dragging the row scrolls the page instead of picking a task up', async ({
+  page, browserName,
+}) => {
+  test.skip(browserName !== 'webkit', 'touch behaviour');
+  // Reported 2026-07-28: trying to scroll dimmed the screen and stuck a task
+  // under your thumb, because any 8px pointer move armed the drag — and that
+  // is exactly what a scroll gesture looks like.
+  await reset(page);
+  await makeListWithTask(page, 'Scrolly', 'task one');
+  for (const n of ['task two', 'task three', 'task four', 'task five']) {
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(n);
+    await page.waitForTimeout(200);
+    await page.getByTestId('task-collapse').last().click();
+  }
+
+  const row = page.getByTestId(/^task-row-/).first();
+  const box = (await row.boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  // A finger going down on the row body, then travelling — i.e. a scroll.
+  // Dispatched on the row itself so it bubbles to the drag handler; sending it
+  // to the body would test nothing.
+  await row.dispatchEvent('pointerdown', {
+    pointerType: 'touch', clientX: cx, clientY: cy, isPrimary: true, button: 0,
+  });
+  await page.mouse.move(cx, cy - 120, { steps: 8 });
+
+  // No ghost and no dimming: the gesture was left alone for the browser.
+  await expect(page.locator('.ghost')).toHaveCount(0);
+  await expect(page.locator('.groups.dragging')).toHaveCount(0);
+  await page.mouse.up();
+});
+
+test('the grip is what picks a task up', async ({ page, browserName }) => {
+  test.skip(browserName !== 'webkit', 'touch behaviour');
+  await reset(page);
+  await makeListWithTask(page, 'Grippy', 'draggable one');
+
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await expect(page.getByTestId(`drag-${id}`)).toBeVisible();
+});

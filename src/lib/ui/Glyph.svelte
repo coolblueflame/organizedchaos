@@ -18,7 +18,7 @@
   type GlyphName =
     | 'notes' | 'blocked' | 'timebox' | 'period' | 'pause' | 'play'
     | 'dice' | 'moon' | 'bolt' | 'install' | 'upload' | 'award' | 'locked'
-    | 'flame' | 'settings' | 'escalate'
+    | 'flame' | 'settings' | 'escalate' | 'grip'
     | 'box' | 'box-checked' | 'box-all';
 
   let { name, size = 11, title }: {
@@ -75,8 +75,14 @@
     <circle class="solid pip" cx="6" cy="6" r="0.85" />
     <circle class="solid pip" cx="8.3" cy="8.3" r="0.85" />
   {:else if name === 'moon'}
-    <!-- Crescent, drawn as one path so the bite is part of the outline. -->
-    <path d="M8.6 8.9 A5.1 5.1 0 1 1 6.4 1.1 A4 4 0 0 0 8.6 8.9 Z" />
+    <!--
+      Crescent: outer arc the long way round, then a wider arc back to carve
+      the bite. Both horns sit on a circle centred at x=6.09 with r=4.9, so the
+      leftmost ink lands at 1.19 and the stroke still clears the box — the
+      previous version's arc centred at 4.52 with r=5.1, putting its left edge
+      at -0.58, and it was visibly clipped (spotted by Ben, 2026-07-28).
+    -->
+    <path d="M8.55 1.76 A4.9 4.9 0 1 0 8.55 10.24 A5.6 5.6 0 0 1 8.55 1.76 Z" />
   {:else if name === 'bolt'}
     <path class="solid" d="M7.2 0.8 L3 6.6 L5.6 6.6 L4.8 11.2 L9 5.2 L6.4 5.2 Z" />
   {:else if name === 'install'}
@@ -113,6 +119,12 @@
     <!-- Deadline pressure: a stack of chevrons pointing up. -->
     <path d="M2.6 6.6 L6 3.2 L9.4 6.6" />
     <path d="M2.6 10 L6 6.6 L9.4 10" />
+  {:else if name === 'grip'}
+    <!-- The universal "pick me up here": two columns of dots. -->
+    {#each [2.6, 6, 9.4] as cy (cy)}
+      <circle class="solid" cx="4.4" cy={cy} r="0.95" />
+      <circle class="solid" cx="7.6" cy={cy} r="0.95" />
+    {/each}
   {:else if name === 'box'}
     <rect x="1.2" y="1.2" width="9.6" height="9.6" rx="2" />
   {:else if name === 'box-checked'}

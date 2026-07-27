@@ -182,3 +182,39 @@ test('per-list sort mode is remembered', async ({ page }) => {
   await page.getByTestId(/^list-row-/).first().click();
   await expect(page.getByTestId('list-sort')).toContainText('date');
 });
+
+test('copies today\'s wins as a dash-bulleted list', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'clipboard permissions are chromium-only here');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await makeList(page, 'Wins');
+
+  for (const name of ['Mow the lawn', 'Book dentist']) {
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.waitForTimeout(250);
+    await page.getByTestId('task-collapse').last().click();
+  }
+  // Complete them oldest-first so the copied order is predictable.
+  for (const name of ['Mow the lawn', 'Book dentist']) {
+    const row = page.getByTestId(/^task-row-/).filter({ hasText: name }).first();
+    const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+    await page.getByTestId(`task-check-${id}`).click();
+    await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+  }
+
+  await page.getByTestId('back').click();
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByTestId('copy-wins')).toContainText('2 wins');
+
+  await page.getByTestId('copy-wins').click();
+  await expect(page.getByTestId('copy-wins')).toContainText('copied');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip).toBe('- Mow the lawn\n- Book dentist');
+});
+
+test('offers nothing to copy on a day with no completions', async ({ page }) => {
+  await makeList(page, 'Quiet');
+  await page.getByTestId('back').click();
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByTestId('copy-wins')).toHaveCount(0);
+});

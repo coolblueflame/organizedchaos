@@ -210,7 +210,11 @@
 </div>
 
 <style>
-  .editor { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 8px; }
+  .editor {
+    display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 8px;
+    /* The fields grid measures THIS box, not the viewport (see .fields). */
+    container: editor / inline-size;
+  }
   .notes {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-size: 0.85rem; padding: 8px; outline: none; resize: vertical;
@@ -226,16 +230,28 @@
   /* Grid, not a flex row: a native date input has a wide intrinsic minimum and
      refuses to shrink past it, so three across would overlap on a phone. This
      drops to two columns (then one) before that can happen. */
-  .fields {
-    display: grid; gap: 10px 12px;
-    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  /*
+   * One field per row by default, side by side only when there is real room.
+   *
+   * auto-fit with a 150px minimum was not enough: Safari gives date and time
+   * inputs an intrinsic minimum width that ignores `width: 100%`, and the 16px
+   * font these get on touch (see app.css — it stops iOS zooming on focus) makes
+   * them wider still, so two columns kept colliding on a phone even though the
+   * grid said they fit. A width query on the editor itself is the honest
+   * measure, since this sits inside a row with its own padding — a viewport
+   * query would be describing the wrong box.
+   */
+  .fields { display: grid; gap: 10px 12px; grid-template-columns: 1fr; }
+  @container editor (min-width: 460px) {
+    .fields { grid-template-columns: repeat(3, 1fr); }
   }
   .fields label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .fields span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .fields input {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
-    color-scheme: dark; width: 100%;
+    /* Lets the native date/time control shrink below its intrinsic width. */
+    color-scheme: dark; width: 100%; min-width: 0;
   }
   .repeat-row {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;

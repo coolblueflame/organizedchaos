@@ -99,8 +99,20 @@
   let origin: { x: number; y: number } | null = null;
   let candidate: Task | null = null;
 
-  function onPointerDown(e: PointerEvent, task: Task) {
+  /**
+   * A touch drag must start on the grip; a mouse drag can start anywhere.
+   *
+   * Dragging from anywhere was fine with a cursor and unusable with a finger:
+   * a scroll is a press plus more than eight pixels of travel, which is exactly
+   * the gesture this watches for, so trying to scroll a list dimmed the screen
+   * and stuck a task under your thumb (reported 2026-07-28). The grip carries
+   * `touch-action: none`, so a drag begun there never becomes a scroll, and
+   * every other touch on the row is left to the browser.
+   */
+  function onPointerDown(e: PointerEvent, task: Task, fromGrip = false) {
     if (!mode || e.button !== 0) return;
+    if (!fromGrip && e.pointerType !== 'mouse') return;
+    if (fromGrip) e.preventDefault(); // no text selection or native drag image
     candidate = task;
     origin = { x: e.clientX, y: e.clientY };
   }
@@ -164,6 +176,12 @@
         <button class="pick" class:on={selected.includes(task.id)}
           data-testid="select-{task.id}" onclick={() => toggleSelect(task.id)}
           aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-checked' : 'box'} size={12} /></button>
+        {#if mode}
+          <button class="grip" data-testid="drag-{task.id}" aria-label="drag to regroup"
+            onpointerdown={(e) => onPointerDown(e, task, true)}>
+            <Glyph name="grip" size={12} />
+          </button>
+        {/if}
         <TaskRow
           {task}
           {showList}
@@ -230,6 +248,14 @@
     font-size: 0.95rem; cursor: pointer; padding: 0 2px; align-self: center;
   }
   .pick.on { color: var(--acc-cyan); }
+  .grip {
+    flex: none; align-self: center; background: none; border: none;
+    color: var(--line); cursor: grab; padding: 6px 2px;
+    /* The whole point: a drag starting here can never become a page scroll. */
+    touch-action: none;
+  }
+  .grip:hover { color: var(--dim); }
+  .grip:active { cursor: grabbing; }
   .draggable.picked :global(.row) { border-color: var(--acc-cyan); }
   .pick-group {
     margin-left: auto; background: none; border: none; color: var(--dim);

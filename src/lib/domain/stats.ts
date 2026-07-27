@@ -22,6 +22,35 @@ function weekStartKey(dayKey: string): string {
   return addDaysKey(dayKey, -dow);
 }
 
+/**
+ * Everything finished during one app-day, oldest first — the order you did
+ * them in, which is the order you'd recount them in.
+ *
+ * Imported history is excluded: a Things backup dumped in this morning is not
+ * something you accomplished today, and it would swamp a real day's list.
+ */
+export function completedOnDay(tasks: Task[], dayKey: string, rolloverHour: number): Task[] {
+  return scoredTasks(tasks)
+    .filter((t) => appDayKey(new Date(t.completedAt!), rolloverHour) === dayKey)
+    .sort((a, b) => a.completedAt! - b.completedAt!);
+}
+
+/**
+ * Today's finished work as a plain dash-bulleted list, for pasting somewhere
+ * that deserves to hear about it.
+ *
+ * A literal "- " rather than a typographic bullet on purpose: it survives
+ * every editor, chat box and issue tracker unchanged, and Markdown renders it
+ * as a real list. Unnamed tasks still get a line — a blank bullet is a better
+ * prompt than a silently shorter list.
+ */
+export function winsList(tasks: Task[], now: Date, rolloverHour: number): string {
+  const day = appDayKey(now, rolloverHour);
+  return completedOnDay(tasks, day, rolloverHour)
+    .map((t) => `- ${t.name.trim() || 'untitled'}`)
+    .join('\n');
+}
+
 export interface CompletionCounts {
   today: number; week: number; month: number; year: number; lifetime: number;
 }

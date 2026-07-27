@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type Priority, type Task } from './types';
 import {
   burdenSeries, completionCounts, completionSeries, formatDuration, totalEstimateHours,
+  winsList,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -104,3 +105,53 @@ describe('burdenSeries', () => {
     expect(byKey['2026-07-15']).toBe(2);  // just t1 remains
   });
 });
+
+describe('shareable wins list', () => {
+  const day = (iso: string) => new Date(iso).getTime();
+
+  it('lists today\'s completions oldest first, dash-bulleted', () => {
+    const now = new Date('2026-07-28T15:00:00');
+    const tasks = [
+      wins({ id: 'b', name: 'Book dentist', completedAt: day('2026-07-28T11:00:00') }),
+      wins({ id: 'a', name: 'Mow the lawn', completedAt: day('2026-07-28T09:00:00') }),
+    ];
+    expect(winsList(tasks, now, 4)).toBe('- Mow the lawn\n- Book dentist');
+  });
+
+  it('respects the 4am app-day, not midnight', () => {
+    const now = new Date('2026-07-28T02:00:00'); // still "the 27th" until 4am
+    const tasks = [
+      wins({ id: 'late', name: 'Late night win', completedAt: day('2026-07-28T01:30:00') }),
+      wins({ id: 'prev', name: 'Yesterday morning', completedAt: day('2026-07-27T10:00:00') }),
+      wins({ id: 'older', name: 'Two days ago', completedAt: day('2026-07-26T10:00:00') }),
+    ];
+    expect(winsList(tasks, now, 4)).toBe('- Yesterday morning\n- Late night win');
+  });
+
+  it('leaves out imported history, deleted tasks and anything unfinished', () => {
+    const now = new Date('2026-07-28T15:00:00');
+    const done = day('2026-07-28T10:00:00');
+    const tasks = [
+      wins({ id: 'real', name: 'Real win', completedAt: done }),
+      wins({ id: 'imported', name: 'From Things', completedAt: done, importedHistory: true }),
+      wins({ id: 'gone', name: 'Deleted', completedAt: done, deleted: true }),
+      wins({ id: 'open', name: 'Still open' }),
+    ];
+    expect(winsList(tasks, now, 4)).toBe('- Real win');
+  });
+
+  it('is empty when nothing has been finished today', () => {
+    expect(winsList([wins({ id: 'x', name: 'open' })], new Date('2026-07-28T15:00:00'), 4)).toBe('');
+  });
+
+  it('still emits a line for a task that was never named', () => {
+    const now = new Date('2026-07-28T15:00:00');
+    const tasks = [wins({ id: 'u', name: '  ', completedAt: day('2026-07-28T10:00:00') })];
+    expect(winsList(tasks, now, 4)).toBe('- untitled');
+  });
+});
+
+/** Local fixture for the wins tests: priority is irrelevant to this list. */
+function wins(over: Partial<Task>): Task {
+  return task({ priority: 'medium', ...over });
+}
