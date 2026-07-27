@@ -15,17 +15,25 @@
   import { burstFromElement, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
   import { shuffleReveal } from './fx/shuffle';
+  import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
 
   let { listId }: { listId?: string } = $props();
 
+  // Lists that are outside their scheduled hours right now. Rolling from a
+  // specific list is an explicit choice, so scoped entry ignores schedules.
+  // svelte-ignore state_referenced_locally
+  const asleepLists = listId
+    ? []
+    : app.state.lists.filter((l) => !isListActiveAt(l, new Date())).map((l) => l.id);
+
   // List filter is an OMIT set: empty = all lists in (Ben's "all minus a few").
-  // The list-scoped 🎲 entry seeds it with everything EXCEPT that list.
+  // Seeded from the schedule; the scoped 🎲 entry omits everything else.
   // svelte-ignore state_referenced_locally
   let omittedLists = $state<string[]>(
-    listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [],
+    listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [...asleepLists],
   );
   let filterTags = $state<string[]>([]);
   let notNow = $state<string[]>([]);
@@ -92,6 +100,26 @@
     const without = { ...scope(), excludeIds: [] };
     return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
   });
+
+  /** Empty only because some lists are off the clock right now? */
+  const hoursAreTheProblem = $derived.by(() => {
+    if (drawn !== null || asleepLists.length === 0) return false;
+    const stillOmitted = asleepLists.filter((id) => omittedLists.includes(id));
+    if (stillOmitted.length === 0) return false;
+    const ignoringHours = {
+      ...scope(),
+      listIds: app.state.lists
+        .filter((l) => !omittedLists.includes(l.id) || asleepLists.includes(l.id))
+        .map((l) => l.id),
+    };
+    return eligibleForDraw(app.state.tasks, new Date(), ignoringHours).length > 0;
+  });
+
+  function ignoreHours() {
+    omittedLists = omittedLists.filter((id) => !asleepLists.includes(id));
+    notNow = [];
+    redraw();
+  }
 
   function notNowClick() {
     if (!drawn) return;
@@ -163,7 +191,10 @@
         {#each app.state.lists as l (l.id)}
           <button class="chip list-chip" class:on={!omittedLists.includes(l.id)}
             data-testid="draw-filter-list-{l.id}"
-            onclick={() => toggleListFilter(l.id)}>{l.title}</button>
+            title={describeWindow(l) ? `scheduled ${describeWindow(l)}` : undefined}
+            onclick={() => toggleListFilter(l.id)}>
+            {#if asleepLists.includes(l.id)}🌙 {/if}{l.title}
+          </button>
         {/each}
       </div>
     {/if}
@@ -228,6 +259,9 @@
       {#if skipsAreTheProblem}
         <p>// you've skipped everything in the pool</p>
         <button class="reset" data-testid="draw-reset-skips" onclick={resetSkips}>reset skips</button>
+      {:else if hoursAreTheProblem}
+        <p>// everything left is on a list that's off the clock right now 🌙</p>
+        <button class="reset" data-testid="draw-ignore-hours" onclick={ignoreHours}>roll anyway</button>
       {:else}
         <p>// pool empty — everything's done, filtered out, or snoozed until 4am</p>
         <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>

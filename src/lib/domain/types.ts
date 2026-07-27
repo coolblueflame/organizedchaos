@@ -33,6 +33,12 @@ export interface List extends Base {
   areaGroup?: string;
   /** Last sort mode used in this list's view (spec §6: remembered per list). */
   sortMode: SortMode;
+  /**
+   * Optional local-time window ('HH:MM') during which the randomizer may draw
+   * from this list; may wrap past midnight. Both must be set to take effect.
+   */
+  activeFrom?: string;
+  activeTo?: string;
   /** Source Things project/area uuid — makes re-imports idempotent (spec §9). */
   thingsUuid?: string;
 }

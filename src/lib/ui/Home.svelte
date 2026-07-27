@@ -8,6 +8,7 @@
   import { navigate } from './router.svelte';
   import { toast } from './toast.svelte';
   import { openTasks } from '../domain/views';
+  import { describeWindow, isListActiveAt } from '../domain/schedule';
   import type { List } from '../domain/types';
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
@@ -41,6 +42,9 @@
   let renamingId = $state<string | null>(null);
   let editText = $state('');
   let regroupingId = $state<string | null>(null);
+  let hoursId = $state<string | null>(null);
+  let hoursFrom = $state('09:00');
+  let hoursTo = $state('17:00');
 
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
@@ -91,6 +95,23 @@
     regroupingId = null;
   }
 
+  function startHours(l: List) {
+    hoursId = l.id;
+    hoursFrom = l.activeFrom ?? '09:00';
+    hoursTo = l.activeTo ?? '17:00';
+    menuFor = null;
+  }
+
+  async function saveHours() {
+    if (hoursId) await app.setListHours(hoursId, hoursFrom, hoursTo);
+    hoursId = null;
+  }
+
+  async function clearHours() {
+    if (hoursId) await app.setListHours(hoursId, undefined, undefined);
+    hoursId = null;
+  }
+
   async function deleteList(l: List) {
     menuFor = null;
     if (!window.confirm(`Delete "${l.title}" and its open tasks?`)) return;
@@ -139,9 +160,24 @@
             <input class="inline-edit" autofocus bind:value={editText} placeholder="group name (empty = none)"
               onblur={finishRegroup}
               onkeydown={(e) => { if (e.key === 'Enter') finishRegroup(); if (e.key === 'Escape') regroupingId = null; }} />
+          {:else if hoursId === l.id}
+            <div class="hours-row" data-testid="list-hours-editor">
+              <span class="hours-label">🎲 draws from</span>
+              <input type="time" data-testid="list-hours-from" bind:value={hoursFrom} />
+              <span class="hours-label">to</span>
+              <input type="time" data-testid="list-hours-to" bind:value={hoursTo} />
+              <button class="hours-btn" data-testid="list-hours-save" onclick={saveHours}>set</button>
+              <button class="hours-btn" data-testid="list-hours-clear" onclick={clearHours}>any time</button>
+            </div>
           {:else}
             <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
               <span class="list-title">{l.title}</span>
+              {#if describeWindow(l)}
+                <span class="window" class:asleep={!isListActiveAt(l, new Date())}
+                  title="the randomizer draws from this list {describeWindow(l)}">
+                  {isListActiveAt(l, new Date()) ? '🎲' : '🌙'} {describeWindow(l)}
+                </span>
+              {/if}
               <span class="count">{countFor(l.id)}</span>
             </button>
             <button class="menu-btn" data-testid="list-menu-{l.id}"
@@ -150,6 +186,7 @@
               <div class="menu">
                 <button onclick={() => startRename(l)}>Rename</button>
                 <button onclick={() => startRegroup(l)}>Group…</button>
+                <button data-testid="list-hours-{l.id}" onclick={() => startHours(l)}>Hours…</button>
                 <button class="danger" data-testid="list-delete-{l.id}" onclick={() => deleteList(l)}>Delete</button>
               </div>
             {/if}
@@ -215,6 +252,26 @@
   .list-main:hover { background: var(--bg2); }
   .list-title { font-weight: 500; }
   .count { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; }
+  .window {
+    margin-left: auto; margin-right: 10px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.65rem;
+  }
+  .window.asleep { color: var(--dim); }
+  .hours-row {
+    flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 8px; padding: 10px;
+  }
+  .hours-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .hours-row input {
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 0.8rem;
+    padding: 4px 6px; color-scheme: dark;
+  }
+  .hours-btn {
+    background: none; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 4px 10px; cursor: pointer;
+  }
   .menu-btn {
     background: none; border: none; color: var(--dim); font-size: 1.1rem;
     cursor: pointer; padding: 0 10px;

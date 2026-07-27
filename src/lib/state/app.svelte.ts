@@ -242,6 +242,11 @@ export class AppStore {
     await this.patchList(id, { sortMode });
   }
 
+  /** Set (or clear, with no args) the list's randomizer hours. */
+  async setListHours(id: string, activeFrom?: string, activeTo?: string): Promise<void> {
+    await this.patchList(id, { activeFrom, activeTo });
+  }
+
   private async patchList(id: string, patch: Partial<List>): Promise<void> {
     await this.repo.updateList(id, patch);
     const list = this.state.lists.find((l) => l.id === id);

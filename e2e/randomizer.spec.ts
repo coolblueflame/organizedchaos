@@ -92,6 +92,43 @@ test('omitting a list chip excludes it from the global draw', async ({ page }) =
   await expect(page.getByTestId('draw-empty')).toBeVisible(); // inpool never surfaces
 });
 
+test('scheduled hours keep an off-clock list out of the draw, with an override', async ({ page }) => {
+  // Sit at 22:00 local so a 09:00–17:00 list is asleep.
+  await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  await seed(page, ['daytime task']);
+
+  // Give "Pool" working hours via the list menu
+  const listRow = page.getByTestId(/^list-row-/).first();
+  const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId(`list-hours-${listId}`).click();
+  await page.getByTestId('list-hours-from').fill('09:00');
+  await page.getByTestId('list-hours-to').fill('17:00');
+  await page.getByTestId('list-hours-save').click();
+  await expect(listRow).toContainText('9:00–17:00');
+
+  // At 22:00 the global draw skips it, but offers to roll anyway
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible();
+  await page.getByTestId('draw-ignore-hours').click();
+  await expect(page.getByTestId('draw-card')).toContainText('daytime task');
+});
+
+test('a list is drawable inside its scheduled hours', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(new Date().setHours(11, 0, 0, 0)));
+  await seed(page, ['daytime task']);
+  const listRow = page.getByTestId(/^list-row-/).first();
+  const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId(`list-hours-${listId}`).click();
+  await page.getByTestId('list-hours-from').fill('09:00');
+  await page.getByTestId('list-hours-to').fill('17:00');
+  await page.getByTestId('list-hours-save').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('daytime task');
+});
+
 test('list-scoped randomizer only draws from that list', async ({ page }) => {
   await seed(page, ['inpool']);
   // second list with a task that must never be drawn
