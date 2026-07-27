@@ -41,6 +41,21 @@
     if (current?.kind !== 'trivia') picked = null;
   });
 
+  /**
+   * "Until you click away": notes and awards no longer expire on a timer, so
+   * any interaction elsewhere in the app clears them. Listens on the capture
+   * phase and never stops propagation — the tap does its normal job as well,
+   * so getting on with your work dismisses the note as a side effect rather
+   * than costing an extra tap. The presenter ignores this inside its own
+   * protected window, so a tap already in flight can't wipe it unread.
+   */
+  $effect(() => {
+    if (!current || current.kind === 'trivia' || current.kind === 'moment') return;
+    const away = () => presenter.dismissAway();
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  });
+
   // ── input sequences (desktop keys; mobile gets the wordmark tap ritual) ──
   const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
   let keyBuf: string[] = [];

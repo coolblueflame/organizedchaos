@@ -96,6 +96,24 @@
     await startDraft();
   }
 
+  /**
+   * Capture it and start the clock in one go, for the "actually, I'm doing
+   * this right now" case. Marks it in progress only — it deliberately does NOT
+   * seize the current-task slot, which may already hold something you accepted
+   * from the randomizer and haven't finished.
+   */
+  async function startNow(): Promise<void> {
+    await flushName(); // waits for any in-flight draft itself
+    if (!nameDraft.trim()) {
+      focusName(); // nothing to start yet — stay put rather than closing
+      return;
+    }
+    const id = draftId;
+    draftId = null;
+    if (id) await app.setInProgress(id, true);
+    onclose();
+  }
+
   async function close(): Promise<void> {
     await flushName(); // waits for any in-flight draft itself
     const id = draftId;
@@ -182,6 +200,9 @@
     <button class="primary" data-testid="quick-add-another" onclick={() => void addAnother()}>
       + add another
     </button>
+    <button class="start" data-testid="quick-add-start" onclick={() => void startNow()}>
+      ▶ start now
+    </button>
     <button data-testid="quick-add-done" onclick={() => void close()}>done</button>
   </div>
   <p class="hint">enter adds another · esc or tapping away finishes</p>
@@ -228,5 +249,6 @@
     padding: 11px; cursor: pointer;
   }
   .actions .primary { color: var(--acc-green); border-color: var(--acc-green); font-weight: 700; }
+  .actions .start { color: var(--acc-blue); border-color: var(--acc-blue); }
   .hint { color: var(--dim); font-family: var(--font-mono); font-size: 0.65rem; text-align: center; margin: 0; }
 </style>

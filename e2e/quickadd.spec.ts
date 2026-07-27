@@ -124,3 +124,29 @@ test('the name field is focused the moment quick add opens, and stays focused', 
   await expect(page.getByTestId('quick-add')).toContainText('1 added');
   await expect(page.getByTestId('quick-add-name')).toBeFocused();
 });
+
+test('start now captures the task and puts it straight into progress', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Inbox');
+
+  await page.getByTestId('quick-add-open').click();
+  await page.getByTestId('quick-add-name').fill('do this right now');
+  await page.getByTestId('quick-add-start').click();
+
+  // Sheet closes, and the task is live in the In Progress section.
+  await expect(page.getByTestId('quick-add')).toHaveCount(0);
+  await page.getByTestId('inprogress-link').click();
+  await expect(page.getByText('do this right now', { exact: true })).toBeVisible();
+});
+
+test('start now on an empty field keeps the sheet open rather than making a blank', async ({
+  page,
+}) => {
+  await reset(page);
+  await makeList(page, 'Inbox');
+
+  await page.getByTestId('quick-add-open').click();
+  await page.getByTestId('quick-add-start').click();
+  await expect(page.getByTestId('quick-add')).toBeVisible();
+  await expect(page.getByTestId('quick-add-name')).toBeFocused();
+});

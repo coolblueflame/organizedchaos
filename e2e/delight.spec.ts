@@ -86,3 +86,29 @@ test('the bonus draw persists nothing unless accepted', async ({ page }) => {
   await page.getByTestId('selfcare-accept').click();
   await expect(page.getByTestId('current-task-card')).toContainText('water');
 });
+
+test('a note waits to be read instead of expiring on a timer', async ({ page }) => {
+  // Reported 2026-07-28: a note vanished while the app was backgrounded, so
+  // reopening it to read the thing showed nothing. Notes now wait for the user.
+  await reset(page, 'fact');
+  await completeOne(page);
+  await expect(page.getByTestId('delight-note')).toBeVisible();
+
+  // Far longer than any old lifetime; it is still there.
+  await page.waitForTimeout(9000);
+  await expect(page.getByTestId('delight-note')).toBeVisible();
+
+  // Interacting elsewhere clears it — the tap does its own job as well.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('delight-note')).toHaveCount(0);
+});
+
+test('a tap that was already in flight cannot wipe a note unread', async ({ page }) => {
+  await reset(page, 'fact');
+  await completeOne(page);
+  await expect(page.getByTestId('delight-note')).toBeVisible();
+
+  // Immediately poking elsewhere is treated as incidental, not a dismissal.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('delight-note')).toBeVisible();
+});

@@ -15,11 +15,43 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** Past the protected window, so a dismiss actually registers. */
+const settle = () => vi.advanceTimersByTime(3100);
+
 describe('PresenterStore', () => {
-  it('shows one presentation and clears it after its lifetime', () => {
+  it('keeps something readable on screen until it is dismissed', () => {
+    // Regression: notes expired on a timer that kept running while the app was
+    // BACKGROUNDED, so reopening the app to read one showed an empty screen.
     p.show(note('hello'));
     expect(p.current).toMatchObject({ kind: 'note', text: 'hello' });
-    vi.advanceTimersByTime(7100);
+    vi.advanceTimersByTime(10 * 60_000);
+    expect(p.current).toMatchObject({ kind: 'note', text: 'hello' });
+    p.dismiss();
+    expect(p.current).toBeNull();
+  });
+
+  it('a stray tap elsewhere cannot wipe it before it has been read', () => {
+    p.show(note('read me'));
+    vi.advanceTimersByTime(200); // a tap already in flight when it appeared
+    p.dismissAway();
+    expect(p.current).not.toBeNull();
+    settle();
+    p.dismissAway();
+    expect(p.current).toBeNull();
+  });
+
+  it('but tapping the thing itself always works, however quickly', () => {
+    // Aiming at it is unambiguous — making the user wait would just feel broken.
+    p.show(note('tap me'));
+    vi.advanceTimersByTime(50);
+    p.dismiss();
+    expect(p.current).toBeNull();
+  });
+
+  it('still time-boxes pure motion, which has nothing to read', () => {
+    p.show({ kind: 'moment', moment: 'disco' });
+    expect(p.current).toMatchObject({ kind: 'moment' });
+    vi.advanceTimersByTime(3600);
     expect(p.current).toBeNull();
   });
 
@@ -27,6 +59,7 @@ describe('PresenterStore', () => {
     p.show(unlock('a'));
     p.show(unlock('b'));
     expect(p.current).toMatchObject({ unlockId: 'a' }); // b waits its turn
+    settle();
     p.dismiss();
     vi.advanceTimersByTime(300);
     expect(p.current).toMatchObject({ unlockId: 'b' });
@@ -36,9 +69,11 @@ describe('PresenterStore', () => {
     p.show(unlock('a'));
     p.show(unlock('b'));
     p.show(unlock('b'));
+    settle();
     p.dismiss();
     vi.advanceTimersByTime(300);
     expect(p.current).toMatchObject({ unlockId: 'b' });
+    settle();
     p.dismiss();
     vi.advanceTimersByTime(300);
     expect(p.current).toBeNull(); // only the one 'b'
@@ -52,10 +87,12 @@ describe('PresenterStore', () => {
     p.show(unlock('a'));
     p.show(unlock('b'));
     p.show(unlock('c'));
+    settle();
     p.dismiss();
     p.dismiss(); // arrives inside the hand-off window
     vi.advanceTimersByTime(300);
     expect(p.current).toMatchObject({ unlockId: 'b' });
+    settle();
     p.dismiss();
     vi.advanceTimersByTime(300);
     expect(p.current).toMatchObject({ unlockId: 'c' });
@@ -64,6 +101,7 @@ describe('PresenterStore', () => {
   it('ambient content cannot jump in front of an award mid-hand-off', () => {
     p.show(unlock('a'));
     p.show(unlock('b'));
+    settle();
     p.dismiss(); // 'b' is on its way in
     p.show(note('ambient'));
     expect(p.current).toBeNull(); // the note did not seize the empty slot
@@ -77,12 +115,12 @@ describe('PresenterStore', () => {
     expect(p.current).toMatchObject({ kind: 'trivia' });
   });
 
-  it('awards run shorter while others are waiting, so the run still clears fast', () => {
+  it('a waiting award does not hurry the one being read', () => {
+    // Awards wait for the reader now, so earning a second one mid-read must
+    // not cut the first one short.
     p.show(unlock('a'));
     p.show(unlock('b'));
-    vi.advanceTimersByTime(2700); // shortened turn, not the full 6s
-    expect(p.current).toBeNull();
-    vi.advanceTimersByTime(300);
-    expect(p.current).toMatchObject({ unlockId: 'b' });
+    vi.advanceTimersByTime(60_000);
+    expect(p.current).toMatchObject({ unlockId: 'a' });
   });
 });
