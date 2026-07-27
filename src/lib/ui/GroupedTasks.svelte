@@ -10,7 +10,7 @@
   import { app } from '../state/app.svelte';
   import type { TaskGroup } from '../domain/views';
   import { regroupPatch } from '../domain/regroup';
-  import type { Task } from '../domain/types';
+  import { PRIORITIES, type Priority, type Task } from '../domain/types';
   import TaskRow from './TaskRow.svelte';
   import { haptic } from './fx/haptics';
 
@@ -28,6 +28,34 @@
     showList?: boolean;
     onenter?: (name: string) => void;
   } = $props();
+
+  // ── multi-select ─────────────────────────────────────────────────────────
+  let selected = $state<string[]>([]);
+  let bulkPriority = $state<Priority>('high');
+  let bulkList = $state('');
+
+  const selectionMode = $derived(selected.length > 0);
+
+  function toggleSelect(id: string) {
+    selected = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
+  }
+
+  function selectGroup(group: TaskGroup) {
+    const ids = group.tasks.map((t) => t.id);
+    const allIn = ids.every((id) => selected.includes(id));
+    selected = allIn
+      ? selected.filter((id) => !ids.includes(id))
+      : [...new Set([...selected, ...ids])];
+  }
+
+  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority', value?: string) {
+    const ids = [...selected];
+    selected = [];
+    await app.bulkApply(ids, action, value);
+    haptic('success');
+    // A big sweep earns its own moment; otherwise leave it to the ambient roll.
+    if (ids.length < 5 || !app.grantUnlockAndShow('sweeper')) app.fireEgg('bulkActed');
+  }
 
   const DRAG_THRESHOLD = 8; // px before a press becomes a drag, so taps still work
 
@@ -73,6 +101,7 @@
     await app.patchTask(task.id, change.patch);
     await app.markReviewed(task.id);
     haptic('success');
+    app.fireEgg('taskDragged');
   }
 </script>
 
@@ -88,6 +117,8 @@
       data-testid="group-{group.key}">
       {group.label}
       {#if dragging && hoverKey === group.key}<span class="drop-hint">drop to move here</span>{/if}
+      <button class="pick-group" data-testid="select-group-{group.key}"
+        onclick={() => selectGroup(group)} title="select all in this group">▣</button>
     </h2>
     {#each group.tasks as task (group.key + task.id)}
       <!-- Presentational drag wrapper; the row inside keeps all the semantics. -->
@@ -95,7 +126,11 @@
         class="draggable"
         role="presentation"
         class:lifted={dragging?.id === task.id}
+        class:picked={selected.includes(task.id)}
         onpointerdown={(e) => onPointerDown(e, task)}>
+        <button class="pick" class:on={selected.includes(task.id)}
+          data-testid="select-{task.id}" onclick={() => toggleSelect(task.id)}
+          aria-label="select task">{selected.includes(task.id) ? '☑' : '☐'}</button>
         <TaskRow
           {task}
           {showList}
@@ -116,6 +151,24 @@
   </div>
 {/if}
 
+{#if selectionMode}
+  <div class="bulk" data-testid="bulk-bar">
+    <span class="count">{selected.length} selected</span>
+    <button data-testid="bulk-complete" onclick={() => void runBulk('complete')}>✓ done</button>
+    <select data-testid="bulk-priority" bind:value={bulkPriority}
+      onchange={() => void runBulk('priority', bulkPriority)}>
+      {#each [...PRIORITIES].reverse() as p (p)}<option value={p}>→ {p}</option>{/each}
+    </select>
+    <select data-testid="bulk-move" bind:value={bulkList}
+      onchange={() => bulkList && void runBulk('move', bulkList)}>
+      <option value="">→ move to…</option>
+      {#each app.state.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+    </select>
+    <button class="danger" data-testid="bulk-delete" onclick={() => void runBulk('delete')}>delete</button>
+    <button class="clear" data-testid="bulk-clear" onclick={() => (selected = [])}>✕</button>
+  </div>
+{/if}
+
 <style>
   .groups { display: flex; flex-direction: column; gap: 6px; }
   .groups.dragging { user-select: none; touch-action: none; }
@@ -130,7 +183,37 @@
     background: rgba(126, 231, 135, 0.08);
   }
   .drop-hint { font-size: 0.6rem; opacity: 0.8; text-transform: none; letter-spacing: 0; }
+  .draggable { display: flex; align-items: stretch; gap: 4px; }
   .draggable.lifted { opacity: 0.35; }
+  .draggable :global(.row) { flex: 1; min-width: 0; }
+  .pick {
+    flex: none; background: none; border: none; color: var(--dim);
+    font-size: 0.95rem; cursor: pointer; padding: 0 2px; align-self: center;
+  }
+  .pick.on { color: var(--acc-cyan); }
+  .draggable.picked :global(.row) { border-color: var(--acc-cyan); }
+  .pick-group {
+    margin-left: auto; background: none; border: none; color: var(--dim);
+    font-size: 0.8rem; cursor: pointer; padding: 0 4px;
+  }
+  .pick-group:hover { color: var(--acc-cyan); }
+  .bulk {
+    position: fixed; z-index: 120;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+    background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 10px;
+    padding: 8px 12px; max-width: 94vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  .count { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
+  .bulk button, .bulk select {
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 0.72rem;
+    padding: 5px 9px; cursor: pointer;
+  }
+  .bulk .danger { color: var(--acc-magenta); }
+  .bulk .clear { color: var(--dim); border-color: transparent; }
   .ghost {
     position: fixed; z-index: 500; pointer-events: none;
     transform: translate(-50%, -140%);

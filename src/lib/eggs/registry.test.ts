@@ -49,6 +49,8 @@ describe('registry shape', () => {
       });
       expect(p.kind).toBe('unlock');
       if (p.kind === 'unlock') expect(ids).toContain(p.unlockId);
+      // Earned awards must never be gated behind the ambient chance roll.
+      expect(e.guaranteed).toBe(true);
     }
   });
 

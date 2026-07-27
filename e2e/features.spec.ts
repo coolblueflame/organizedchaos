@@ -112,6 +112,47 @@ test('dragging a task onto another priority group adopts it', async ({ page }) =
   await expect(row).toBeVisible();
 });
 
+test('multi-select bulk-completes several tasks, undoable as one', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Bulk');
+  await addTask(page, 'one');
+  await addTask(page, 'two');
+  await addTask(page, 'three');
+
+  const ids = await Promise.all(
+    (await page.getByTestId(/^task-row-/).all()).map(async (row) =>
+      (await row.getAttribute('data-testid'))!.replace('task-row-', '')),
+  );
+  await page.getByTestId(`select-${ids[0]}`).click();
+  await page.getByTestId(`select-${ids[1]}`).click();
+  await expect(page.getByTestId('bulk-bar')).toContainText('2 selected');
+
+  await page.getByTestId('bulk-complete').click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(3);
+});
+
+test('selecting a whole group and moving it to another list', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Source');
+  await addTask(page, 'movable');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Destination');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Source' }).click();
+  await page.getByTestId('select-group-medium').click();
+  await expect(page.getByTestId('bulk-bar')).toContainText('1 selected');
+  await page.getByTestId('bulk-move').selectOption({ label: 'Destination' });
+
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Destination' }).click();
+  await expect(page.getByText('movable', { exact: true })).toBeVisible();
+});
+
 test('timebox counts down on the current task and can be cleared', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Boxed');

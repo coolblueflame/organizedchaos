@@ -4,7 +4,7 @@
  */
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
-import { QUIPS, STREAK_LINES } from './content/quips';
+import { BULK_LINES, QUIPS, STREAK_LINES, TIMEBOX_LINES, WORK_PERIOD_LINES } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
 
@@ -25,7 +25,8 @@ const unlockEgg = (
   condition: NonNullable<EggDef['condition']>,
 ): EggDef => ({
   id: `unlock-${id}`,
-  weight: 1000, // when earned, it wins the roll
+  weight: 1000, // tie-break only: when two are earned at once, both are certain
+  guaranteed: true, // earned awards are never a dice roll — see EggDef.guaranteed
   triggers,
   condition: (c) => !c.unlocks.includes(id) && condition(c),
   present: () => ({ kind: 'unlock', unlockId: id, label: unlockDef(id).label }),
@@ -52,6 +53,22 @@ export const REGISTRY: EggDef[] = [
       text: `${c.completionsToday} tasks today. The mountain is being MOVED.`,
     }),
   },
+  // The newer surfaces get their own voices.
+  {
+    id: 'timebox-line', weight: 60, triggers: ['timeboxFinished'],
+    present: (c) => ({ kind: 'note', emoji: '⏰', accent: 'orange', text: pick(TIMEBOX_LINES, c.rng) }),
+  },
+  {
+    id: 'work-period-line', weight: 60, triggers: ['workPeriodStarted'], cooldownMs: HOUR / 2,
+    present: (c) => ({ kind: 'note', emoji: '⏱', accent: 'cyan', text: pick(WORK_PERIOD_LINES, c.rng) }),
+  },
+  {
+    id: 'bulk-line', weight: 60, triggers: ['bulkActed'], cooldownMs: HOUR / 4,
+    present: (c) => ({ kind: 'note', emoji: '💥', accent: 'cyan', text: pick(BULK_LINES, c.rng) }),
+  },
+  unlockEgg('boxer', ['timeboxFinished'], () => true),
+  unlockEgg('shepherd', ['taskDragged'], () => true),
+
   // Trivia — persistent score, sparse by design.
   {
     id: 'trivia', weight: 8, triggers: ['taskCompleted', 'screenVisited'],

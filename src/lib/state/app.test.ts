@@ -224,6 +224,36 @@ describe('AppStore', () => {
     expect(saved.avgActiveMs).toBe(30 * 60_000);
   });
 
+  it('bulk actions apply to every selected task and undo as one step', async () => {
+    const from = await store.addList('From');
+    const to = await store.addList('To');
+    const a = await store.addTask(from.id);
+    const b = await store.addTask(from.id);
+    await store.patchTask(a.id, { name: 'one' });
+    await store.patchTask(b.id, { name: 'two' });
+
+    await store.bulkApply([a.id, b.id], 'move', to.id);
+    expect(store.state.tasks.every((t) => t.listId === to.id)).toBe(true);
+    expect(await store.undoLast()).toBe('Moved 2 tasks');
+    expect(store.state.tasks.every((t) => t.listId === from.id)).toBe(true);
+
+    await store.bulkApply([a.id, b.id], 'priority', 'max');
+    expect(store.state.tasks.every((t) => t.priority === 'max')).toBe(true);
+    await store.undoLast();
+    expect(store.state.tasks.every((t) => t.priority === 'medium')).toBe(true);
+
+    await store.bulkApply([a.id, b.id], 'complete');
+    expect(store.state.tasks.every((t) => t.completedAt !== undefined)).toBe(true);
+    // One undo, not one per task
+    expect(await store.undoLast()).toBe('Completed 2 tasks');
+    expect(store.state.tasks.every((t) => t.completedAt === undefined)).toBe(true);
+
+    await store.bulkApply([a.id, b.id], 'delete');
+    expect(store.state.tasks).toHaveLength(0);
+    await store.undoLast();
+    expect(store.state.tasks).toHaveLength(2);
+  });
+
   it('undo restores a completed task, its in-progress flag, and its current-task slot', async () => {
     const list = await store.addList('L');
     const a = await store.addTask(list.id);

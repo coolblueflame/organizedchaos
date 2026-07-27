@@ -107,6 +107,35 @@ describe('EggEngine', () => {
     expect(e.grantUnlock('first-blood')).toBe(false); // second time is a no-op
   });
 
+  it('an earned unlock fires on the FIRST qualifying event, chance gate and governor notwithstanding', async () => {
+    // Regression (reported 2026-07-26): "completed your first task" arrived on
+    // the user's THIRD completion, because awards rode the same 40% roll and
+    // 90s quiet-time governor as ambient quips. Earned ≠ random.
+    const registry: EggDef[] = [{
+      id: 'unlock-first', weight: 1000, guaranteed: true, triggers: ['taskCompleted'],
+      condition: (c) => c.lifetimeCompletions >= 1,
+      present: () => ({ kind: 'unlock', unlockId: 'first-blood', label: 'First!' }),
+    }];
+    const e = makeEngine([0.99, 0.99], registry); // any chance roll would fail
+    (e as unknown as { baseChance: Record<string, number> }).baseChance = { taskCompleted: 0.01 } as never;
+    (e as unknown as { minGapMs: number }).minGapMs = 3600_000 as never;
+    await e.ready;
+    expect(e.handle('taskCompleted', { lifetimeCompletions: 1 }))
+      .toMatchObject({ kind: 'unlock', unlockId: 'first-blood' });
+  });
+
+  it('a guaranteed entry still respects its own condition', async () => {
+    const registry: EggDef[] = [{
+      id: 'unlock-century', weight: 1000, guaranteed: true, triggers: ['taskCompleted'],
+      condition: (c) => c.lifetimeCompletions >= 100,
+      present: () => ({ kind: 'unlock', unlockId: 'century', label: '100' }),
+    }];
+    const e = makeEngine([0, 0], registry);
+    await e.ready;
+    expect(e.handle('taskCompleted', { lifetimeCompletions: 99 })).toBeNull();
+    expect(e.handle('taskCompleted', { lifetimeCompletions: 100 })).not.toBeNull();
+  });
+
   it('trivia stats, unlocks (idempotent), and story stage persist', async () => {
     const e = makeEngine([0]);
     await e.ready;

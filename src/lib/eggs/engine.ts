@@ -10,7 +10,8 @@ import { appDayKey } from '../domain/time';
 
 export type EggEvent =
   | 'taskCompleted' | 'drawAccepted' | 'drawSkipped'
-  | 'screenVisited' | 'appOpened' | 'bigButtonPressed';
+  | 'screenVisited' | 'appOpened' | 'bigButtonPressed'
+  | 'timeboxFinished' | 'workPeriodStarted' | 'bulkActed' | 'taskDragged';
 
 export interface EggContext {
   event: EggEvent;
@@ -45,6 +46,14 @@ export interface EggDef {
   id: string;
   /** Relative weight within the eligible set for one roll. */
   weight: number;
+  /**
+   * Earned, deterministic entries (unlocks): once the condition is true they
+   * fire on the very next matching event, skipping the chance roll and the
+   * quiet-time governor. A milestone the user has genuinely earned must never
+   * be a dice roll — "completed your first task" has to land on the FIRST task.
+   * Safe to exempt because each unlock can only ever fire once in a lifetime.
+   */
+  guaranteed?: boolean;
   triggers: EggEvent[];
   cooldownMs?: number;
   maxPerDay?: number;
@@ -94,6 +103,7 @@ export interface EngineDeps {
 const DEFAULT_CHANCE: Record<EggEvent, number> = {
   taskCompleted: 0.4, drawAccepted: 0.15, drawSkipped: 0.08,
   screenVisited: 0.05, appOpened: 0.12, bigButtonPressed: 0.04,
+  timeboxFinished: 0.6, workPeriodStarted: 0.35, bulkActed: 0.3, taskDragged: 0.05,
 };
 
 export class EggEngine {
@@ -172,11 +182,7 @@ export class EggEngine {
   }
 
   private pick(ctx: EggContext, day: string, ts: number): Presentation | null {
-    // Global governor first — delight must never become noise (spec §12).
-    if (ts - this.state.lastPresentedAt < this.minGapMs) return null;
     const presentedToday = this.state.presentedDay === day ? this.state.presentedToday : 0;
-    if (presentedToday >= this.maxPerDayGlobal) return null;
-    if (this.rng() > (this.baseChance[ctx.event] ?? 0)) return null;
 
     const eligible = this.registry.filter((egg) => {
       if (!egg.triggers.includes(ctx.event)) return false;
@@ -192,10 +198,20 @@ export class EggEngine {
     });
     if (eligible.length === 0) return null;
 
-    const total = eligible.reduce((s, e) => s + e.weight, 0);
+    // Earned entries jump the queue; everything else answers to the governor,
+    // because ambient delight must never become noise (spec §12).
+    let pool = eligible.filter((egg) => egg.guaranteed);
+    if (pool.length === 0) {
+      if (ts - this.state.lastPresentedAt < this.minGapMs) return null;
+      if (presentedToday >= this.maxPerDayGlobal) return null;
+      if (this.rng() > (this.baseChance[ctx.event] ?? 0)) return null;
+      pool = eligible;
+    }
+
+    const total = pool.reduce((s, e) => s + e.weight, 0);
     let roll = this.rng() * total;
-    let chosen = eligible[eligible.length - 1]!;
-    for (const egg of eligible) {
+    let chosen = pool[pool.length - 1]!;
+    for (const egg of pool) {
       roll -= egg.weight;
       if (roll <= 0) { chosen = egg; break; }
     }

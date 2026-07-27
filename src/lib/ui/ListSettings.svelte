@@ -65,6 +65,7 @@
       activeFrom: undefined,
       activeTo: undefined,
     });
+    if (deadline) app.grantUnlockAndShow('clairvoyant');
     onclose();
   }
 

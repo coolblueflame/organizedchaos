@@ -90,6 +90,44 @@ export const QUIPS: readonly string[] = [
   'Trogdor the BURNINATOR approves of this burnination of your backlog.',
 ] as const;
 
+/** Lines for finishing (or surviving) a timebox. */
+export const TIMEBOX_LINES: readonly string[] = [
+  'Time. Pencils down. 📝',
+  'BRRRING. That’s the round.',
+  'The timer has spoken. You may now stretch.',
+  'Ding! Your table is ready — table for one, at the couch.',
+  '⏰ Deploy complete. Rolling back to rest state.',
+  'That’s a wrap on this scene.',
+  'Boss defeated: The Ticking Clock.',
+  'You have been timeboxed. How do you feel?',
+  'Focus streak ended by natural causes.',
+  'The sand has run out. Flip me over anytime.',
+  'Pomodoro achieved. Tomato acquired. 🍅',
+  'GG. The clock never stood a chance.',
+] as const;
+
+/** Lines for declaring a work period. */
+export const WORK_PERIOD_LINES: readonly string[] = [
+  'Clock in. ⏱ Let’s make it count.',
+  'Deep work mode: engaged.',
+  'The gauntlet is set. Only what fits gets through.',
+  'Focus window open. Distractions, form an orderly queue.',
+  'Speedrun timer started. Any%.',
+  'Right then. Sleeves: rolled.',
+  'The forge is hot.',
+] as const;
+
+/** Lines for sweeping several tasks at once. */
+export const BULK_LINES: readonly string[] = [
+  'Multi-kill! 💥',
+  'A clean sweep. Very satisfying.',
+  'Batch processed. Efficiency: unreasonable.',
+  'You just did that in bulk. Costco energy.',
+  'Mass deletion of obligations. Gorgeous.',
+  'That was a combo, and I saw it.',
+  'Ah, the ol’ select-and-obliterate. A classic.',
+] as const;
+
 /** Rarer streak / heater lines — the app noticing you’re on one. */
 export const STREAK_LINES: readonly string[] = [
   '🔥 You’re on fire. (metaphorically. hydrate.)',

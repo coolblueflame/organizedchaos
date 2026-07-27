@@ -49,7 +49,10 @@
 
   async function start(minutes: number) {
     picking = false;
-    if (minutes > 0) await app.startWorkPeriod(minutes);
+    if (minutes > 0) {
+      await app.startWorkPeriod(minutes);
+      app.fireEgg('workPeriodStarted');
+    }
   }
 </script>
 

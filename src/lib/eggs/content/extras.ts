@@ -85,4 +85,8 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'konami', label: 'The Old Ways — entered a very famous code', hint: '↑↑…' },
   { id: 'chaos-word', label: 'Speak Its Name — typed the magic word', hint: 'what IS this app called?' },
   { id: 'century', label: 'Centurion — 100 lifetime completions', hint: 'the long game' },
+  { id: 'boxer', label: 'Against the Clock — rode a timebox to zero', hint: 'beat something ticking' },
+  { id: 'sweeper', label: 'Clean Sweep — five tasks in one bulk action', hint: 'do a lot at once' },
+  { id: 'shepherd', label: 'Herder — dragged a task into a new group', hint: 'move something without opening it' },
+  { id: 'clairvoyant', label: 'Project Manager — set a deadline on a whole list', hint: 'plan further ahead' },
 ] as const;

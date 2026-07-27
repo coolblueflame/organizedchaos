@@ -52,6 +52,7 @@
     } catch { /* fx never block the alert */ }
     void notify();
     beep();
+    app.fireEgg('timeboxFinished');
   }
 
   /** OS-level notification when we're allowed one; silently skipped otherwise. */

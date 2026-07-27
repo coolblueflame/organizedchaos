@@ -150,14 +150,20 @@ export class AppStore {
     if (this.eggs && this.eggs.triviaStats.correct >= 10) this.grantUnlockAndShow('quiz-whiz');
   }
 
-  /** Direct grant path for flows outside the registry (codes, trivia milestones). */
-  grantUnlockAndShow(id: string): void {
-    if (!this.eggs) return;
-    if (this.eggs.grantUnlock(id)) {
+  /**
+   * Direct grant path for flows outside the registry (codes, trivia milestones,
+   * one-shot feature discoveries). Returns true when it was newly earned, so
+   * callers can stay quiet instead of stacking an ambient note on top.
+   */
+  grantUnlockAndShow(id: string): boolean {
+    if (!this.eggs) return false;
+    const earned = this.eggs.grantUnlock(id);
+    if (earned) {
       const def = UNLOCKS.find((u) => u.id === id);
       if (def) presenter.show({ kind: 'unlock', unlockId: id, label: def.label });
     }
     this.syncEggMirrors();
+    return earned;
   }
 
   advanceStory(stage: number): void {
@@ -317,6 +323,52 @@ export class AppStore {
    * any await) so callers that immediately inspect state — e.g. the pristine
    * check behind rapid entry — can never race the IndexedDB write.
    */
+  /**
+   * Bulk edits from multi-select. Applied one by one so every rule (recurrence
+   * arming, timing, sync) behaves exactly as it would individually, then folded
+   * into ONE undo entry so a mistaken sweep is a single Cmd+Z.
+   */
+  async bulkApply(
+    taskIds: string[],
+    action: 'complete' | 'delete' | 'move' | 'priority',
+    value?: string,
+  ): Promise<void> {
+    const before = taskIds
+      .map((id) => this.state.tasks.find((t) => t.id === id))
+      .filter((t): t is Task => t !== undefined)
+      .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority }));
+    if (before.length === 0) return;
+
+    for (const { id } of before) {
+      if (action === 'complete') await this.completeTask(id);
+      else if (action === 'delete') await this.removeTask(id, { silent: true });
+      else if (action === 'move' && value) await this.patchTask(id, { listId: value });
+      else if (action === 'priority' && value) {
+        await this.patchTask(id, { priority: value as Task['priority'] });
+      }
+    }
+    // Each helper may have pushed its own entry; collapse to one clean undo.
+    for (const _ of before) if (action === 'complete') undoStack.entries.pop();
+
+    const verb = action === 'complete' ? 'Completed'
+      : action === 'delete' ? 'Deleted'
+      : action === 'move' ? 'Moved'
+      : 'Re-prioritised';
+    this.pushUndo(`${verb} ${before.length} task${before.length === 1 ? '' : 's'}`, async () => {
+      for (const snap of before) {
+        if (action === 'complete') {
+          await this.patchTask(snap.id, { completedAt: undefined, activeMs: undefined });
+        } else if (action === 'delete') {
+          await this.restoreTask(snap.id);
+        } else if (action === 'move') {
+          await this.patchTask(snap.id, { listId: snap.listId });
+        } else {
+          await this.patchTask(snap.id, { priority: snap.priority });
+        }
+      }
+    });
+  }
+
   /** Move a task to another list (the move control on the task editor). */
   async moveTask(id: string, listId: string): Promise<void> {
     await this.patchTask(id, { listId });
