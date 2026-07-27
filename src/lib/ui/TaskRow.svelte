@@ -16,6 +16,7 @@
 
   let {
     task, expanded = false, ontoggle, onenter, showList = false, completedMode = false,
+    showCompletedAt = false,
   }: {
     task: Task;
     expanded?: boolean;
@@ -24,6 +25,8 @@
     onenter?: (currentName: string) => void;
     showList?: boolean;
     completedMode?: boolean;
+    /** Show when it was finished (search results; the Completed screen groups by day instead). */
+    showCompletedAt?: boolean;
   } = $props();
 
   const now = new Date();
@@ -156,7 +159,10 @@
         {#each rowTags as t (t.id)}
           <span class="tag-dot" style="background: {tagColor(t.colorIndex)}"></span>
         {/each}
-        {#if task.deadline}
+        {#if showCompletedAt && task.completedAt}
+          <span class="done-at">✓ {new Date(task.completedAt).toLocaleDateString()}</span>
+        {/if}
+        {#if task.deadline && !completedMode}
           <span class="deadline" class:overdue>{shortDate(task.deadline)}</span>
         {/if}
         {#if escalated}<span class="flame" title="escalated by deadline">▲</span>{/if}
@@ -226,6 +232,7 @@
     background: var(--acc-yellow); box-shadow: 0 0 5px var(--acc-yellow);
   }
   .deadline { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .done-at { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
   .prio { width: 8px; height: 8px; border-radius: 50%; }

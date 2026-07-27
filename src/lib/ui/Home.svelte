@@ -137,6 +137,10 @@
     {phrase}
   </button>
 
+  <button class="search-bar" data-testid="search-entry" onclick={() => navigate({ name: 'search' })}>
+    <span class="mag">⌕</span> search everything…
+  </button>
+
   <nav class="sort-row">
     <button data-testid="sort-date" onclick={() => navigate({ name: 'sort', mode: 'date' })}>by date</button>
     <button data-testid="sort-priority" onclick={() => navigate({ name: 'sort', mode: 'priority' })}>by priority</button>
@@ -234,6 +238,13 @@
   @keyframes blink { 50% { opacity: 0; } }
   .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 4px 0 20px; }
 
+  .search-bar {
+    width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--dim); font-size: 0.85rem; padding: 10px 12px; cursor: text; text-align: left;
+  }
+  .search-bar:hover { border-color: var(--acc-blue); color: var(--text); }
+  .mag { font-size: 1.1rem; color: var(--acc-blue); }
   .sort-row { display: flex; gap: 8px; margin-bottom: 20px; }
   .sort-row button {
     flex: 1; background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;

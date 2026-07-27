@@ -17,7 +17,8 @@ export type Route =
   | { name: 'recurring' }
   | { name: 'settings' }
   | { name: 'import' }
-  | { name: 'stats' };
+  | { name: 'stats' }
+  | { name: 'search' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -32,6 +33,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'settings') return { name: 'settings' };
   if (parts[0] === 'import') return { name: 'import' };
   if (parts[0] === 'stats') return { name: 'stats' };
+  if (parts[0] === 'search') return { name: 'search' };
   return { name: 'home' };
 }
 
@@ -47,6 +49,7 @@ function toHash(r: Route): string {
     case 'settings': return '#/settings';
     case 'import': return '#/import';
     case 'stats': return '#/stats';
+    case 'search': return '#/search';
   }
 }
 

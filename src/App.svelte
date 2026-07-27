@@ -1,7 +1,7 @@
 <!-- Router shell: boot splash until the store hydrates, then the active screen. -->
 <script lang="ts">
   import { app } from './lib/state/app.svelte';
-  import { router } from './lib/ui/router.svelte';
+  import { navigate, router } from './lib/ui/router.svelte';
   import { nextRolloverTs } from './lib/domain/time';
   import { toast } from './lib/ui/toast.svelte';
 
@@ -40,6 +40,7 @@
   import SettingsView from './lib/ui/SettingsView.svelte';
   import ImportView from './lib/ui/ImportView.svelte';
   import StatsView from './lib/ui/StatsView.svelte';
+  import SearchView from './lib/ui/SearchView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import FxLayer from './lib/ui/fx/FxLayer.svelte';
   import DelightLayer from './lib/eggs/DelightLayer.svelte';
@@ -49,17 +50,28 @@
     if (app.ready) app.fireEgg('screenVisited', { screen: router.current.name });
   });
 
-  // Cmd/Ctrl+Z undoes the last consequential action, long after its toast is gone.
+  // Keyboard: Cmd/Ctrl+Z undoes the last consequential action long after its
+  // toast is gone; "/" and Cmd/Ctrl+K jump to search.
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
       const el = e.target as HTMLElement | null;
-      // Let text fields keep their own native undo.
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
-      e.preventDefault();
-      void app.undoLast().then((label) => {
-        if (label) toast.show(`Undid: ${label}`, () => {});
-      });
+      const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (typing) return; // let text fields keep their own native undo
+        e.preventDefault();
+        void app.undoLast().then((label) => {
+          if (label) toast.show(`Undid: ${label}`, () => {});
+        });
+        return;
+      }
+
+      const wantsSearch = (!typing && e.key === '/') ||
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k');
+      if (wantsSearch) {
+        e.preventDefault();
+        navigate({ name: 'search' });
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -90,6 +102,8 @@
     <ImportView />
   {:else if r.name === 'stats'}
     <StatsView />
+  {:else if r.name === 'search'}
+    <SearchView />
   {:else}
     <Home />
   {/if}
