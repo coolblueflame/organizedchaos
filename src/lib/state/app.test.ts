@@ -725,3 +725,47 @@ describe('list ordering', () => {
     expect(store.state.lists.map((l) => l.updatedAt)).toEqual(stamps);
   });
 });
+
+describe('deleting and restoring never duplicates a row', () => {
+  it('restoring a list a sync already put back does not make a second copy', async () => {
+    // "My list keeps growing": not new lists, the same one twice. Delete puts
+    // the row in the trash map; if a sync merge then returns it to the mirror,
+    // the old restore pushed the trashed copy in ALONGSIDE it.
+    const list = await store.addList('Comes Back');
+    const task = await store.addTask(list.id);
+    const removed = await store.removeList(list.id);
+    expect(store.state.lists).toHaveLength(0);
+
+    // Simulate a sync putting the row back before the user hits undo.
+    store.state.lists.push({
+      ...list, deleted: false, updatedAt: Date.now(),
+    });
+
+    await store.restoreList(list.id, removed);
+    expect(store.state.lists.filter((l) => l.id === list.id)).toHaveLength(1);
+    expect(store.state.tasks.filter((t) => t.id === task.id)).toHaveLength(1);
+  });
+
+  it('a plain delete-then-undo still restores exactly one list and its tasks', async () => {
+    const list = await store.addList('Oops');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    const removed = await store.removeList(list.id);
+
+    await store.restoreList(list.id, removed);
+    expect(store.state.lists.map((l) => l.id)).toEqual([list.id]);
+    expect(store.state.tasks.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+    // …and it reached disk, so the other device learns about it too.
+    const disk = await persisted();
+    expect(disk.lists).toHaveLength(1);
+    expect(disk.tasks).toHaveLength(2);
+  });
+
+  it('restoring twice is harmless', async () => {
+    const list = await store.addList('Twice');
+    const removed = await store.removeList(list.id);
+    await store.restoreList(list.id, removed);
+    await store.restoreList(list.id, removed);
+    expect(store.state.lists.filter((l) => l.id === list.id)).toHaveLength(1);
+  });
+});

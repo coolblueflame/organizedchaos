@@ -48,10 +48,20 @@ describe('PresenterStore', () => {
     expect(p.current).toBeNull();
   });
 
-  it('still time-boxes pure motion, which has nothing to read', () => {
+  it('a full-screen moment still ends by itself, but not before it is readable', () => {
+    // It cannot wait forever — a full-screen effect that never leaves blocks
+    // the app. But 3.5s was too short for the ones with words in them.
     p.show({ kind: 'moment', moment: 'disco' });
-    expect(p.current).toMatchObject({ kind: 'moment' });
-    vi.advanceTimersByTime(3600);
+    vi.advanceTimersByTime(5000);
+    expect(p.current, 'still up long enough to read').toMatchObject({ kind: 'moment' });
+    vi.advanceTimersByTime(4500);
+    expect(p.current, 'but it does clear on its own').toBeNull();
+  });
+
+  it('and a tap clears a moment immediately once it has settled', () => {
+    p.show({ kind: 'moment', moment: 'disco' });
+    vi.advanceTimersByTime(3100);
+    p.dismiss();
     expect(p.current).toBeNull();
   });
 

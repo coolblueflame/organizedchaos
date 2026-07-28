@@ -16,7 +16,14 @@ const HANDOFF_MS = 260;
  * so reopening the app to read the thing showed an empty screen (reported
  * 2026-07-28). Only motion is still time-boxed — there is nothing to read.
  */
-const MOMENT_MS = 3500;
+/**
+ * Moments are the one thing still on a timer, because a full-screen effect
+ * that never leaves would block the app (spec §12) — but the original 3.5s was
+ * set on the theory that they are pure motion with nothing to read, and some
+ * of them plainly have text in them. Long enough to actually read now, and a
+ * tap still clears it the instant you are done.
+ */
+const MOMENT_MS = 9000;
 /**
  * …but it cannot be dismissed instantly either: whatever tap or scroll was
  * already in flight when it appeared would wipe it before it was read. A short

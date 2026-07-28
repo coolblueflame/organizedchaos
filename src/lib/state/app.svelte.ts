@@ -331,15 +331,28 @@ export class AppStore {
     return openIds;
   }
 
+  /**
+   * Un-delete a list and its tasks.
+   *
+   * Pushing the trashed copy back in unconditionally used to be enough, but a
+   * sync can return the row to the mirror first — a merge resolving in favour
+   * of another device's live copy, say — and then the push added a SECOND
+   * entry for the same list. That is the "my list keeps growing" report: not
+   * new lists, one list twice. Adopt whatever is already there, and fall back
+   * to the trashed copy only when it is genuinely absent.
+   */
   async restoreList(id: string, taskIds: string[]): Promise<void> {
     await this.repo.updateList(id, { deleted: false });
-    const list = this.trashLists.get(id);
-    if (list) {
-      list.deleted = false;
-      this.state.lists.push(list);
-      this.trashLists.delete(id);
+    const trashed = this.trashLists.get(id);
+    this.trashLists.delete(id);
+    const existing = this.state.lists.find((l) => l.id === id);
+    if (existing) existing.deleted = false;
+    else if (trashed) {
+      trashed.deleted = false;
+      this.state.lists.push(trashed);
     }
     for (const taskId of taskIds) await this.restoreTask(taskId);
+    this.requestSync(); // was missing entirely: a restore never propagated
   }
 
   // ── tasks ────────────────────────────────────────────────────────────────
@@ -581,13 +594,16 @@ export class AppStore {
     }
   }
 
+  /** Same duplicate guard as restoreList — see the note there. */
   async restoreTask(id: string): Promise<void> {
     await this.repo.updateTask(id, { deleted: false });
-    const task = this.trashTasks.get(id);
-    if (task) {
-      task.deleted = false;
-      this.state.tasks.push(task);
-      this.trashTasks.delete(id);
+    const trashed = this.trashTasks.get(id);
+    this.trashTasks.delete(id);
+    const existing = this.state.tasks.find((t) => t.id === id);
+    if (existing) existing.deleted = false;
+    else if (trashed) {
+      trashed.deleted = false;
+      this.state.tasks.push(trashed);
     }
     this.requestSync();
   }
