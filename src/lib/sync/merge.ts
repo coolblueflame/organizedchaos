@@ -6,7 +6,7 @@
  * (tombstones) propagate. Singletons (currentTask, settings) merge by their
  * kv stamps, so clearing the current task on one device propagates too.
  */
-import type { RemoteSnapshot } from './files';
+import type { DelightProgress, RemoteSnapshot } from './files';
 
 export interface MergeResult {
   merged: RemoteSnapshot;
@@ -45,9 +45,43 @@ function sameRows<T extends Row>(a: T[], b: T[]): boolean {
   });
 }
 
+/**
+ * Achievements merge by union and maximum, never by "newest wins".
+ *
+ * A discovery earned on one device is earned, full stop — last-write-wins
+ * would let a phone that had not seen it yet erase it from the laptop. Union
+ * and max are also idempotent and order-independent, so merging twice, or in
+ * the other order, lands in the same place.
+ *
+ * The streak is the exception that needs a key: it is a single number whose
+ * meaning depends on when it was last touched, so the side that completed
+ * something more recently wins, with the larger streak breaking a tie.
+ */
+function mergeDelight(
+  a: DelightProgress | undefined,
+  b: DelightProgress | undefined,
+): DelightProgress | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const streakSide =
+    a.lastCompletionDay === b.lastCompletionDay
+      ? (a.streakDays >= b.streakDays ? a : b)
+      : (a.lastCompletionDay > b.lastCompletionDay ? a : b);
+  return {
+    unlocks: [...new Set([...a.unlocks, ...b.unlocks])].sort(),
+    storyStage: Math.max(a.storyStage, b.storyStage),
+    triviaCorrect: Math.max(a.triviaCorrect, b.triviaCorrect),
+    triviaTotal: Math.max(a.triviaTotal, b.triviaTotal),
+    streakDays: streakSide.streakDays,
+    lastCompletionDay: streakSide.lastCompletionDay,
+  };
+}
+
 export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): MergeResult {
   const currentNewer = remote.currentTaskUpdatedAt > local.currentTaskUpdatedAt ? remote : local;
   const settingsNewer = remote.settingsUpdatedAt > local.settingsUpdatedAt ? remote : local;
+
+  const delight = mergeDelight(local.delight, remote.delight);
 
   const merged: RemoteSnapshot = {
     lists: mergeRows(local.lists, remote.lists),
@@ -58,6 +92,7 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     currentTaskUpdatedAt: currentNewer.currentTaskUpdatedAt,
     settings: settingsNewer.settings,
     settingsUpdatedAt: settingsNewer.settingsUpdatedAt,
+    ...(delight ? { delight } : {}),
   };
 
   const sameAs = (side: RemoteSnapshot) =>
@@ -68,7 +103,8 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     JSON.stringify(merged.currentTask) === JSON.stringify(side.currentTask) &&
     merged.currentTaskUpdatedAt === side.currentTaskUpdatedAt &&
     JSON.stringify(merged.settings) === JSON.stringify(side.settings) &&
-    merged.settingsUpdatedAt === side.settingsUpdatedAt;
+    merged.settingsUpdatedAt === side.settingsUpdatedAt &&
+    JSON.stringify(merged.delight ?? null) === JSON.stringify(side.delight ?? null);
 
   return { merged, localChanged: !sameAs(local), remoteChanged: !sameAs(remote) };
 }

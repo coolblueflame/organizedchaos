@@ -66,13 +66,50 @@ export class GithubClient {
     return rows.filter((r) => r.type === 'file').map((r) => ({ path: r.path, sha: r.sha }));
   }
 
+  /**
+   * Files over 1MB do not come back inline.
+   *
+   * The Contents API only base64-encodes content up to 1MB; past that it still
+   * answers 200 with an EMPTY `content` and `encoding: "none"`, so decoding it
+   * yields "" and JSON.parse dies with "unexpected end of data". That is not
+   * hypothetical — importing a real Things logbook pushed one file past the
+   * line and broke syncing entirely.
+   *
+   * The blob endpoint serves the same object up to 100MB, and the listing we
+   * already fetch hands us the sha, so the fallback costs one extra request
+   * and only for the files that need it.
+   */
+  private async getBlobText(sha: string): Promise<string> {
+    const res = await fetch(
+      `https://api.github.com/repos/${this.cfg.owner}/${this.cfg.repo}/git/blobs/${sha}`,
+      { headers: { ...this.headers(), Accept: 'application/vnd.github.raw' } },
+    );
+    if (res.status === 401 || res.status === 403) throw new AuthError(`GitHub auth failed (${res.status})`);
+    if (!res.ok) throw new Error(`GitHub blob ${sha} failed: ${res.status}`);
+    return res.text();
+  }
+
   async getFile(path: string): Promise<RemoteFile | null> {
     const res = await fetch(this.url(path), { headers: this.headers() });
     if (res.status === 404) return null;
     if (res.status === 401 || res.status === 403) throw new AuthError(`GitHub auth failed (${res.status})`);
     if (!res.ok) throw new Error(`GitHub get ${path} failed: ${res.status}`);
-    const body = (await res.json()) as { content: string; sha: string };
-    return { json: JSON.parse(fromB64(body.content)), sha: body.sha };
+    const body = (await res.json()) as {
+      content?: string; encoding?: string; sha: string; size?: number;
+    };
+    // Keyed off the symptom (no content) rather than `encoding === 'base64'`:
+    // that field is what the docs promise, but keying on its presence makes
+    // every ordinary read depend on a header being exactly right, and sends
+    // perfectly inline files down the blob path when it is not.
+    const text = body.content ? fromB64(body.content) : await this.getBlobText(body.sha);
+    if (text === '') {
+      // Better than a bare JSON.parse error naming neither the file nor why.
+      throw new Error(
+        `GitHub returned no content for ${path} (${body.size ?? '?'} bytes). ` +
+        'Files over 100MB cannot be synced through this API.',
+      );
+    }
+    return { json: JSON.parse(text), sha: body.sha };
   }
 
   async putFile(path: string, json: unknown, sha?: string): Promise<string> {

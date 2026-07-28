@@ -18,20 +18,23 @@ const CFG: SyncConfig = {
   token: TOKEN,
 };
 const PATH = `_selftest/roundtrip-${Date.now()}.json`;
+const BIG_PATH = `_selftest/big-${Date.now()}.json`;
 
 afterAll(async () => {
   if (!TOKEN) return;
-  const head = await fetch(
-    `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${PATH}`,
-    { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' } },
-  );
-  if (!head.ok) return;
-  const { sha } = (await head.json()) as { sha: string };
-  await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${PATH}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' },
-    body: JSON.stringify({ message: 'selftest cleanup', sha }),
-  });
+  for (const path of [PATH, BIG_PATH]) {
+    const head = await fetch(
+      `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${path}`,
+      { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' } },
+    );
+    if (!head.ok) continue;
+    const { sha } = (await head.json()) as { sha: string };
+    await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${path}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' },
+      body: JSON.stringify({ message: 'selftest cleanup', sha }),
+    });
+  }
 });
 
 describe.skipIf(!TOKEN)('GithubClient against live GitHub', () => {
@@ -79,4 +82,30 @@ describe.skipIf(!TOKEN)('GithubClient against live GitHub', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBeTruthy();
   });
+});
+
+describe.skipIf(!TOKEN)('a logbook bigger than the inline limit', () => {
+  const client = new GithubClient(CFG);
+
+  it('round-trips a file over 1MB, which the Contents API will not inline', async () => {
+    // The exact shape that broke syncing after a 25,000-task import: past 1MB
+    // GitHub answers 200 with an EMPTY content field and encoding "none", so
+    // the old decode produced "" and JSON.parse died. Only a real request
+    // proves the fallback works — no amount of mocking would have caught it.
+    const rows = Array.from({ length: 9_000 }, (_, i) => ({
+      id: `task-${i}`, name: `a task with a reasonably long name ${i}`,
+      notes: 'padding so the file comfortably clears one megabyte '.repeat(2),
+      updatedAt: 1_700_000_000_000 + i, deleted: false,
+    }));
+    const payload = { schema: 1, tasks: rows };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2)).length;
+    expect(bytes, 'fixture must actually exceed the 1MB inline limit')
+      .toBeGreaterThan(1_048_576);
+
+    await client.putFile(BIG_PATH, payload);
+    const back = await client.getFile(BIG_PATH);
+    expect(back).not.toBeNull();
+    expect((back!.json as typeof payload).tasks).toHaveLength(9_000);
+    expect((back!.json as typeof payload).tasks[8_999]!.name).toBe(rows[8_999]!.name);
+  }, 120_000);
 });

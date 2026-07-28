@@ -21,6 +21,27 @@ export class SchemaTooNewError extends Error {
   }
 }
 
+/**
+ * The half of the delight state that belongs to the USER rather than the
+ * device: what they have discovered, how far the story has come, their quiz
+ * record, their streak.
+ *
+ * The other half — which entries have been seen lately, the quiet-time clock,
+ * today's per-event tallies — is pacing, and deliberately stays device-local.
+ * Syncing that would let one device's recent surprise suppress another's.
+ *
+ * Optional on the wire: remotes written before this existed simply lack it.
+ */
+export interface DelightProgress {
+  unlocks: string[];
+  storyStage: number;
+  triviaCorrect: number;
+  triviaTotal: number;
+  streakDays: number;
+  /** App-day key of the most recent completion — the streak's merge key. */
+  lastCompletionDay: string;
+}
+
 export interface RemoteSnapshot {
   lists: List[];
   tasks: Task[];
@@ -30,6 +51,7 @@ export interface RemoteSnapshot {
   currentTaskUpdatedAt: number;
   settings: Settings;
   settingsUpdatedAt: number;
+  delight?: DelightProgress;
 }
 
 export interface SyncFilePayloads {
@@ -46,6 +68,7 @@ interface ActiveFile {
   currentTaskUpdatedAt: number;
   settings: Settings;
   settingsUpdatedAt: number;
+  delight?: DelightProgress;
 }
 
 interface LogbookFile {
@@ -73,6 +96,7 @@ export function toFiles(snap: RemoteSnapshot, now: Date): SyncFilePayloads {
     currentTaskUpdatedAt: snap.currentTaskUpdatedAt,
     settings: snap.settings,
     settingsUpdatedAt: snap.settingsUpdatedAt,
+    ...(snap.delight ? { delight: snap.delight } : {}),
   };
   files['active.json'] = active;
 
@@ -115,5 +139,7 @@ export function fromFiles(files: SyncFilePayloads): RemoteSnapshot {
     currentTaskUpdatedAt: active.currentTaskUpdatedAt ?? 0,
     settings: { ...DEFAULT_SETTINGS, ...(active.settings ?? {}) },
     settingsUpdatedAt: active.settingsUpdatedAt ?? 0,
+    // Absent on remotes written before delight synced — merge treats it as none.
+    ...(active.delight ? { delight: active.delight } : {}),
   };
 }
