@@ -132,15 +132,22 @@ export function wouldCycle(taskId: string, blockerId: string, tasks: Task[]): bo
 }
 
 /**
- * Tasks that `completedId` finishing has just set free — used to tell the user
+ * Tasks that `completedId` finishing sets free — used to tell the user
  * something opened up. Only tasks with no OTHER open blocker qualify.
+ *
+ * Answers "given that this one is done", so it does not care whether the
+ * completion has actually been written yet: `completedId` is discounted from
+ * every blocker list regardless of its current state. That makes it safe to
+ * call BEFORE the completion lands, which is what lets the caller arm its undo
+ * entry before the task disappears from the screen.
  */
 export function newlyUnblocked(completedId: string, tasks: Task[]): Task[] {
   const index = byId(tasks);
   return tasks.filter(
     (t) =>
+      t.id !== completedId &&
       !isDone(t) &&
       (t.blockedBy ?? []).includes(completedId) &&
-      openBlockerIds(t, index).length === 0,
+      openBlockerIds(t, index).every((id) => id === completedId),
   );
 }

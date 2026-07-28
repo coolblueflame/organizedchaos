@@ -160,3 +160,22 @@ describe('the draw honours blocking', () => {
       .toBe('a');
   });
 });
+
+describe('newlyUnblocked is order-independent', () => {
+  it('gives the same answer before and after the completion is recorded', () => {
+    // The caller needs this BEFORE the write lands, so it can arm its undo
+    // entry while the task is still on screen. Same question, same answer,
+    // whichever side of the mutation you ask it from.
+    const blocker = task({ id: 'blocker' });
+    const freed = task({ id: 'freed', blockedBy: ['blocker'] });
+    const stuck = task({ id: 'stuck', blockedBy: ['blocker', 'other'] });
+    const other = task({ id: 'other' });
+
+    const before = newlyUnblocked('blocker', [blocker, freed, stuck, other]);
+    const after = newlyUnblocked('blocker', [
+      { ...blocker, completedAt: 1 }, freed, stuck, other,
+    ]);
+    expect(before.map((t) => t.id)).toEqual(['freed']);
+    expect(after.map((t) => t.id)).toEqual(['freed']);
+  });
+});

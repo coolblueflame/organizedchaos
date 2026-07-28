@@ -328,6 +328,35 @@ describe('AppStore', () => {
     expect((await persisted()).tasks[0]!.completedAt).toBeUndefined();
   });
 
+  it('arms the undo before the row can vanish, even when the write is slow', async () => {
+    // The precise race CI kept hitting. patchTask updates the mirror
+    // SYNCHRONOUSLY and then awaits the IndexedDB write, so the row leaves the
+    // screen while the write is still in flight. Slowing the write makes that
+    // window wide and deterministic instead of a timing coincidence.
+    const list = await store.addList('L');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'gone too soon' });
+    undoStack.clear();
+
+    const repo = (store as unknown as {
+      repo: { updateTask: (...args: never[]) => Promise<unknown> };
+    }).repo;
+    const realUpdate = repo.updateTask.bind(repo);
+    repo.updateTask = (...args: never[]) =>
+      new Promise((resolve) => { setTimeout(() => resolve(realUpdate(...args)), 40); });
+
+    const pending = store.completeTask(a.id);
+    await Promise.resolve(); // let the synchronous mirror update land
+
+    expect(store.state.tasks.find((t) => t.id === a.id)?.completedAt,
+      'the mirror says done, so the row is already gone').toBeGreaterThan(0);
+    expect(undoStack.latest?.label,
+      'the undo must already exist at that instant').toContain('gone too soon');
+
+    repo.updateTask = realUpdate as typeof repo.updateTask;
+    await pending;
+  });
+
   it('the undo entry exists the moment the task leaves the screen', async () => {
     // Regression: the row vanished on the first state change, but the undo
     // entry was pushed after several more awaits (recurrence bookkeeping,

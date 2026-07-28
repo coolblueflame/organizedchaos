@@ -462,27 +462,23 @@ export class AppStore {
       ? (task.activeAccumulatedMs ?? 0) + (finishedAt - task.startedAt)
       : undefined;
 
-    await this.patchTask(id, {
-      completedAt: finishedAt,
-      inProgress: false,
-      startedAt: undefined,
-      timeboxEndsAt: undefined,
-      ...(tracked && tracked > 0 ? { activeMs: tracked } : {}),
-    });
-    // Did this open a door? Reported first, so freeing blocked work is the
-    // headline and the ordinary completion quip is what the governor drops.
+    // Did this open a door? Asked before the write, because newlyUnblocked
+    // answers "given that this one is done" regardless of whether that has
+    // been recorded yet — which is what lets the undo below be armed first.
     const freed = newlyUnblocked(id, this.state.tasks);
 
-    // Register the undo NOW, not at the end.
+    // Register the undo BEFORE the mutation, not after it.
     //
-    // The patch above already removed the row from the screen, but everything
-    // below is awaited — recurrence bookkeeping, clearing the current task,
-    // possibly drawing the next one. Pushing the undo entry after all that left
-    // a window where the task had visibly vanished and Cmd+Z did nothing,
-    // because the stack was still empty. Rare by hand, reliably hit by a test
-    // that completes and undoes as fast as it can, and it got likelier as the
-    // app grew. The closure only reads state captured before this point, so it
-    // is safe to arm early; the later steps are all things undo reverses.
+    // patchTask updates the in-memory mirror SYNCHRONOUSLY and only then awaits
+    // the IndexedDB write, so the row leaves the screen the instant the patch
+    // is applied — while the write is still in flight. Arming the undo after
+    // that await therefore still left a window where the task had visibly
+    // vanished and Cmd+Z found an empty stack. (An earlier fix moved the push
+    // up to just after the patch, which shortened the window without closing
+    // it; CI kept failing intermittently until it moved above the patch.)
+    //
+    // Safe to arm first: the closure only reads state captured above, and
+    // every step below is something undo reverses anyway.
     const freedNote = freed.length === 0 ? ''
       : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
       : ` — unblocked ${freed.length} tasks`;
@@ -506,7 +502,17 @@ export class AppStore {
       }
     });
 
+    await this.patchTask(id, {
+      completedAt: finishedAt,
+      inProgress: false,
+      startedAt: undefined,
+      timeboxEndsAt: undefined,
+      ...(tracked && tracked > 0 ? { activeMs: tracked } : {}),
+    });
+
     if (freed.length > 0) {
+      // Reported first, so freeing blocked work is the headline and the
+      // ordinary completion quip is what the governor drops.
       this.fireEgg('taskUnblocked');
       if (freed.length >= 3) this.grantUnlockAndShow('load-bearing');
     }
