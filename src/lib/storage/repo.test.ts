@@ -214,3 +214,50 @@ describe('Repo', () => {
     expect(await repo.getSyncAuth()).toBeNull();
   });
 });
+
+describe('a change must always beat what it changed', () => {
+  // Rows can carry a future updatedAt for mundane reasons — a wrong clock, an
+  // import that misread its source epoch. Since updatedAt is the sync merge
+  // key, stamping an edit with a lower number makes the edit lose to the copy
+  // it was replacing: it reverts on the next sync, and a delete comes back.
+
+  it('a delete outranks a row stamped in the future', async () => {
+    const list = await repo.createList({ title: 'imported' });
+    const future = Date.now() + 30 * 365 * 86_400_000;
+    await repo.replaceAll({ ...(await repo.loadSnapshot()), lists: [{ ...list, updatedAt: future }] });
+
+    await repo.softDelete('lists', list.id);
+    const tombstone = (await repo.loadSnapshot()).lists[0]!;
+    expect(tombstone.deleted).toBe(true);
+    expect(tombstone.updatedAt, 'must outrank the row it buries').toBeGreaterThan(future);
+  });
+
+  it('an edit outranks a row stamped in the future', async () => {
+    const list = await repo.createList({ title: 'before' });
+    const future = Date.now() + 30 * 365 * 86_400_000;
+    await repo.replaceAll({ ...(await repo.loadSnapshot()), lists: [{ ...list, updatedAt: future }] });
+
+    await repo.updateList(list.id, { title: 'after' });
+    expect((await repo.loadSnapshot()).lists[0]!.updatedAt).toBeGreaterThan(future);
+  });
+
+  it('successive edits keep climbing rather than sticking', async () => {
+    const list = await repo.createList({ title: 'x' });
+    const future = Date.now() + 30 * 365 * 86_400_000;
+    await repo.replaceAll({ ...(await repo.loadSnapshot()), lists: [{ ...list, updatedAt: future }] });
+
+    await repo.updateList(list.id, { title: 'a' });
+    const first = (await repo.loadSnapshot()).lists[0]!.updatedAt;
+    await repo.updateList(list.id, { title: 'b' });
+    expect((await repo.loadSnapshot()).lists[0]!.updatedAt).toBeGreaterThan(first);
+  });
+
+  it('ordinary edits still stamp the wall clock, not a running counter', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+    const list = await repo.createList({ title: 'x' });
+    vi.setSystemTime(new Date('2026-07-15T12:00:05'));
+    await repo.updateList(list.id, { title: 'y' });
+    expect((await repo.loadSnapshot()).lists[0]!.updatedAt)
+      .toBe(new Date('2026-07-15T12:00:05').getTime());
+  });
+});

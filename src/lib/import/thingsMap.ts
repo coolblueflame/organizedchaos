@@ -57,9 +57,26 @@ export function unpackThingsDate(v: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-/** Cocoa epoch (2001-01-01Z) seconds → unix ms. */
+/**
+ * A Things date column → unix ms.
+ *
+ * These are seconds, but WHICH epoch depends on the version that wrote the
+ * library: older ones count from the Cocoa epoch (2001-01-01Z), newer ones use
+ * plain unix time. Adding the Cocoa offset to a value that was already unix
+ * throws every date 31 years into the future — which is not just cosmetic,
+ * because `updatedAt` is the sync merge key, so rows stamped in 2050 cannot be
+ * edited or deleted by anything happening today.
+ *
+ * The two are easy to tell apart rather than guess at. Every unix value since
+ * 2001 is above 978,307,200, while a Cocoa value would have to pass 1e9 to mean
+ * a date after 2032 — and these columns hold creation, modification and
+ * completion times, which are all in the past. The threshold sits between those
+ * ranges with decades of clearance on both sides.
+ */
+const ALREADY_UNIX_S = 1_100_000_000; // Cocoa: 2035-11 · unix: 2004-11
+
 export function cocoaToMs(v: number): number {
-  return Math.round((v + 978_307_200) * 1000);
+  return Math.round((v >= ALREADY_UNIX_S ? v : v + 978_307_200) * 1000);
 }
 
 /**

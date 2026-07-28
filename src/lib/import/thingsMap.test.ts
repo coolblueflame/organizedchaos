@@ -37,6 +37,22 @@ describe('decoders', () => {
     expect(cocoaToMs(0)).toBe(978307200000); // 2001-01-01T00:00:00Z
   });
 
+  it('leaves a column that is ALREADY unix seconds alone', () => {
+    // Ben's library (2026-07-28): every imported row landed 31 years in the
+    // future because these columns were unix already and got the Cocoa offset
+    // added on top. `updatedAt` is the sync merge key, so those rows could not
+    // be edited or deleted — a tombstone stamped today lost to a row claiming
+    // 2053. Whichever epoch a library uses, the answer must be the real date.
+    const realDate = Date.UTC(2019, 9, 30);
+    expect(cocoaToMs(realDate / 1000)).toBe(realDate);
+  });
+
+  it('reads both epochs as the same instant', () => {
+    const instant = Date.UTC(2020, 0, 15);
+    expect(cocoaToMs(instant / 1000)).toBe(instant); // unix seconds
+    expect(cocoaToMs(instant / 1000 - 978_307_200)).toBe(instant); // cocoa seconds
+  });
+
   it('parses a plist dict with nested arrays', () => {
     const d = parsePlistDict(MONTHLY_20TH);
     expect(d.fu).toBe(8);

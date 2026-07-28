@@ -70,6 +70,22 @@ function stamp(): { id: string; createdAt: number; updatedAt: number; deleted: f
   return { id: nanoid(), createdAt: now, updatedAt: now, deleted: false };
 }
 
+/**
+ * The stamp for a row being changed: now, or a tick past what the row already
+ * claims — whichever is later.
+ *
+ * `updatedAt` is the sync merge key, so a write that lowers it makes the change
+ * lose to the copy it was meant to replace: the edit reverts on the next sync
+ * and a delete comes back from the dead. Rows can hold a future stamp for
+ * mundane reasons — a clock that was wrong, a device in another timezone, an
+ * import that misread its source's epoch — and none of them should cost the
+ * user the ability to edit or delete the row. Changing something must always
+ * supersede what it changed.
+ */
+function nextStamp(current: number): number {
+  return Math.max(Date.now(), current + 1);
+}
+
 export class Repo {
   constructor(private db: AppDb) {}
 
@@ -130,7 +146,7 @@ export class Repo {
   ): Promise<void> {
     const row = await table.get(id);
     if (!row) return;
-    await table.put({ ...row, ...patch, updatedAt: Date.now() });
+    await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt) });
   }
 
   updateTask(id: string, patch: Partial<Task>) { return this.patchRow(this.db.tasks, id, patch); }
