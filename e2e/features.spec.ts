@@ -455,3 +455,34 @@ test('the completed screen renders history a page at a time', async ({ page }) =
   await page.getByTestId('rows-more').scrollIntoViewIfNeeded();
   await expect.poll(() => rows.count(), { timeout: 5000 }).toBeGreaterThan(first);
 });
+
+test('the rituals screen shows the day at a glance and ticks off from there', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Life');
+  await addTask(page, 'eat lunch');
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByText('eat lunch', { exact: true }).click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  // The footer link exists only once a ritual does, and says one is due.
+  const link = page.getByTestId('rituals-link');
+  await expect(link).toContainText('1 due');
+  await link.click();
+
+  await expect(page.getByTestId(`ritual-row-${id}`)).toContainText('eat lunch');
+  await expect(page.getByTestId(`ritual-row-${id}`)).toContainText('every day');
+
+  // Tick it off from here: it moves to done and the record lands in history.
+  await page.getByTestId(`ritual-complete-${id}`).click();
+  await expect(page.getByTestId(`ritual-complete-${id}`)).toBeDisabled();
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('rituals-link')).not.toContainText('due');
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByText('eat lunch', { exact: true })).toBeVisible();
+});

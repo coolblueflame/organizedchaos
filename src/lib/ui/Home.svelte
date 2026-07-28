@@ -11,6 +11,7 @@
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
   import { moveAcross, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
+  import { isRitualDue } from '../domain/ritual';
   import ListSettings from './ListSettings.svelte';
   import { flip } from 'svelte/animate';
   import { motionOk } from './fx/particles';
@@ -72,6 +73,14 @@
   const loadShare = (listId: string) =>
     Math.round((countFor(listId) / heaviestList) * 100);
   const recurringCount = $derived(app.state.templates.filter((t) => !t.deleted).length);
+  // The Rituals link appears once any exist — a fifth footer row must earn its place.
+  const ritualCount = $derived(
+    app.state.tasks.filter((t) => !t.deleted && t.ritual !== undefined).length,
+  );
+  const ritualsDue = $derived(
+    app.state.tasks.filter((t) =>
+      !t.deleted && isRitualDue(t, new Date(), app.state.settings.rolloverHour)).length,
+  );
 
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
   const grouped = $derived.by(() => {
@@ -274,6 +283,11 @@
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
       <span class="ico"><Glyph name="play" size={15} /></span> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
     </button>
+    {#if ritualCount > 0}
+      <button data-testid="rituals-link" onclick={() => navigate({ name: 'rituals' })}>
+        <span class="ico"><Glyph name="period" size={15} /></span> Rituals{#if ritualsDue > 0}&nbsp;<span class="due-count">({ritualsDue} due)</span>{/if}
+      </button>
+    {/if}
     <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
       <span class="ico">↻</span> Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
     </button>
@@ -435,6 +449,7 @@
     padding: 12px 10px; cursor: pointer; text-align: left;
   }
   .footer-links button:hover { color: var(--acc-green); }
+  .due-count { color: var(--acc-magenta); }
   /* One column for the icon whatever it is — drawn glyph or typographic mark —
      so the four labels start on the same pixel. */
   .ico {
