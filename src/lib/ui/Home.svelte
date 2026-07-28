@@ -57,6 +57,20 @@
   const open = $derived(openTasks(app.state.tasks));
   const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
   const inProgressCount = $derived(open.filter((t) => t.inProgress).length);
+
+  /**
+   * How heavy a list is next to the heaviest one, as a percentage.
+   *
+   * Deliberately NOT a completion bar: a library imported from years of history
+   * is almost entirely completed tasks, so "percent done" would read as 99% for
+   * everything and mean nothing. How much is left, relative to the fullest list,
+   * is a thing you can actually act on.
+   */
+  const heaviestList = $derived(
+    Math.max(1, ...app.state.lists.map((l) => open.filter((t) => t.listId === l.id).length)),
+  );
+  const loadShare = (listId: string) =>
+    Math.round((countFor(listId) / heaviestList) * 100);
   const recurringCount = $derived(app.state.templates.filter((t) => !t.deleted).length);
 
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
@@ -221,6 +235,7 @@
             <Glyph name="grip" size={12} />
           </button>
           <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
+            <span class="prompt" aria-hidden="true">&gt;</span>
             <span class="list-title">{l.title}</span>
             {#if l.deadline}
               {@const tier = projectTiers.get(l.id)}
@@ -234,6 +249,9 @@
                 <Glyph name={isListActiveAt(l, new Date()) ? 'dice' : 'moon'} size={10} /> {describeWindow(l)}{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
               </span>
             {/if}
+            <span class="load" aria-hidden="true">
+              <span class="load-fill" style="width: {loadShare(l.id)}%"></span>
+            </span>
             <span class="count">{countFor(l.id)}</span>
           </button>
           <button class="menu-btn" data-testid="list-menu-{l.id}"
@@ -254,16 +272,16 @@
 
   <div class="footer-links">
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
-      <Glyph name="play" size={15} /> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
+      <span class="ico"><Glyph name="play" size={15} /></span> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
     </button>
     <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
-      ↻ Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
+      <span class="ico">↻</span> Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
     </button>
     <button data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
-      ✓ Completed
+      <span class="ico">✓</span> Completed
     </button>
     <button data-testid="settings-link" onclick={() => navigate({ name: 'settings' })}>
-      <Glyph name="settings" size={15} /> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
+      <span class="ico"><Glyph name="settings" size={15} /></span> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
     </button>
   </div>
 </main>
@@ -341,9 +359,21 @@
   }
   .list-main:hover { background: var(--bg2); }
   .list-title { font-weight: 500; }
+  .prompt {
+    color: var(--acc-green); font-family: var(--font-mono); font-weight: 700;
+    margin-right: 2px; opacity: 0.75; flex: none;
+  }
+  .list-row:hover .prompt { opacity: 1; }
+  /* Sits right of the title, left of the count: a glance tells you which lists
+     are carrying the weight without reading a single number. */
+  .load {
+    margin-left: auto; margin-right: 8px; width: 46px; height: 3px; flex: none;
+    background: var(--bg2); border-radius: 2px; overflow: hidden;
+  }
+  .load-fill { display: block; height: 100%; background: var(--acc-green); opacity: 0.55; }
   .count { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; }
   .window {
-    margin-left: auto; margin-right: 10px;
+    margin-right: 10px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.65rem;
   }
   .window.asleep { color: var(--dim); }
@@ -364,6 +394,7 @@
     color: var(--text); padding: 14px; font-size: 0.95rem; outline: none;
   }
   .new-list {
+    margin-top: 10px; /* not another row in the list — a different kind of thing */
     background: none; border: 1px dashed var(--line); border-radius: 8px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
     padding: 12px; cursor: pointer; text-align: left;
@@ -404,5 +435,11 @@
     padding: 12px 10px; cursor: pointer; text-align: left;
   }
   .footer-links button:hover { color: var(--acc-green); }
+  /* One column for the icon whatever it is — drawn glyph or typographic mark —
+     so the four labels start on the same pixel. */
+  .ico {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; flex: none; font-size: 0.95rem; line-height: 1;
+  }
   .sync-warn { color: var(--acc-orange); }
 </style>

@@ -67,7 +67,11 @@ test('rapid entry still focuses the new row on touch', async ({ page }) => {
 
   await expect(page.getByTestId('task-name-input')).toBeFocused();
   await page.getByTestId('task-name-input').fill('second');
-  await page.getByTestId('task-name-input').press('Escape');
+  // Close with the collapse button, which flushes the name and then closes in
+  // one path. Escape went through the global handler instead, which has to have
+  // re-armed for a row created a moment earlier — a race that took CI red once,
+  // and one this test was never about.
+  await page.getByTestId('task-collapse').click();
   await expect(page.getByText('second', { exact: true })).toBeVisible();
 });
 
