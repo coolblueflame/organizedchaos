@@ -152,6 +152,14 @@
     {/if}
   </section>
 
+  <section class="block">
+    <button class="shelve" data-testid="list-settings-archive"
+      onclick={() => { void app.setListArchived(list.id, !list.archived); onclose(); }}>
+      {list.archived ? 'revive from the archive' : 'archive list'}
+    </button>
+    <p class="hint">Archived: off the home screen, out of the dice — still searchable, nothing deleted.</p>
+  </section>
+
   <div class="actions">
     <button class="danger" class:armed={deleteArmed} data-testid="list-settings-delete" onclick={remove}>
       {deleteArmed ? 'tap again to delete list' : 'delete list'}

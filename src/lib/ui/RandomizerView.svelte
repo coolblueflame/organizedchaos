@@ -21,6 +21,7 @@
   import { projectPriorities } from '../domain/project';
   import { blockLifts } from '../domain/blocking';
   import { ritualExclusions, withRitualLifts } from '../domain/ritual';
+  import { archivedTaskIds } from '../domain/archive';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
@@ -63,7 +64,9 @@
   let tagQuery = $state('');
   const matches = (name: string, q: string) =>
     q.trim() === '' || name.toLowerCase().includes(q.trim().toLowerCase());
-  const shownLists = $derived(app.state.lists.filter((l) => matches(l.title, listQuery)));
+  const shownLists = $derived(
+    app.state.lists.filter((l) => l.archived !== true && matches(l.title, listQuery)),
+  );
   const shownTags = $derived(app.state.tags.filter((t) => matches(t.name, tagQuery)));
 
   /**
@@ -89,7 +92,7 @@
       ? app.state.lists.filter((l) => !omittedLists.includes(l.id)).map((l) => l.id)
       : undefined,
     tagIds: filterTags,
-    excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue],
+    excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue, ...onShelf],
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
   });
@@ -147,6 +150,9 @@
    * window. Excluded rather than de-prioritised: "eat lunch" at 4pm is not a
    * low-priority suggestion, it is not a suggestion.
    */
+  /** Tasks on archived lists — never proposed, always findable. */
+  const onShelf = $derived(archivedTaskIds(app.state.tasks, app.state.lists));
+
   const ritualsNotDue = $derived(
     ritualExclusions(app.state.tasks, app.state.settings, new Date()),
   );

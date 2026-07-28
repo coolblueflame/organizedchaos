@@ -490,3 +490,45 @@ test('the rituals screen shows the day at a glance and ticks off from there', as
   await page.getByTestId('completed-link').click();
   await expect(page.getByText('eat lunch', { exact: true })).toBeVisible();
 });
+
+test('archiving a list shelves it everywhere the app proposes work', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Cruft');
+  await addTask(page, 'stale thing');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Current');
+  await addTask(page, 'real work');
+  await page.getByTestId('back').click();
+
+  // Archive Cruft from its settings sheet.
+  const cruft = page.getByTestId(/^list-row-/).filter({ hasText: 'Cruft' }).first();
+  const id = (await cruft.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${id}`).click();
+  await page.getByTestId('list-settings-archive').click();
+
+  // Off the home groups, onto the shelf.
+  await expect(page.getByTestId(`list-row-${id}`)).toHaveCount(0);
+  await page.getByTestId('archived-shelf').click();
+  await expect(page.getByTestId(`archived-row-${id}`)).toContainText('Cruft');
+
+  // The dice never propose it: only the real work draws.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('real work');
+  await page.getByTestId('draw-not-now').click();
+  await expect(page.getByTestId('draw-empty'), 'nothing else in the pool').toBeVisible();
+  await page.getByTestId('back').click();
+
+  // Out of the global sort views too — but search still finds it.
+  await page.getByTestId('sort-priority').click();
+  await expect(page.getByText('stale thing', { exact: true })).toHaveCount(0);
+  await page.getByTestId('back').click();
+  await page.getByTestId('search-entry').click();
+  await page.getByTestId('search-input').fill('stale');
+  await expect(page.getByText('stale thing', { exact: true })).toBeVisible();
+  await page.getByTestId('back').click();
+
+  // Revive: back on home, back in the pool.
+  await page.getByTestId('archived-shelf').click();
+  await page.getByTestId(`unarchive-${id}`).click();
+  await expect(page.getByTestId(`list-row-${id}`)).toBeVisible();
+});

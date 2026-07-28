@@ -78,6 +78,7 @@
     app.state.tasks.filter((t) => !t.deleted && t.ritual !== undefined).length,
   );
   const reviewCount = $derived(app.tasksNeedingReview().length);
+  const archivedLists = $derived(app.state.lists.filter((l) => l.archived === true));
   const ritualsDue = $derived(
     app.state.tasks.filter((t) =>
       !t.deleted && isRitualDue(t, new Date(), app.state.settings.rolloverHour)).length,
@@ -86,7 +87,7 @@
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
   const grouped = $derived.by(() => {
     const buckets = new Map<string, List[]>();
-    for (const l of app.state.lists) {
+    for (const l of app.state.lists.filter((x) => x.archived !== true)) {
       const key = l.areaGroup?.trim() ?? '';
       const bucket = buckets.get(key) ?? [];
       bucket.push(l);
@@ -287,6 +288,19 @@
     {/if}
   </section>
 
+  {#if archivedLists.length > 0}
+    <details class="shelf" data-testid="archived-shelf">
+      <summary>archived · {archivedLists.length}</summary>
+      {#each archivedLists as l (l.id)}
+        <div class="shelf-row" data-testid="archived-row-{l.id}">
+          <button class="shelf-title" onclick={() => navigate({ name: 'list', id: l.id })}>{l.title}</button>
+          <button class="shelf-revive" data-testid="unarchive-{l.id}"
+            onclick={() => void app.setListArchived(l.id, false)}>revive</button>
+        </div>
+      {/each}
+    </details>
+  {/if}
+
   <div class="footer-links">
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
       <span class="ico"><Glyph name="play" size={15} /></span> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
@@ -458,6 +472,25 @@
   }
   .footer-links button:hover { color: var(--acc-green); }
   .due-count { color: var(--acc-magenta); }
+  .shelf { margin-top: 18px; }
+  .shelf summary {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    cursor: pointer; padding: 6px 2px; list-style: none;
+  }
+  .shelf summary::before { content: '▸ '; }
+  .shelf[open] summary::before { content: '▾ '; }
+  .shelf summary:hover { color: var(--text); }
+  .shelf-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px 5px 14px; }
+  .shelf-title {
+    flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 0;
+    color: var(--dim); font-size: 0.85rem; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .shelf-title:hover { color: var(--text); }
+  .shelf-revive {
+    background: none; border: none; color: var(--acc-blue); cursor: pointer;
+    font-family: var(--font-mono); font-size: 0.7rem; text-decoration: underline; padding: 2px;
+  }
   .sweep-banner {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     width: 100%; margin-bottom: 14px;

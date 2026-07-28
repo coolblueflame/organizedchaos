@@ -27,7 +27,7 @@ export function listHealth(lists: List[], tasks: Task[], now: Date): ListHealthR
   }
 
   const rows = lists
-    .filter((l) => !l.deleted)
+    .filter((l) => !l.deleted && l.archived !== true)
     .map((list) => {
       const mine = byList.get(list.id) ?? [];
       const ages = mine

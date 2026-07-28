@@ -39,6 +39,13 @@ export interface List extends Base {
    * as zero.
    */
   order?: number;
+  /**
+   * Archived: off the home screen, out of the randomizer, skipped by the
+   * sweep and the sort views — but never deleted. Still searchable, still in
+   * completed history, one tap to revive. The shape cruft should take when
+   * deleting history feels wrong.
+   */
+  archived?: boolean;
   /** Last sort mode used in this list's view (spec §6: remembered per list). */
   sortMode: SortMode;
   /**

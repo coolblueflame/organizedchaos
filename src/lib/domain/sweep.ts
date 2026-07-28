@@ -31,8 +31,9 @@ export function sweepQueue(tasks: Task[], lists: List[]): Task[] {
   for (const bucket of byList.values()) bucket.sort((a, b) => a.createdAt - b.createdAt);
 
   // Home-screen list order: '' group first, then groups alphabetically.
+  // Archived lists are skipped entirely — archiving IS the verdict on them.
   const groups = new Map<string, List[]>();
-  for (const l of lists.filter((x) => !x.deleted)) {
+  for (const l of lists.filter((x) => !x.deleted && x.archived !== true)) {
     const key = l.areaGroup?.trim() ?? '';
     const bucket = groups.get(key) ?? [];
     bucket.push(l);
@@ -45,7 +46,8 @@ export function sweepQueue(tasks: Task[], lists: List[]): Task[] {
   const out: Task[] = [];
   for (const l of orderedLists) out.push(...(byList.get(l.id) ?? []));
   // Tasks on unknown lists (sync edge) still deserve review — last, not lost.
-  const known = new Set(orderedLists.map((l) => l.id));
+  // (Archived lists are KNOWN, so their tasks fall out here rather than back in.)
+  const known = new Set(lists.filter((x) => !x.deleted).map((l) => l.id));
   for (const [listId, bucket] of byList) if (!known.has(listId)) out.push(...bucket);
   return out;
 }

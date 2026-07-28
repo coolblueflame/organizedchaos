@@ -11,6 +11,7 @@
     SUB_SORT_LABELS, type SubSort,
   } from '../domain/views';
   import GroupedTasks from './GroupedTasks.svelte';
+  import { withoutArchived } from '../domain/archive';
   import { closeOnOutsideOrEscape } from './dismiss';
 
   let { mode }: { mode: 'date' | 'priority' | 'tag' } = $props();
@@ -23,9 +24,12 @@
 
   const groups = $derived.by(() => {
     const now = new Date();
-    if (mode === 'date') return groupByDate(app.state.tasks, app.state.settings, now);
-    if (mode === 'tag') return groupByTag(app.state.tasks, app.state.tags, app.state.settings, now);
-    return groupByPriority(app.state.tasks, app.state.settings, now);
+    // Archived lists' tasks are out of every global view — that is what
+    // archiving means. They stay reachable via search and the shelf itself.
+    const tasks = withoutArchived(app.state.tasks, app.state.lists);
+    if (mode === 'date') return groupByDate(tasks, app.state.settings, now);
+    if (mode === 'tag') return groupByTag(tasks, app.state.tags, app.state.settings, now);
+    return groupByPriority(tasks, app.state.settings, now);
   });
 
   let subSort = $state<SubSort>('smart');

@@ -13,6 +13,7 @@ import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import { ritualExclusions, withRitualLifts } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
+import { archivedTaskIds } from '../domain/archive';
 import { reorderPatches } from '../domain/listOrder';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
@@ -313,6 +314,11 @@ export class AppStore {
    */
   async moveListToGroup(id: string, group: string): Promise<void> {
     await this.patchList(id, { areaGroup: group.trim() || undefined });
+  }
+
+  /** Shelve or revive a list — see domain/archive.ts for what that means. */
+  async setListArchived(id: string, archived: boolean): Promise<void> {
+    await this.patchList(id, { archived: archived || undefined });
   }
 
   /**
@@ -681,7 +687,12 @@ export class AppStore {
     const now = new Date();
     const next = drawTask(
       this.state.tasks, this.state.settings, now, Math.random,
-      { excludeIds: ritualExclusions(this.state.tasks, this.state.settings, now) },
+      {
+        excludeIds: [
+          ...ritualExclusions(this.state.tasks, this.state.settings, now),
+          ...archivedTaskIds(this.state.tasks, this.state.lists),
+        ],
+      },
       undefined,
       withRitualLifts(
         blockLifts(this.state.tasks, this.state.settings, now), this.state.tasks, this.state.settings, now,
