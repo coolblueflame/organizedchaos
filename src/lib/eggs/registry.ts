@@ -5,7 +5,7 @@
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
 import {
-  BULK_LINES, QUIPS, STREAK_LINES, TIMEBOX_LINES, UNBLOCK_LINES, WORK_PERIOD_LINES,
+  BULK_LINES, QUIPS, RITUAL_LINES, STREAK_LINES, TIMEBOX_LINES, UNBLOCK_LINES, WORK_PERIOD_LINES,
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
@@ -74,6 +74,11 @@ export const REGISTRY: EggDef[] = [
     id: 'unblock-line', weight: 60, triggers: ['taskUnblocked'],
     present: (c) => ({ kind: 'note', emoji: '🗝', accent: 'green', text: pick(UNBLOCK_LINES, c.rng) }),
   },
+  {
+    id: 'ritual-line', weight: 60, triggers: ['ritualCompleted'],
+    present: (c) => ({ kind: 'note', emoji: '🕯️', accent: 'green', text: pick(RITUAL_LINES, c.rng) }),
+  },
+  unlockEgg('ritualist', ['ritualCompleted'], () => true),
   unlockEgg('boxer', ['timeboxFinished'], () => true),
   unlockEgg('shepherd', ['taskDragged'], () => true),
   unlockEgg('keymaster', ['taskUnblocked'], () => true),
@@ -110,6 +115,12 @@ export const REGISTRY: EggDef[] = [
     return h >= 2 && h < 4;
   }),
   unlockEgg('century', ['taskCompleted'], (c) => c.lifetimeCompletions >= 100),
-  // quiz-whiz, konami, chaos-word, hatchling, sweeper and clairvoyant are
-  // granted directly by their own flows (grantUnlockAndShow), not rolled here.
+  unlockEgg('early-bird', ['taskCompleted'], (c) => {
+    // The other end of night-owl's window: after the 4am day rollover,
+    // before the ordinary world wakes up.
+    const h = c.now.getHours();
+    return h >= 4 && h < 7;
+  }),
+  // quiz-whiz, konami, chaos-word, hatchling, sweeper, clairvoyant, gardener
+  // and clockwork are granted directly by their own flows (grantUnlockAndShow).
 ];

@@ -544,7 +544,15 @@ export class AppStore {
     });
 
     if (this.state.currentTask?.taskId === task.id) await this.clearCurrent();
+    // Both events, in this order: the ritual's own voice gets first claim on
+    // the presentation slot, while the plain completion event still runs the
+    // engine's bookkeeping (streak, daily tally) — those must not know the
+    // difference between kinds of finishing. The quiet-time governor makes a
+    // double presentation impossible.
+    this.fireEgg('ritualCompleted');
     this.fireEgg('taskCompleted');
+    const kept = this.state.tasks.filter((t) => !t.deleted && t.ritual && t.ritualDoneDay === day);
+    if (kept.length >= 3) this.grantUnlockAndShow('clockwork');
     if (!opts.bulk && this.state.settings.autoSelectNext) await this.drawNext();
   }
 
@@ -1103,6 +1111,7 @@ export class AppStore {
       for (const { id, before } of affected) await this.patchTask(id, { tagIds: before });
       await this.restoreTag(sourceId, source);
     });
+    this.grantUnlockAndShow('gardener');
     return affected.length;
   }
 }

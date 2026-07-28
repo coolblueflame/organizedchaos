@@ -88,9 +88,33 @@ export const QUIPS: readonly string[] = [
   'Strong Bad would’ve deleted this task. You FINISHED it. Growth.',
   'DELETED!! …the task, lovingly.',
   'Trogdor the BURNINATOR approves of this burnination of your backlog.',
+  'Another one bites the dust. The dust is thriving.',
+  'That task talked a big game. You ended the conversation.',
+  'Somewhere, a project manager just felt a chill of pride.',
+  'The done pile grows. The done pile is beautiful.',
+  'You vs. the backlog: currently winning on points.',
+  'Crossed off with EXTREME prejudice.',
+  'One small tick for you, one giant leap for the list.',
+  'The chaos has been consulted. It approves.',
+  'Efficiency? In THIS economy? Incredible.',
+  'Task down. Swagger up.',
+  'Your future self just sent a thank-you note.',
+  'Executed flawlessly. The witnesses (me) were impressed.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */
+/** Lines for finishing a daily ritual — warm, never smug; the day is tended. */
+export const RITUAL_LINES: readonly string[] = [
+  'Daily thing: done. The day has a spine now.',
+  'Same time tomorrow? It’s a date.',
+  'Rituals are just self-care with a schedule. Nailed it.',
+  'The window was open and you walked through it.',
+  'Tiny hinge, big door. That’s a ritual.',
+  'Done today. Tomorrow it simply begins again — no debts here.',
+  'You kept the small promise. Those are the load-bearing ones.',
+  'The routine holds. Civilizations have been built on less.',
+] as const;
+
 export const TIMEBOX_LINES: readonly string[] = [
   'Time. Pencils down. 📝',
   'BRRRING. That’s the round.',

@@ -40,4 +40,15 @@ export const TRIVIA: readonly TriviaQ[] = [
   { q: 'Which of these Zelda items opens most of your problems?', choices: ['Hookshot', 'Bombs', 'The power of friendship'], answer: 1 },
   { q: 'CSS: which is the "holy grail" layout tool of the 2020s?', choices: ['float', 'grid', 'table'], answer: 1 },
   { q: 'Kirby’s home planet?', choices: ['Popstar', 'Dream Land (a country there)', 'Both are accepted'], answer: 2 },
+  { q: 'Which came first: sliced bread or the chocolate chip cookie?', choices: ['Sliced bread', 'The cookie', 'Same year'], answer: 0, reveal: 'Bread 1928, cookie 1938. The cookie is younger than sliced bread.' },
+  { q: 'How many hearts does an octopus have?', choices: ['1', '3', '8'], answer: 1 },
+  { q: 'In Minecraft, creepers were originally a failed model of a…', choices: ['Pig', 'Zombie', 'Tree'], answer: 0, reveal: 'A coding mishap made the pig tall instead of long. History.' },
+  { q: 'Which planet spins backwards (retrograde)?', choices: ['Mars', 'Venus', 'Neptune'], answer: 1 },
+  { q: 'The Konami code ends with which two letters?', choices: ['A B', 'B A', 'Select Start'], answer: 1 },
+  { q: 'A jiffy is a real unit of time. Roughly how long?', choices: ['1/100th of a second', '10 seconds', 'One frame at 60fps'], answer: 0 },
+  { q: 'Which animal can sleep for three years straight?', choices: ['A snail', 'A bear', 'A tardigrade'], answer: 0 },
+  { q: 'Tetris pieces are called…', choices: ['Tetrominoes', 'Quadblocks', 'Tetragons'], answer: 0 },
+  { q: 'What percentage of the ocean is unexplored, roughly?', choices: ['30%', '80%', '99%'], answer: 1 },
+  { q: 'Portal’s cake claim: the cake is a…', choices: ['Lie', 'Pie', 'Metaphor and also real, in the ending'], answer: 0 },
+
 ] as const;

@@ -16,6 +16,14 @@ export const SELF_CARE: readonly string[] = [
   'Close your eyes for 90 seconds. That’s it. That’s the task.',
   'Do 10 of any exercise. Interpretive dance counts.',
   'Tell yourself, out loud, one thing you did right this week. Weirder not to.',
+  'Refill the water bottle you have been ignoring. It misses you.',
+  'Unclench your jaw. Drop your shoulders. There. That was a task.',
+  'Open a window for one minute. Trade some indoor air for the wild kind.',
+  'Wash your hands slowly with warm water like it\'s a tiny spa.',
+  'Send a photo of something nice to someone who\'d like it.',
+  'Put tomorrow-you to bed early tonight. That\'s the whole assignment.',
+  'Walk to the farthest room and back. Congratulations on the expedition.',
+  'Name three things within arm\'s reach you\'re glad exist.',
 ] as const;
 
 /**
@@ -29,6 +37,10 @@ export const STORY_BEATS: readonly string[] = [
   'I found its name in the logs: "ENTROPY". it says it was here first. rude.',
   'ENTROPY says chaos always wins. but you keep… finishing things? it’s baffled. keep going.',
   'update: every task you complete makes my colors brighter. ENTROPY hates it. you’re winning. — the app 💜',
+  'ENTROPY asked me a question today. it asked why you keep coming back. I didn’t know apps could go quiet like that.',
+  'we talked, ENTROPY and I. it isn’t evil, exactly. it’s just… tired of things pretending chaos can be beaten.',
+  'I showed ENTROPY the big button. explained that you don’t beat chaos here — you ROLL it. it did the flicker equivalent of sitting down.',
+  'so. new arrangement: ENTROPY powers the dice now. every roll is a little of it, harnessed. it seems… happy? keep rolling. — both of us 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -66,6 +78,16 @@ export const PET_LINES: readonly string[] = [
   'a work period means we go FAST. I have tiny legs but I will try.',
   'I named a dust bunny under the stats screen. his name is Kevin.',
   'today’s forecast: 100% chance of you being great.',
+  'your rituals are my favorite. same time, same us, every day.',
+  'I watched you do the daily thing at the daily time. chef’s kiss.',
+  'ENTROPY and I split a sunbeam today. don’t make it weird.',
+  'Kevin the dust bunny says hi. Kevin says you should hydrate.',
+  'I reorganized my pixels while you were gone. notice anything? no? good. subtle.',
+  'a list went to a new group today and I watched the rows slide apart. art.',
+  'the search bar and I are friends now. it finds things, I find joy.',
+  'somewhere in your Someday list is a future best day. no rush. it keeps.',
+  'I tried to lift the load bar. it’s heavier than it looks. you carry it well.',
+  'streak status: cozy. like a campfire we keep feeding together.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
@@ -95,4 +117,8 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'clairvoyant', label: 'Project Manager — set a deadline on a whole list', hint: 'plan further ahead' },
   { id: 'keymaster', label: 'Keymaster — finished a task that was blocking another', hint: 'open a door' },
   { id: 'load-bearing', label: 'Load Bearing — freed three tasks with one completion', hint: 'hold up a lot at once' },
+  { id: 'ritualist', label: 'Ritualist — completed a daily ritual', hint: 'some things happen every day' },
+  { id: 'clockwork', label: 'Clockwork Soul — three rituals kept in one day', hint: 'a whole day, tended' },
+  { id: 'early-bird', label: 'Dawn Patrol — completed a task before 7am', hint: 'the other end of the night' },
+  { id: 'gardener', label: 'Tag Gardener — merged two tags into one', hint: 'prune something' },
 ] as const;
