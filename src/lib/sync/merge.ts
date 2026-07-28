@@ -25,6 +25,18 @@ function pick<T extends Row>(a: T, b: T): T {
   return a;
 }
 
+/**
+ * Does `incoming` beat the copy already in storage?
+ *
+ * The same rule `pick` uses, exposed so the write-back can re-apply it at the
+ * moment it touches the database. A sync cycle merges against a snapshot read
+ * seconds earlier; re-checking here is what stops it from carrying a row the
+ * user has since changed — or deleted — back into storage.
+ */
+export function supersedes(incoming: Row, mine: Row): boolean {
+  return pick(mine, incoming) === incoming;
+}
+
 function mergeRows<T extends Row>(local: T[], remote: T[]): T[] {
   const byId = new Map<string, T>();
   for (const row of local) byId.set(row.id, row);
@@ -57,7 +69,7 @@ function sameRows<T extends Row>(a: T[], b: T[]): boolean {
  * meaning depends on when it was last touched, so the side that completed
  * something more recently wins, with the larger streak breaking a tie.
  */
-function mergeDelight(
+export function mergeDelight(
   a: DelightProgress | undefined,
   b: DelightProgress | undefined,
 ): DelightProgress | undefined {

@@ -109,8 +109,7 @@ describe('Repo', () => {
     expect(snapshot.lists[0]!.deleted).toBe(true);
   });
 
-  it('replaceAll swaps the entire store transactionally and round-trips', async () => {
-    await repo.createList({ title: 'stale local' });
+  it('replaceAll writes the merged snapshot in one transaction', async () => {
     const incoming = await repo.loadSnapshot();
     incoming.lists = [{
       id: 'L9', title: 'from remote', sortMode: 'priority' as const,
@@ -127,6 +126,84 @@ describe('Repo', () => {
     expect(back.currentTaskUpdatedAt).toBe(4);
     expect(back.settings.hoursPerDay).toBe(7);
     expect(back.settingsUpdatedAt).toBe(5);
+  });
+
+  describe('replaceAll vs. edits made while a sync was in flight', () => {
+    // A sync cycle reads the local snapshot, spends seconds on the network, then
+    // writes the merged result back. Anything the user did in between is NEWER
+    // than what that snapshot holds, and must not be undone by the write.
+
+    it('keeps a delete that landed after the snapshot was taken', async () => {
+      vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+      const list = await repo.createList({ title: 'Doomed' });
+      const inFlight = await repo.loadSnapshot(); // sync reads: list is alive
+
+      vi.setSystemTime(new Date('2026-07-15T12:00:05')); // user deletes it
+      await repo.softDelete('lists', list.id);
+
+      await repo.replaceAll(inFlight); // sync writes back what it had read
+      expect((await repo.loadState()).lists, 'the delete must survive').toHaveLength(0);
+    });
+
+    it('keeps an edit that landed after the snapshot was taken', async () => {
+      vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+      const list = await repo.createList({ title: 'before' });
+      const inFlight = await repo.loadSnapshot();
+
+      vi.setSystemTime(new Date('2026-07-15T12:00:05'));
+      await repo.updateList(list.id, { title: 'after' });
+
+      await repo.replaceAll(inFlight);
+      expect((await repo.loadState()).lists[0]!.title).toBe('after');
+    });
+
+    it('keeps a row created after the snapshot was taken', async () => {
+      const inFlight = await repo.loadSnapshot();
+      const fresh = await repo.createList({ title: 'typed mid-sync' });
+      await repo.replaceAll(inFlight);
+      expect((await repo.loadState()).lists.map((l) => l.id)).toEqual([fresh.id]);
+    });
+
+    it('still accepts remote rows that really are newer', async () => {
+      vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+      const list = await repo.createList({ title: 'mine' });
+      const incoming = await repo.loadSnapshot();
+      incoming.lists = [{ ...incoming.lists[0]!, title: 'theirs', updatedAt: Date.now() + 60_000 }];
+      await repo.replaceAll(incoming);
+      expect((await repo.loadState()).lists[0]!.title).toBe('theirs');
+      expect(list.id).toBe(incoming.lists[0]!.id);
+    });
+
+    it('keeps settings and the current task changed mid-sync', async () => {
+      vi.setSystemTime(new Date('2026-07-15T12:00:00'));
+      const incoming = await repo.loadSnapshot();
+      incoming.settings = { ...incoming.settings, hoursPerDay: 3 };
+      incoming.settingsUpdatedAt = Date.now();
+      incoming.currentTask = { taskId: 'stale', acceptedAt: 1 };
+      incoming.currentTaskUpdatedAt = Date.now();
+
+      vi.setSystemTime(new Date('2026-07-15T12:00:05'));
+      await repo.updateSettings({ hoursPerDay: 9 });
+      await repo.setCurrentTask({ taskId: 'fresh', acceptedAt: 2 });
+
+      await repo.replaceAll(incoming);
+      const back = await repo.loadState();
+      expect(back.settings.hoursPerDay).toBe(9);
+      expect(back.currentTask).toEqual({ taskId: 'fresh', acceptedAt: 2 });
+    });
+
+    it('keeps a discovery earned mid-sync', async () => {
+      await repo.setKv('eggState', { unlocks: ['earned-just-now'], storyStage: 3 });
+      const incoming = await repo.loadSnapshot();
+      incoming.delight = {
+        unlocks: ['from-the-other-device'], storyStage: 1,
+        triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+      };
+      await repo.replaceAll(incoming);
+      const eggs = await repo.getKv<{ unlocks: string[]; storyStage: number }>('eggState');
+      expect(eggs!.unlocks).toEqual(['earned-just-now', 'from-the-other-device']);
+      expect(eggs!.storyStage, 'never rewound').toBe(3);
+    });
   });
 
   it('sync auth kv round-trips and clears', async () => {

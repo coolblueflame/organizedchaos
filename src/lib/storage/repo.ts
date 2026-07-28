@@ -14,6 +14,7 @@ import {
 } from '../domain/types';
 import type { DelightProgress, RemoteSnapshot } from '../sync/files';
 import type { SyncConfig } from '../sync/githubClient';
+import { mergeDelight, supersedes } from '../sync/merge';
 import type { AppDb } from './db';
 
 /** The parts of the stored delight blob the repo needs to see. */
@@ -24,6 +25,18 @@ interface StoredDelight {
   streakDays?: number;
   lastCompletionDay?: string;
   [key: string]: unknown;
+}
+
+/** The travelling half of the stored delight blob — the rest is device pacing. */
+function storedToProgress(stored: StoredDelight): DelightProgress {
+  return {
+    unlocks: [...(stored.unlocks ?? [])],
+    storyStage: stored.storyStage ?? 0,
+    triviaCorrect: stored.trivia?.correct ?? 0,
+    triviaTotal: stored.trivia?.total ?? 0,
+    streakDays: stored.streakDays ?? 0,
+    lastCompletionDay: stored.lastCompletionDay ?? '',
+  };
 }
 
 export interface AppState {
@@ -167,53 +180,85 @@ export class Repo {
     // Only the achievement half travels. The rest of eggState is pacing — what
     // has been shown lately, the quiet-time clock — which describes this device
     // and would gag another one if it were shared.
-    const delight: DelightProgress | undefined = eggs
-      ? {
-          unlocks: [...(eggs.unlocks ?? [])],
-          storyStage: eggs.storyStage ?? 0,
-          triviaCorrect: eggs.trivia?.correct ?? 0,
-          triviaTotal: eggs.trivia?.total ?? 0,
-          streakDays: eggs.streakDays ?? 0,
-          lastCompletionDay: eggs.lastCompletionDay ?? '',
-        }
-      : undefined;
+    const delight: DelightProgress | undefined = eggs ? storedToProgress(eggs) : undefined;
     return { ...state, lists, tasks, tags, templates, ...(delight ? { delight } : {}) };
   }
 
-  /** Swap the whole store for a merged snapshot — one transaction, all-or-nothing. */
+  /**
+   * Write a merged snapshot back — one transaction, all-or-nothing.
+   *
+   * Deliberately NOT a wholesale swap. The snapshot was read before the sync
+   * went to the network, and with a large library that round trip takes
+   * seconds; anything the user did in the meantime is newer than what this
+   * snapshot holds. Clearing the tables and re-writing it verbatim undid that
+   * work — a list deleted mid-sync came back, a task ticked off mid-sync came
+   * back unfinished — and, because the tombstone was destroyed rather than
+   * overruled, the delete could never propagate either.
+   *
+   * So every row re-runs the merge's own newest-wins rule against whatever is
+   * in storage at write time, and rows created since the read are left alone
+   * (absent from the snapshot is exactly how the merge already treats a row
+   * only one side knows about). That makes this write idempotent and
+   * order-independent, which is what a background sync needs it to be.
+   */
   async replaceAll(snap: RemoteSnapshot): Promise<void> {
     await this.db.transaction('rw', [this.db.lists, this.db.tasks, this.db.tags, this.db.templates, this.db.kv], async () => {
       await Promise.all([
-        this.db.lists.clear(), this.db.tasks.clear(),
-        this.db.tags.clear(), this.db.templates.clear(),
-      ]);
-      await Promise.all([
-        this.db.lists.bulkPut(snap.lists),
-        this.db.tasks.bulkPut(snap.tasks),
-        this.db.tags.bulkPut(snap.tags),
-        this.db.templates.bulkPut(snap.templates),
-        this.db.kv.put({ key: 'currentTask', value: { data: snap.currentTask, updatedAt: snap.currentTaskUpdatedAt } }),
-        this.db.kv.put({ key: 'settings', value: { data: snap.settings, updatedAt: snap.settingsUpdatedAt } }),
+        this.applyRows(this.db.lists, snap.lists),
+        this.applyRows(this.db.tasks, snap.tasks),
+        this.applyRows(this.db.tags, snap.tags),
+        this.applyRows(this.db.templates, snap.templates),
+        this.applyStamped('currentTask', snap.currentTask, snap.currentTaskUpdatedAt),
+        this.applyStamped('settings', snap.settings, snap.settingsUpdatedAt),
       ]);
       // Merge the achievement half back in WITHOUT touching this device's
       // pacing fields (seen / lastPresentedAt / presentedToday). Read-modify-
-      // write inside the same transaction so a concurrent save cannot lose it.
+      // write inside the same transaction so a concurrent save cannot lose it,
+      // and by union/max so a discovery earned mid-sync is not erased either.
       if (snap.delight) {
         const row = await this.db.kv.get('eggState');
         const current = (row?.value as StoredDelight | undefined) ?? {};
+        const won = mergeDelight(storedToProgress(current), snap.delight)!;
         await this.db.kv.put({
           key: 'eggState',
           value: {
             ...current,
-            unlocks: snap.delight.unlocks,
-            storyStage: snap.delight.storyStage,
-            trivia: { correct: snap.delight.triviaCorrect, total: snap.delight.triviaTotal },
-            streakDays: snap.delight.streakDays,
-            lastCompletionDay: snap.delight.lastCompletionDay,
+            unlocks: won.unlocks,
+            storyStage: won.storyStage,
+            trivia: { correct: won.triviaCorrect, total: won.triviaTotal },
+            streakDays: won.streakDays,
+            lastCompletionDay: won.lastCompletionDay,
           },
         });
       }
     });
+  }
+
+  /** Write only the incoming rows that beat what storage already holds. */
+  private async applyRows<T extends { id: string; updatedAt: number; deleted: boolean }>(
+    table: { toArray: () => Promise<T[]>; bulkPut: (rows: T[]) => Promise<unknown> },
+    incoming: T[],
+  ): Promise<void> {
+    const mine = new Map((await table.toArray()).map((row) => [row.id, row]));
+    const wins = incoming.filter((row) => {
+      const existing = mine.get(row.id);
+      return existing === undefined || supersedes(row, existing);
+    });
+    if (wins.length) await table.bulkPut(wins);
+  }
+
+  /**
+   * Same guard for the stamped singletons. `>=` rather than `>` so a merge that
+   * simply agrees with what is stored still rewrites it — only a strictly newer
+   * local change wins.
+   */
+  private async applyStamped(key: 'currentTask' | 'settings', data: unknown, updatedAt: number): Promise<void> {
+    const row = await this.db.kv.get(key);
+    const value = row?.value;
+    const stored = typeof value === 'object' && value !== null && 'updatedAt' in value
+      ? (value as { updatedAt: number }).updatedAt
+      : 0;
+    if (updatedAt >= stored) await this.db.kv.put({ key, value: { data, updatedAt } });
   }
 
   /** Generic device-local kv (delight state etc.) — not part of sync snapshots. */

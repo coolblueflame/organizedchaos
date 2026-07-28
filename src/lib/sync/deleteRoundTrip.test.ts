@@ -133,7 +133,11 @@ describe('deleting lists across two devices', () => {
     await phone.engine.syncNow();
     await pc.engine.syncNow();
 
-    console.log('after a post-delete edit elsewhere ->', 'pc:', pc.visible, 'phone:', phone.visible);
+    // Documented, not desired: with entity-level newest-wins there is no way to
+    // tell "I edited this deliberately" from "my copy was stale". Pinned so the
+    // day it changes is a decision rather than a surprise.
+    expect(pc.visible).toEqual(['a', 'b']);
+    expect(phone.visible).toEqual(['a', 'b']);
   });
 });
 
