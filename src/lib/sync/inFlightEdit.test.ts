@@ -103,6 +103,25 @@ describe('editing during an in-flight sync', () => {
     expect(remote?.deleted, 'a tombstone the other device will honour').toBe(true);
   });
 
+  it('a list stamped in the future can still be deleted', async () => {
+    // Ben's library, 2026-07-28: the import misread its source epoch, so 61 of
+    // 64 lists claimed an updatedAt in the 2050s. A tombstone stamped today
+    // lost the merge to a row claiming 2053, every time, and the list came
+    // straight back on the next sync.
+    const list = await repo.createList({ title: 'Imported from Things' });
+    const snap = await repo.loadSnapshot();
+    const future = Date.now() + 27 * 365 * 86_400_000;
+    await repo.replaceAll({ ...snap, lists: [{ ...list, updatedAt: future }] });
+    await engineWith().syncNow(); // the future-stamped copy reaches the remote
+
+    await repo.softDelete('lists', list.id);
+    await engineWith().syncNow();
+    await engineWith().syncNow(); // and does not crawl back on a later sync
+
+    expect((await repo.loadState()).lists, 'stays deleted locally').toEqual([]);
+    expect(client.lists().find((l) => l.id === list.id)?.deleted, 'and on the remote').toBe(true);
+  });
+
   it('a task completed mid-cycle stays completed', async () => {
     const list = await repo.createList({ title: 'Chores' });
     const task = await repo.createTask({
