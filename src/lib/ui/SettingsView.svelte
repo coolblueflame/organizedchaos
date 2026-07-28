@@ -106,6 +106,7 @@
     <h2>backup & data</h2>
     <button data-testid="settings-export" onclick={exportBackup} class="with-glyph"><Glyph name="install" size={11} /> export everything as JSON</button>
     <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })} class="with-glyph"><Glyph name="upload" size={11} /> import from Things</button>
+    <button data-testid="settings-tags" onclick={() => navigate({ name: 'tags' })}>manage tags</button>
     <p class="hint">device storage:
       {#if app.persistentStorage === 'granted'}persistent ✓ (the browser won't evict your data)
       {:else if app.persistentStorage === 'denied'}best-effort — install to the home screen to lock it in

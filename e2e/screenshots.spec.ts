@@ -34,11 +34,11 @@ test('capture app screens', async ({ page }) => {
   };
 
   await addTask('fix the leaky faucet', async () => {
-    await page.getByTestId('priority-high').click();
-    await page.getByTestId('new-tag').click();
-    await page.getByTestId('new-tag-input').fill('diy');
-    await page.getByTestId('new-tag-save').click();
-    await page.getByTestId('task-estimate-input').fill('2');
+    await page.getByTestId('priority-high').last().click();
+    await page.getByTestId('new-tag').last().click();
+    await page.getByTestId('new-tag-input').last().fill('diy');
+    await page.getByTestId('new-tag-save').last().click();
+    await page.getByTestId('task-estimate-input').last().fill('2');
   });
   await addTask('water the plants', async () => {
     await page.getByTestId('task-recur-row').click();
@@ -50,8 +50,8 @@ test('capture app screens', async ({ page }) => {
     const d = new Date();
     d.setDate(d.getDate() + 2);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    await page.getByTestId('task-deadline-input').fill(key);
-    await page.getByTestId('task-estimate-input').fill('4');
+    await page.getByTestId('task-deadline-input').last().fill(key);
+    await page.getByTestId('task-estimate-input').last().fill('4');
   });
   await page.screenshot({ path: 'screenshots/02-list.png', fullPage: true });
   await page.getByTestId('back').click();
@@ -81,4 +81,16 @@ test('capture app screens', async ({ page }) => {
   await page.getByTestId('stats-estimate').waitFor();
   await page.waitForTimeout(400); // let charts paint
   await page.screenshot({ path: 'screenshots/04-stats.png', fullPage: true });
+
+  // Tag housekeeping, with a duplicate spelling to show that section too.
+  await page.goto('./');
+  await page.getByTestId(/^list-row-/).first().click();
+  await addTask('paint the shed', async () => {
+    await page.getByTestId('new-tag').last().click();
+    await page.getByTestId('new-tag-input').last().fill('DIY');
+    await page.getByTestId('new-tag-save').last().click();
+  });
+  await page.goto('./#/tags');
+  await page.getByTestId(/^tag-row-/).first().waitFor();
+  await page.screenshot({ path: 'screenshots/05-tags.png', fullPage: true });
 });

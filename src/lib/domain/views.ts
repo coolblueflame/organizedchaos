@@ -106,7 +106,11 @@ export function groupByTag(tasks: Task[], tags: Tag[], settings: Settings, now: 
     const bucket = open.filter((t) => t.tagIds.includes(tg.id)).sort(sub);
     if (bucket.length) groups.push({ key: tg.id, label: tg.name, tasks: bucket });
   }
-  const untagged = open.filter((t) => t.tagIds.length === 0).sort(sub);
+  // "No LIVE tags", not "no tag ids": deleting a tag leaves its id behind on
+  // the tasks that wore it, and a task whose only tag was deleted belongs here
+  // rather than falling out of the view entirely.
+  const live = new Set(liveTags.map((t) => t.id));
+  const untagged = open.filter((t) => !t.tagIds.some((id) => live.has(id))).sort(sub);
   if (untagged.length) groups.push({ key: 'untagged', label: 'Untagged', tasks: untagged });
   return groups;
 }

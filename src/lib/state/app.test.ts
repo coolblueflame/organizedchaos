@@ -769,3 +769,105 @@ describe('deleting and restoring never duplicates a row', () => {
     expect(store.state.lists.filter((l) => l.id === list.id)).toHaveLength(1);
   });
 });
+
+describe('tag housekeeping', () => {
+  async function tagged(name: string, taskNames: string[]) {
+    const tag = await store.addTag(name, 0);
+    const list = store.state.lists[0] ?? (await store.addList('Stuff'));
+    for (const n of taskNames) {
+      const task = await store.addTask(list.id);
+      await store.patchTask(task.id, { name: n, tagIds: [tag.id] });
+    }
+    return tag;
+  }
+
+  it('renames a tag without disturbing the tasks wearing it', async () => {
+    const tag = await tagged('erands', ['post office']);
+    await store.renameTag(tag.id, 'errands');
+    expect(store.state.tags[0]!.name).toBe('errands');
+    expect(store.state.tasks[0]!.tagIds).toEqual([tag.id]);
+    expect((await persisted()).tags[0]!.name).toBe('errands');
+  });
+
+  it('ignores a rename to nothing', async () => {
+    const tag = await tagged('keep me', []);
+    await store.renameTag(tag.id, '   ');
+    expect(store.state.tags[0]!.name).toBe('keep me');
+  });
+
+  it('deleting a tag hides it everywhere, and undo brings it back', async () => {
+    const tag = await tagged('junk', ['a task']);
+    await store.removeTag(tag.id);
+    expect(store.state.tags).toEqual([]);
+    expect((await persisted()).tags).toEqual([]);
+
+    await undoStack.undo();
+    expect(store.state.tags.map((t) => t.name)).toEqual(['junk']);
+    expect((await persisted()).tags).toHaveLength(1);
+  });
+
+  it('a deleted tag leaves the task alone, so undo re-labels it automatically', async () => {
+    // Deliberate: the id stays on the task and every reader ignores what it
+    // cannot resolve. It is what makes deleting a heavily-used tag instant.
+    const tag = await tagged('junk', ['a task']);
+    await store.removeTag(tag.id);
+    expect(store.state.tasks[0]!.tagIds, 'untouched').toEqual([tag.id]);
+    await undoStack.undo();
+    expect(store.state.tasks[0]!.tagIds).toEqual([tag.id]);
+  });
+
+  it('deletes a batch of tags under a single undo', async () => {
+    const a = await tagged('one', []);
+    const b = await tagged('two', []);
+    await store.removeTags([a.id, b.id]);
+    expect(store.state.tags).toEqual([]);
+    await undoStack.undo();
+    expect(store.state.tags).toHaveLength(2);
+  });
+
+  it('merging moves every task onto the surviving tag', async () => {
+    const keep = await tagged('work', ['report']);
+    const dupe = await tagged('Work', ['emails', 'standup']);
+    const moved = await store.mergeTags(dupe.id, keep.id);
+
+    expect(moved).toBe(2);
+    expect(store.state.tags.map((t) => t.name)).toEqual(['work']);
+    for (const task of store.state.tasks) expect(task.tagIds).toEqual([keep.id]);
+    expect((await persisted()).tasks.every((t) => t.tagIds.includes(keep.id))).toBe(true);
+  });
+
+  it('merging a tag a task already wears does not double it up', async () => {
+    const keep = await tagged('work', []);
+    const dupe = await tagged('Work', []);
+    const list = store.state.lists[0]!;
+    const both = await store.addTask(list.id);
+    await store.patchTask(both.id, { name: 'wears both', tagIds: [keep.id, dupe.id] });
+
+    await store.mergeTags(dupe.id, keep.id);
+    expect(store.state.tasks.find((t) => t.id === both.id)!.tagIds).toEqual([keep.id]);
+  });
+
+  it('undoing a merge restores the exact tag sets, not an approximation', async () => {
+    const keep = await tagged('work', []);
+    const dupe = await tagged('Work', []);
+    const list = store.state.lists[0]!;
+    const onlyDupe = await store.addTask(list.id);
+    await store.patchTask(onlyDupe.id, { name: 'only dupe', tagIds: [dupe.id] });
+    const both = await store.addTask(list.id);
+    await store.patchTask(both.id, { name: 'both', tagIds: [keep.id, dupe.id] });
+
+    await store.mergeTags(dupe.id, keep.id);
+    await undoStack.undo();
+
+    expect(store.state.tags).toHaveLength(2);
+    expect(store.state.tasks.find((t) => t.id === onlyDupe.id)!.tagIds).toEqual([dupe.id]);
+    expect(store.state.tasks.find((t) => t.id === both.id)!.tagIds).toEqual([keep.id, dupe.id]);
+  });
+
+  it('refuses to merge a tag into itself or into one that is gone', async () => {
+    const tag = await tagged('solo', ['x']);
+    expect(await store.mergeTags(tag.id, tag.id)).toBe(0);
+    expect(await store.mergeTags(tag.id, 'nope')).toBe(0);
+    expect(store.state.tags).toHaveLength(1);
+  });
+});

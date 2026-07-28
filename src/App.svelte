@@ -41,6 +41,7 @@
   import ImportView from './lib/ui/ImportView.svelte';
   import StatsView from './lib/ui/StatsView.svelte';
   import SearchView from './lib/ui/SearchView.svelte';
+  import TagsView from './lib/ui/TagsView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import InstallHowTo from './lib/ui/InstallHowTo.svelte';
   import { install } from './lib/ui/install.svelte';
@@ -106,6 +107,8 @@
     <StatsView />
   {:else if r.name === 'search'}
     <SearchView />
+  {:else if r.name === 'tags'}
+    <TagsView />
   {:else}
     <Home />
   {/if}

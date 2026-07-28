@@ -42,6 +42,10 @@
     <h1>{titles[mode]}</h1>
     <button class="sub" data-testid="sort-subsort" onclick={cycleSubSort}
       title="order within each group">↳ {SUB_SORT_LABELS[subSort]}</button>
+    {#if mode === 'tag'}
+      <button class="sub" data-testid="sort-manage-tags"
+        onclick={() => navigate({ name: 'tags' })}>manage</button>
+    {/if}
   </header>
 
   <GroupedTasks groups={sortedGroups} {mode} showList bind:editingTaskId />

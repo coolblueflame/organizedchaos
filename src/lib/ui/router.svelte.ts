@@ -18,7 +18,8 @@ export type Route =
   | { name: 'settings' }
   | { name: 'import' }
   | { name: 'stats' }
-  | { name: 'search' };
+  | { name: 'search' }
+  | { name: 'tags' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -34,6 +35,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'import') return { name: 'import' };
   if (parts[0] === 'stats') return { name: 'stats' };
   if (parts[0] === 'search') return { name: 'search' };
+  if (parts[0] === 'tags') return { name: 'tags' };
   return { name: 'home' };
 }
 
@@ -50,6 +52,7 @@ function toHash(r: Route): string {
     case 'import': return '#/import';
     case 'stats': return '#/stats';
     case 'search': return '#/search';
+    case 'tags': return '#/tags';
   }
 }
 

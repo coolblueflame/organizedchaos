@@ -905,6 +905,109 @@ export class AppStore {
     this.requestSync();
     return tag;
   }
+
+  private async patchTag(id: string, patch: Partial<Tag>): Promise<void> {
+    await this.repo.updateTag(id, patch);
+    const tag = this.state.tags.find((t) => t.id === id);
+    if (tag) Object.assign(tag, patch, { updatedAt: Date.now() });
+    this.requestSync();
+  }
+
+  /** Renaming re-labels every task wearing it — the tag id never changes. */
+  async renameTag(id: string, name: string): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await this.patchTag(id, { name: trimmed });
+  }
+
+  async recolorTag(id: string, colorIndex: number): Promise<void> {
+    await this.patchTag(id, { colorIndex });
+  }
+
+  /**
+   * Tombstone a tag WITHOUT rewriting the tasks that wear it.
+   *
+   * Those ids are left dangling on purpose. Every reader resolves a tag id
+   * against the live tag list and skips what it cannot find, so a dangling id
+   * is inert — and leaving it means deleting a tag costs one write instead of
+   * one per task, which on a library this size is the difference between
+   * instant and a visible stall. It also makes undo exact: put the tag back
+   * and every task that wore it is wearing it again.
+   */
+  async removeTag(id: string): Promise<void> {
+    const tag = this.state.tags.find((t) => t.id === id);
+    await this.repo.softDelete('tags', id);
+    this.state.tags = this.state.tags.filter((t) => t.id !== id);
+    this.requestSync();
+    this.pushUndo(`Deleted tag "${tag?.name || 'tag'}"`, () => this.restoreTag(id, tag));
+  }
+
+  private async restoreTag(id: string, trashed: Tag | undefined): Promise<void> {
+    await this.repo.updateTag(id, { deleted: false });
+    const existing = this.state.tags.find((t) => t.id === id);
+    if (existing) existing.deleted = false;
+    else if (trashed) {
+      trashed.deleted = false;
+      this.state.tags.push(trashed);
+    }
+    this.requestSync();
+  }
+
+  /**
+   * Delete several tags under ONE undo entry — the point of a "clear out the
+   * unused ones" button is that changing your mind is a single tap, not N.
+   */
+  async removeTags(ids: string[]): Promise<void> {
+    const trashed = ids
+      .map((id) => this.state.tags.find((t) => t.id === id))
+      .filter((t): t is Tag => t !== undefined);
+    if (trashed.length === 0) return;
+    for (const tag of trashed) await this.repo.softDelete('tags', tag.id);
+    const gone = new Set(trashed.map((t) => t.id));
+    this.state.tags = this.state.tags.filter((t) => !gone.has(t.id));
+    this.requestSync();
+    const label = trashed.length === 1
+      ? `Deleted tag "${trashed[0]!.name}"`
+      : `Deleted ${trashed.length} tags`;
+    this.pushUndo(label, async () => {
+      for (const tag of trashed) await this.restoreTag(tag.id, tag);
+    });
+  }
+
+  /**
+   * Fold `sourceId` into `targetId`: everything wearing the source ends up
+   * wearing the target, and the source is tombstoned.
+   *
+   * Unlike a plain delete this HAS to rewrite the tasks — the whole point is
+   * that the association survives, and it can only survive under the surviving
+   * id. Undo restores each task's exact previous tag set rather than stripping
+   * the target, so merging a tag a task already had is reversible too.
+   */
+  async mergeTags(sourceId: string, targetId: string): Promise<number> {
+    if (sourceId === targetId) return 0;
+    const source = this.state.tags.find((t) => t.id === sourceId);
+    const target = this.state.tags.find((t) => t.id === targetId);
+    if (!source || !target) return 0;
+
+    const affected = this.state.tasks
+      .filter((t) => t.tagIds.includes(sourceId))
+      .map((t) => ({ id: t.id, before: [...t.tagIds] }));
+
+    for (const { id, before } of affected) {
+      const next = before.filter((tagId) => tagId !== sourceId);
+      if (!next.includes(targetId)) next.push(targetId);
+      await this.patchTask(id, { tagIds: next });
+    }
+    await this.repo.softDelete('tags', sourceId);
+    this.state.tags = this.state.tags.filter((t) => t.id !== sourceId);
+    this.requestSync();
+
+    this.pushUndo(`Merged "${source.name}" into "${target.name}"`, async () => {
+      for (const { id, before } of affected) await this.patchTask(id, { tagIds: before });
+      await this.restoreTag(sourceId, source);
+    });
+    return affected.length;
+  }
 }
 
 /** Module singleton the UI imports; tests construct their own instances. */
