@@ -588,6 +588,41 @@ describe('AppStore', () => {
     expect((await persisted()).tasks).toHaveLength(1);
   });
 
+  it('importThings: everything you made by hand survives untouched', async () => {
+    // The question anyone asks before a big import: does this ADD, or replace?
+    // It adds. Matching is by Things UUID, and hand-made rows have none, so
+    // they can never be matched and never be overwritten.
+    const myList = await store.addList('My Own List');
+    const myTask = await store.addTask(myList.id);
+    await store.patchTask(myTask.id, { name: 'entered by hand', priority: 'high' });
+    await store.acceptTask(myTask.id); // and it stays the current task
+
+    await store.importThings({
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'From Things', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [],
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'imported', notes: '',
+        priority: 'medium' as const, tagIds: [], inProgress: false,
+        createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      templates: [],
+      review: [],
+      counts: { lists: 1, tags: 0, openTasks: 1, completedTasks: 0, templates: 0 },
+    });
+
+    const mine = store.state.tasks.find((t) => t.id === myTask.id);
+    expect(mine, 'the hand-made task is still there').toBeDefined();
+    expect(mine!.name).toBe('entered by hand');
+    expect(mine!.priority).toBe('high');
+    expect(store.state.lists.find((l) => l.id === myList.id)?.title).toBe('My Own List');
+    expect(store.state.currentTask?.taskId, 'and is still the current task').toBe(myTask.id);
+    // Both worlds now coexist.
+    expect(store.state.tasks).toHaveLength(2);
+    expect(store.state.lists).toHaveLength(2);
+    // Survives a SECOND import too — no duplicates, still no collateral damage.
+    expect((await persisted()).tasks.find((t) => t.id === myTask.id)?.name).toBe('entered by hand');
+  });
+
   it('importThings: re-import never clobbers a newer local edit', async () => {
     const mapped = {
       lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
