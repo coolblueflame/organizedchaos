@@ -329,3 +329,88 @@ test('a long list renders a page at a time instead of all at once', async ({ pag
   await page.getByTestId('rows-more').scrollIntoViewIfNeeded();
   await expect.poll(() => rows.count(), { timeout: 5000 }).toBeGreaterThan(first);
 });
+
+test('tagging a whole selection at once, undoably', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Batch');
+  await addTask(page, 'one');
+  await addTask(page, 'two');
+
+  // A tag to apply — made on the first task, then taken back off it, so both
+  // tasks start untagged and the bulk control is the only thing that tags them.
+  const first = page.getByTestId(/^task-row-/).filter({ hasText: 'one' }).first();
+  const firstId = (await first.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`select-${firstId}`).click(); // selectable without opening
+  await page.getByTestId('bulk-clear').click();
+
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const tx = open.result.transaction('tags', 'readwrite');
+        tx.objectStore('tags').put({
+          id: 'batch-tag', name: 'errands', colorIndex: 3,
+          createdAt: 0, updatedAt: 1, deleted: false,
+        });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.reload();
+
+  await page.getByTestId('select-group-medium').click();
+  await expect(page.getByTestId('bulk-bar')).toContainText('2 selected');
+  await page.getByTestId('bulk-tag').selectOption({ label: '+ errands' });
+
+  // Both rows now carry it, and one undo takes it off both.
+  await expect(page.getByTestId('undo-toast')).toContainText('Tagged 2 tasks');
+  await page.goto('./#/sort/tag');
+  await page.reload();
+  await expect(page.getByTestId('group-batch-tag')).toBeVisible();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
+});
+
+test('a daily ritual is the top pick inside its window and leaves no backlog', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Life');
+  await addTask(page, 'file the accounts'); // ordinary work to compete with
+  await addTask(page, 'eat lunch');
+
+  // Make lunch a ritual for a window that is open right now.
+  const row = page.getByTestId(/^task-row-/).filter({ hasText: 'eat lunch' }).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByText('eat lunch', { exact: true }).click(); // expand the row
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await expect(page.getByTestId('task-ritual-row')).toContainText('every day');
+  await page.getByTestId('task-collapse').click();
+  await expect(page.getByTestId(`ritual-mark-${id}`)).toBeVisible();
+
+  // It outranks the ordinary task even though its own priority is medium.
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('eat lunch');
+
+  // Doing it takes it out of the draw and records it — without removing the
+  // ritual itself, which has to be there again tomorrow.
+  await page.getByTestId('draw-accept').click();
+  await page.getByTestId('current-complete').click();
+  // The completion is deferred for its animation — wait for it to land.
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByText('eat lunch', { exact: true })).toBeVisible();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(`task-row-${id}`), 'the ritual is still on the list').toBeVisible();
+  await expect(page.getByTestId(`ritual-mark-${id}`)).toBeVisible();
+
+  // And the randomizer offers the ordinary work now, not lunch again.
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('file the accounts');
+});

@@ -81,6 +81,14 @@ export interface Task extends Base {
   inProgress: boolean;
   /** "Not Today" snooze — excludes from the randomizer pool ONLY, until this moment. */
   notTodayUntil?: number;
+  /**
+   * A daily ritual's window (see domain/ritual.ts). Present = this task is a
+   * standing daily thing rather than a one-off: it is never spawned, never
+   * accumulates, and only enters the draw inside its window.
+   */
+  ritual?: import('./schedule').HoursRule;
+  /** App-day key of the last time the ritual was done; absent = never. */
+  ritualDoneDay?: string;
   completedAt?: number;
   /** The RecurrenceTemplate this task was spawned from, if any. */
   recurrenceId?: string;

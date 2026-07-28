@@ -45,7 +45,8 @@ export function hasWindow(list: List): boolean {
   return hoursRules(list).length > 0;
 }
 
-function ruleActiveAt(rule: HoursRule, now: Date): boolean {
+/** Exported for rituals, which ask the same question about a task's window. */
+export function ruleActiveAt(rule: HoursRule, now: Date): boolean {
   if (rule.days.length === 0) return false;
   const from = toMinutes(rule.from);
   const to = toMinutes(rule.to);

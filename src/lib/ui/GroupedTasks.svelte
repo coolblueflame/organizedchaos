@@ -36,6 +36,7 @@
   /** Both start blank so picking the value you want always fires a change. */
   let bulkPriority = $state<Priority | ''>('');
   let bulkList = $state('');
+  let bulkTag = $state('');
   let deleteArmed = $state(false);
 
   const selectionMode = $derived(selected.length > 0);
@@ -106,12 +107,13 @@
     await runBulk('delete');
   }
 
-  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority', value?: string) {
+  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag', value?: string) {
     const ids = [...selected];
     selected = [];
     // Reset the pickers, or re-choosing the same value next time is a no-op.
     bulkPriority = '';
     bulkList = '';
+    bulkTag = '';
     deleteArmed = false;
     await app.bulkApply(ids, action, value);
     haptic('success');
@@ -170,20 +172,41 @@
     hoverKey = el?.closest<HTMLElement>('[data-group-key]')?.dataset.groupKey ?? null;
   }
 
+  /**
+   * Everything the current drag is carrying. Dragging a row that is part of a
+   * selection takes the whole selection with it — otherwise selecting a batch
+   * and then dragging it silently moves one task and leaves the rest behind,
+   * which reads as the drag having failed.
+   */
+  const dragPayload = $derived.by(() => {
+    if (!dragging) return [];
+    if (!selected.includes(dragging.id)) return [dragging];
+    return selected
+      .map((id) => groups.flatMap((g) => g.tasks).find((t) => t.id === id))
+      .filter((t): t is Task => t !== undefined);
+  });
+
   async function onPointerUp() {
-    const task = dragging;
+    const carried = dragPayload;
     const key = hoverKey;
     candidate = null;
     origin = null;
     dragging = null;
     hoverKey = null;
-    if (!task || !key || !mode) return;
+    if (carried.length === 0 || !key || !mode) return;
 
     const tagName = app.state.tags.find((t) => t.id === key)?.name;
-    const change = regroupPatch(task, mode, key, tagName);
-    if (!change) return;
-    await app.patchTask(task.id, change.patch);
-    await app.markReviewed(task.id);
+    let moved = 0;
+    for (const task of carried) {
+      const change = regroupPatch(task, mode, key, tagName);
+      if (!change) continue; // already in that group — nothing to do
+      await app.patchTask(task.id, change.patch);
+      await app.markReviewed(task.id);
+      moved += 1;
+    }
+    if (moved === 0) return;
+    // A batch that has just landed somewhere is done being a batch.
+    if (carried.length > 1) selected = [];
     haptic('success');
     app.fireEgg('taskDragged');
   }
@@ -202,7 +225,7 @@
       {group.label}
       {#if dragging && hoverKey === group.key}<span class="drop-hint">drop to move here</span>{/if}
       <button class="pick-group" data-testid="select-group-{group.key}"
-        onclick={() => selectGroup(group)} title="select all in this group"><Glyph name="box-all" size={12} /></button>
+        onclick={() => selectGroup(group)} title="select all in this group"><Glyph name="box-all" size={17} /></button>
     </h2>
     {#each tasks as task (group.key + task.id)}
       <!-- Presentational drag wrapper; the row inside keeps all the semantics. -->
@@ -214,7 +237,7 @@
         onpointerdown={(e) => onPointerDown(e, task)}>
         <button class="pick" class:on={selected.includes(task.id)}
           data-testid="select-{task.id}" onclick={() => toggleSelect(task.id)}
-          aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-checked' : 'box'} size={12} /></button>
+          aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-checked' : 'box'} size={15} /></button>
         {#if mode}
           <button class="grip" data-testid="drag-{task.id}" aria-label="drag to regroup"
             onpointerdown={(e) => onPointerDown(e, task, true)}>
@@ -242,7 +265,11 @@
 
 {#if dragging}
   <div class="ghost" style="left: {pointerX}px; top: {pointerY}px">
-    {dragging.name || 'untitled'}
+    {#if dragPayload.length > 1}
+      {dragPayload.length} tasks
+    {:else}
+      {dragging.name || 'untitled'}
+    {/if}
   </div>
 {/if}
 
@@ -254,6 +281,11 @@
       onchange={() => bulkPriority && void runBulk('priority', bulkPriority)}>
       <option value="">→ priority…</option>
       {#each [...PRIORITIES].reverse() as p (p)}<option value={p}>→ {p}</option>{/each}
+    </select>
+    <select data-testid="bulk-tag" bind:value={bulkTag}
+      onchange={() => bulkTag && void runBulk('tag', bulkTag)}>
+      <option value="">+ tag…</option>
+      {#each app.state.tags as t (t.id)}<option value={t.id}>+ {t.name}</option>{/each}
     </select>
     <select data-testid="bulk-move" bind:value={bulkList}
       onchange={() => bulkList && void runBulk('move', bulkList)}>

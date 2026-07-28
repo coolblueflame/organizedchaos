@@ -20,6 +20,7 @@
   import { describeWindow, isListActiveAt, tasksBlockedByHours } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
   import { blockLifts } from '../domain/blocking';
+  import { ritualExclusions, withRitualLifts } from '../domain/ritual';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
@@ -88,7 +89,7 @@
       ? app.state.lists.filter((l) => !omittedLists.includes(l.id)).map((l) => l.id)
       : undefined,
     tagIds: filterTags,
-    excludeIds: [...notNow, ...blockedByHours],
+    excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue],
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
   });
@@ -141,8 +142,22 @@
   const projectTiers = $derived(
     projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
   );
+  /**
+   * Daily rituals that are not due right now — done today, or outside their
+   * window. Excluded rather than de-prioritised: "eat lunch" at 4pm is not a
+   * low-priority suggestion, it is not a suggestion.
+   */
+  const ritualsNotDue = $derived(
+    ritualExclusions(app.state.tasks, app.state.settings, new Date()),
+  );
+
   /** Blockers inherit the urgency of whatever is waiting on them (§blocking). */
-  const lifts = $derived(blockLifts(app.state.tasks, app.state.settings, new Date()));
+  const lifts = $derived(
+    withRitualLifts(
+      blockLifts(app.state.tasks, app.state.settings, new Date()),
+      app.state.tasks, app.state.settings, new Date(),
+    ),
+  );
 
   function redraw() {
     drawn = drawTask(

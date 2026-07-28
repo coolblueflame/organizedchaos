@@ -7,10 +7,11 @@ import {
   DEFAULT_SETTINGS,
   type List, type RecurrenceMode, type RecurrenceTemplate, type SortMode, type Tag, type Task,
 } from '../domain/types';
-import { nextRolloverTs } from '../domain/time';
+import { appDayKey, nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
+import { ritualExclusions, withRitualLifts } from '../domain/ritual';
 import { reorderPatches } from '../domain/listOrder';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
@@ -398,13 +399,13 @@ export class AppStore {
    */
   async bulkApply(
     taskIds: string[],
-    action: 'complete' | 'delete' | 'move' | 'priority',
+    action: 'complete' | 'delete' | 'move' | 'priority' | 'tag',
     value?: string,
   ): Promise<void> {
     const before = taskIds
       .map((id) => this.state.tasks.find((t) => t.id === id))
       .filter((t): t is Task => t !== undefined)
-      .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority }));
+      .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority, tagIds: [...t.tagIds] }));
     if (before.length === 0) return;
 
     // Collect each item's real inverse as we go. For completions that means
@@ -429,6 +430,14 @@ export class AppStore {
       } else if (action === 'priority' && value) {
         await this.patchTask(snap.id, { priority: value as Task['priority'] });
         inverse.push(() => this.patchTask(snap.id, { priority: snap.priority }));
+      } else if (action === 'tag' && value) {
+        // Adding, never replacing — the point is to label a batch, not to wipe
+        // whatever labels its members already carry. A task that already has it
+        // is skipped so the undo puts back exactly what was there.
+        if (!snap.tagIds.includes(value)) {
+          await this.patchTask(snap.id, { tagIds: [...snap.tagIds, value] });
+          inverse.push(() => this.patchTask(snap.id, { tagIds: snap.tagIds }));
+        }
       }
     }
     if (inverse.length === 0) return;
@@ -436,8 +445,12 @@ export class AppStore {
     const verb = action === 'complete' ? 'Completed'
       : action === 'delete' ? 'Deleted'
       : action === 'move' ? 'Moved'
+      : action === 'tag' ? 'Tagged'
       : 'Re-prioritised';
-    this.pushUndo(`${verb} ${before.length} task${before.length === 1 ? '' : 's'}`, async () => {
+    // `inverse` counts what actually changed — tagging skips tasks that already
+    // wore it, and the toast should not claim to have touched them.
+    const touched = action === 'tag' ? inverse.length : before.length;
+    this.pushUndo(`${verb} ${touched} task${touched === 1 ? '' : 's'}`, async () => {
       // Reverse order, so overlapping effects unwind the way they were applied.
       for (const run of [...inverse].reverse()) await run();
     });
@@ -475,6 +488,67 @@ export class AppStore {
   }
 
   /**
+   * Finishing a daily ritual (see domain/ritual.ts).
+   *
+   * The ritual row itself is never completed — completing it would take it off
+   * the list, and it has to be there again tomorrow. Instead the day is stamped
+   * on it, and a completed copy is written for the record, so the thing you did
+   * shows up in today's wins and in your history like any other finished task.
+   * That copy is an ordinary task: it carries no window, so it never becomes a
+   * ritual itself.
+   */
+  private async completeRitual(task: Task, opts: { bulk?: boolean } = {}): Promise<void> {
+    const day = appDayKey(new Date(), this.state.settings.rolloverHour);
+    if (task.ritualDoneDay === day) return; // already done today; nothing owed
+
+    // Time counts the same way it does anywhere else: only a stretch that was
+    // actually being tracked when it finished. It belongs to the record, not to
+    // the ritual, which is about to start tomorrow from nothing.
+    const finishedAt = Date.now();
+    const tracked = task.inProgress && task.startedAt !== undefined
+      ? (task.activeAccumulatedMs ?? 0) + (finishedAt - task.startedAt)
+      : undefined;
+    const wasInProgress = task.inProgress;
+    const priorStartedAt = task.startedAt;
+    const priorAccumulated = task.activeAccumulatedMs;
+
+    const record = await this.repo.createTask({
+      listId: task.listId,
+      name: task.name,
+      notes: task.notes,
+      priority: task.priority,
+      tagIds: [...task.tagIds],
+      inProgress: false,
+      completedAt: finishedAt,
+      ...(tracked !== undefined ? { activeMs: tracked } : {}),
+    });
+    this.state.tasks.push(record);
+    // Accepting a ritual makes it current and in-progress like anything else,
+    // and finishing it has to put that down — otherwise it sits there flagged
+    // as started, with a clock running, until tomorrow.
+    await this.patchTask(task.id, {
+      ritualDoneDay: day,
+      inProgress: false,
+      startedAt: undefined,
+      activeAccumulatedMs: undefined,
+    });
+
+    this.pushUndo(`Completed "${task.name || 'task'}"`, async () => {
+      await this.removeTask(record.id, { silent: true });
+      await this.patchTask(task.id, {
+        ritualDoneDay: task.ritualDoneDay,
+        inProgress: wasInProgress,
+        startedAt: priorStartedAt,
+        activeAccumulatedMs: priorAccumulated,
+      });
+    });
+
+    if (this.state.currentTask?.taskId === task.id) await this.clearCurrent();
+    this.fireEgg('taskCompleted');
+    if (!opts.bulk && this.state.settings.autoSelectNext) await this.drawNext();
+  }
+
+  /**
    * `bulk` marks a completion that is one item in a multi-select sweep. It
    * suppresses the auto-select draw: rolling a fresh task in the middle of a
    * batch picks from tasks the batch is still working through, leaves an
@@ -483,6 +557,7 @@ export class AppStore {
    */
   async completeTask(id: string, opts: { bulk?: boolean } = {}): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
+    if (task?.ritual) return this.completeRitual(task, opts);
     const wasCurrent = this.state.currentTask?.taskId === id;
     // Snapshot enough to put things back exactly as they were.
     const before = task
@@ -583,14 +658,27 @@ export class AppStore {
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
     }
     // Auto-select (2026-07-26 request): finishing THE current task rolls the next one.
-    if (wasCurrent && !opts.bulk && this.state.settings.autoSelectNext) {
-      const next = drawTask(
-        this.state.tasks, this.state.settings, new Date(), Math.random, undefined, undefined,
-        blockLifts(this.state.tasks, this.state.settings, new Date()),
-      );
-      if (next) await this.acceptTask(next.id);
-    }
+    if (wasCurrent && !opts.bulk && this.state.settings.autoSelectNext) await this.drawNext();
 
+  }
+
+  /**
+   * Roll the next task on the user's behalf. Shared so every automatic draw
+   * applies the same rules the randomizer screen does — in particular a ritual
+   * outside its window must never be handed to you, and one inside its window
+   * should be handed to you first.
+   */
+  private async drawNext(): Promise<void> {
+    const now = new Date();
+    const next = drawTask(
+      this.state.tasks, this.state.settings, now, Math.random,
+      { excludeIds: ritualExclusions(this.state.tasks, this.state.settings, now) },
+      undefined,
+      withRitualLifts(
+        blockLifts(this.state.tasks, this.state.settings, now), this.state.tasks, this.state.settings, now,
+      ),
+    );
+    if (next) await this.acceptTask(next.id);
   }
 
   async uncompleteTask(id: string): Promise<void> {

@@ -13,6 +13,7 @@
   import { tagColor } from './tagColors';
   import TaskEditor from './TaskEditor.svelte';
   import Glyph from './Glyph.svelte';
+  import { describeRitual, ritualState } from '../domain/ritual';
   import { motionOk } from './fx/particles';
   import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
@@ -48,6 +49,10 @@
     }).length,
   );
   const blocked = $derived(blockerCount > 0);
+  /* Recomputed per render rather than on a clock: a ritual crossing into its
+     window mid-stare is not worth a ticking timer, and every navigation or edit
+     re-renders anyway. */
+  const ritual = $derived(ritualState(task, new Date(), app.state.settings.rolloverHour));
   /** A page marker so you can see there's detail worth expanding for. */
   const hasNotes = $derived(task.notes.trim().length > 0);
   const listTitle = $derived(app.state.lists.find((l) => l.id === task.listId)?.title);
@@ -232,6 +237,15 @@
               title="waiting on {blockerCount} unfinished task{blockerCount === 1 ? '' : 's'} — the randomizer will skip it" />
           </span>
         {/if}
+        {#if task.ritual && !completedMode}
+          <span class="mark" class:ritual-due={ritual === 'due'} class:ritual-done={ritual === 'done'}
+            data-testid="ritual-mark-{task.id}">
+            <Glyph name="period" size={11}
+              title={ritual === 'done' ? `done today · ${describeRitual(task.ritual)}`
+                : ritual === 'due' ? `due now · ${describeRitual(task.ritual)}`
+                : `daily · ${describeRitual(task.ritual)}`} />
+          </span>
+        {/if}
         {#if !completedMode && task.timeboxMinutes}
           <span class="mark" data-testid="timeboxed-{task.id}">
             <Glyph name="timebox" size={11}
@@ -289,6 +303,8 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   .restore:hover { color: var(--acc-cyan); }
+  .mark.ritual-due { color: var(--acc-magenta); }
+  .mark.ritual-done { color: var(--acc-green); }
   .body {
     flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none;
     color: var(--text); font-size: 0.9rem; padding: 10px 0; cursor: pointer;

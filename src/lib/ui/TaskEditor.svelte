@@ -4,7 +4,10 @@
   Text fields save on debounce + blur; discrete fields save immediately.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { app } from '../state/app.svelte';
+  import { describeRitual } from '../domain/ritual';
+  import { ALL_DAYS } from '../domain/schedule';
   import { navigate } from './router.svelte';
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
@@ -91,6 +94,40 @@
 
   // ── recurrence ─────────────────────────────────────────────────────────
   let recurOpen = $state(false);
+
+  // ── daily ritual ──────────────────────────────────────────────────────────
+  const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  let ritualOpen = $state(false);
+  let ritualFrom = $state('12:00');
+  let ritualTo = $state('14:00');
+  let ritualDays = $state<number[]>([...ALL_DAYS]);
+
+  // Seed the form from the task each time it opens, not reactively: editing the
+  // fields must not be fought by the value they came from.
+  $effect(() => {
+    if (!ritualOpen) return;
+    const existing = untrack(() => task.ritual);
+    if (existing) {
+      ritualFrom = existing.from;
+      ritualTo = existing.to;
+      ritualDays = [...existing.days];
+    }
+  });
+
+  async function saveRitual() {
+    if (ritualDays.length === 0 || ritualFrom === ritualTo) { ritualOpen = false; return; }
+    await app.patchTask(task.id, {
+      ritual: { days: [...ritualDays].sort((a, b) => a - b), from: ritualFrom, to: ritualTo },
+    });
+    touched();
+    ritualOpen = false;
+  }
+
+  async function removeRitual() {
+    await app.patchTask(task.id, { ritual: undefined, ritualDoneDay: undefined });
+    ritualOpen = false;
+  }
+
   const template = $derived(task.recurrenceId
     ? app.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted)
     : undefined);
@@ -174,6 +211,46 @@
       onclick={() => (recurOpen = true)}>
       {#if template}↻ {describeRecurrence(template.mode, template.deadlineOffsetDays)}{#if template.paused}&nbsp;(paused){/if}
       {:else}↻ make recurring{/if}
+    </button>
+  {/if}
+
+  <!--
+    A daily ritual sits next to recurrence on purpose: they are the two ways a
+    task repeats, and the difference between them is the thing a user has to
+    understand. Recurrence spawns copies and accumulates; a ritual does neither.
+  -->
+  {#if ritualOpen}
+    <div class="ritual-editor">
+      <div class="ritual-row">
+        <label><span>from</span>
+          <input type="time" data-testid="ritual-from" bind:value={ritualFrom} /></label>
+        <label><span>until</span>
+          <input type="time" data-testid="ritual-to" bind:value={ritualTo} /></label>
+      </div>
+      <div class="days">
+        {#each DAY_LABELS as label, i (i)}
+          <button class="day" class:on={ritualDays.includes(i)} data-testid="ritual-day-{i}"
+            onclick={() => (ritualDays = ritualDays.includes(i)
+              ? ritualDays.filter((d) => d !== i) : [...ritualDays, i])}>{label}</button>
+        {/each}
+      </div>
+      <p class="ritual-note">
+        Inside this window it becomes the randomizer's top pick until it's done.
+        Miss a day and nothing piles up — it just comes round again tomorrow.
+      </p>
+      <div class="ritual-actions">
+        <button data-testid="ritual-save" onclick={saveRitual}>save</button>
+        <button data-testid="ritual-cancel" onclick={() => (ritualOpen = false)}>cancel</button>
+        {#if task.ritual}
+          <button class="drop" data-testid="ritual-remove" onclick={removeRitual}>remove</button>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <button class="repeat-row" class:linked={!!task.ritual} data-testid="task-ritual-row"
+      onclick={() => (ritualOpen = true)}>
+      {#if task.ritual}⧗ daily · {describeRitual(task.ritual)}
+      {:else}⧗ make it a daily ritual{/if}
     </button>
   {/if}
 
@@ -263,6 +340,32 @@
   }
   .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
+  .ritual-editor {
+    display: flex; flex-direction: column; gap: 8px;
+    border: 1px solid var(--acc-cyan); border-radius: 6px; padding: 10px;
+  }
+  .ritual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ritual-row label { display: flex; flex-direction: column; gap: 4px; }
+  .ritual-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .ritual-row input {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
+    color-scheme: dark; width: 100%;
+  }
+  .days { display: flex; gap: 4px; }
+  .day {
+    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 6px 0; cursor: pointer;
+  }
+  .day.on { color: var(--acc-green); border-color: var(--acc-green); }
+  .ritual-note { color: var(--dim); font-size: 0.72rem; line-height: 1.5; margin: 0; }
+  .ritual-actions { display: flex; gap: 8px; }
+  .ritual-actions button {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 5px 12px; cursor: pointer;
+  }
+  .ritual-actions .drop { color: var(--acc-magenta); margin-left: auto; }
   .flow-row { display: flex; gap: 8px; }
   .flow {
     flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
