@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveWithin, reorderPatches, sortLists } from './listOrder';
+import { moveAcross, moveWithin, reorderPatches, sameGrouping, sortLists } from './listOrder';
 import type { List } from './types';
 
 const list = (id: string, order?: number): List => ({
@@ -59,5 +59,46 @@ describe('moveWithin', () => {
     expect(moveWithin(['a', 'b'], 'a', 99)).toEqual(['b', 'a']);
     expect(moveWithin(['a', 'b'], 'a', -5)).toEqual(['a', 'b']);
     expect(moveWithin(['a', 'b'], 'zz', 0)).toEqual(['a', 'b']);
+  });
+});
+
+describe('moveAcross', () => {
+  const groups = () => new Map([
+    ['', ['inbox']],
+    ['Work', ['w1', 'w2', 'w3']],
+    ['Home', ['h1', 'h2']],
+  ]);
+
+  it('moves a list into another group at the requested position', () => {
+    const out = moveAcross(groups(), 'w2', 'Home', 1);
+    expect(out.get('Work')).toEqual(['w1', 'w3']);
+    expect(out.get('Home')).toEqual(['h1', 'w2', 'h2']);
+  });
+
+  it('still reorders within a group', () => {
+    const out = moveAcross(groups(), 'w3', 'Work', 0);
+    expect(out.get('Work')).toEqual(['w3', 'w1', 'w2']);
+  });
+
+  it('can empty a group out entirely', () => {
+    const out = moveAcross(groups(), 'inbox', 'Work', 3);
+    expect(out.get('')).toEqual([]);
+    expect(out.get('Work')).toEqual(['w1', 'w2', 'w3', 'inbox']);
+  });
+
+  it('clamps an index past the end rather than losing the row', () => {
+    const out = moveAcross(groups(), 'h1', 'Work', 99);
+    expect(out.get('Work')).toEqual(['w1', 'w2', 'w3', 'h1']);
+  });
+
+  it('leaves the input alone', () => {
+    const before = groups();
+    moveAcross(before, 'w1', 'Home', 0);
+    expect(before.get('Work')).toEqual(['w1', 'w2', 'w3']);
+  });
+
+  it('sameGrouping tells an idle drag from a real one', () => {
+    expect(sameGrouping(groups(), groups())).toBe(true);
+    expect(sameGrouping(groups(), moveAcross(groups(), 'w1', 'Home', 0))).toBe(false);
   });
 });

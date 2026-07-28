@@ -10,8 +10,10 @@
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
-  import { moveWithin, sortLists } from '../domain/listOrder';
+  import { moveAcross, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import ListSettings from './ListSettings.svelte';
+  import { flip } from 'svelte/animate';
+  import { motionOk } from './fx/particles';
   import type { List } from '../domain/types';
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
@@ -74,49 +76,79 @@
   // ── drag to reorder (2026-07-28 request) ─────────────────────────────────
   // Same contract as the task rows: the drag starts on a grip that carries
   // `touch-action: none`, so a finger anywhere else on the row still scrolls.
-  let dragId = $state<string | null>(null);
-  /** Live sequence while dragging, so the list reflows under your finger. */
-  let dragOrder = $state<string[] | null>(null);
-  let dragGroup: string | null = null;
+  /* Rows slide apart to show where a drag will land — the indicator IS the
+     motion, so with reduced motion they simply jump. */
+  const rowFlipMs = motionOk() ? 180 : 0;
 
-  function startListDrag(e: PointerEvent, group: string, ids: string[], id: string) {
+  let dragId = $state<string | null>(null);
+  /**
+   * Live grouping while dragging, so the screen reflows under your finger —
+   * every group, not just the one you started in, because dragging a row past
+   * a heading is how a list changes group.
+   */
+  let dragGroups = $state<GroupedIds | null>(null);
+  /** The group the finger is currently over, for highlighting the destination. */
+  let dragOverGroup = $state<string | null>(null);
+  let dragStartGroup: string | null = null;
+
+  function startListDrag(e: PointerEvent, group: string, id: string) {
     e.preventDefault();
     dragId = id;
-    dragGroup = group;
-    dragOrder = [...ids];
+    dragStartGroup = group;
+    dragOverGroup = group;
+    dragGroups = new Map(grouped.map(([g, lists]) => [g, lists.map((l) => l.id)]));
   }
 
   function onListDragMove(e: PointerEvent) {
-    if (!dragId || !dragOrder) return;
-    // Where does the pointer sit relative to the rows currently on screen?
+    if (!dragId || !dragGroups) return;
+
+    // Which group is the finger in? The heading directly above it wins, so
+    // dragging past a heading moves the list into that section.
+    let group = grouped[0]?.[0] ?? '';
+    for (const el of document.querySelectorAll<HTMLElement>('[data-group-start]')) {
+      if (e.clientY >= el.getBoundingClientRect().top) group = el.dataset.groupStart!;
+    }
+
+    // And where among that group's rows? Compare against each row's midpoint so
+    // the list opens up as soon as the finger passes half way, rather than
+    // waiting until it is fully over the next row.
     const rows = [...document.querySelectorAll<HTMLElement>('[data-list-row]')]
-      .filter((el) => dragOrder!.includes(el.dataset.listRow!));
-    let target = dragOrder.indexOf(dragId);
-    rows.forEach((el, i) => {
-      const box = el.getBoundingClientRect();
-      if (e.clientY > box.top && e.clientY < box.bottom) target = i;
-    });
-    const next = moveWithin(dragOrder, dragId, target);
-    if (next.join() !== dragOrder.join()) {
-      dragOrder = next;
+      .filter((el) => el.dataset.listGroup === group && el.dataset.listRow !== dragId);
+    let index = rows.length;
+    for (let i = 0; i < rows.length; i += 1) {
+      const box = rows[i]!.getBoundingClientRect();
+      if (e.clientY < box.top + box.height / 2) { index = i; break; }
+    }
+
+    const next = moveAcross(dragGroups, dragId, group, index);
+    dragOverGroup = group;
+    if (!sameGrouping(next, dragGroups)) {
+      dragGroups = next;
       haptic('tick');
     }
   }
 
   async function endListDrag() {
-    const ids = dragOrder;
-    const moved = dragId !== null;
+    const groups = dragGroups;
+    const id = dragId;
+    const from = dragStartGroup;
     dragId = null;
-    dragOrder = null;
-    dragGroup = null;
-    if (moved && ids) await app.reorderLists(ids);
+    dragGroups = null;
+    dragOverGroup = null;
+    dragStartGroup = null;
+    if (!groups || !id) return;
+    // Changing section is a property of the list; the sequence is everything else.
+    const landedIn = [...groups.entries()].find(([, ids]) => ids.includes(id))?.[0] ?? from;
+    if (landedIn !== from) await app.moveListToGroup(id, landedIn ?? '');
+    for (const ids of groups.values()) await app.reorderLists(ids);
   }
 
-  /** The sequence to render for a group: the live drag order if it owns one. */
+  /** The sequence to render for a group: the live drag order if there is one. */
   const shownLists = (group: string, lists: List[]): List[] => {
-    if (dragGroup !== group || !dragOrder) return lists;
-    const byId = new Map(lists.map((l) => [l.id, l]));
-    return dragOrder.map((id) => byId.get(id)).filter((l): l is List => l !== undefined);
+    const order = dragGroups?.get(group);
+    if (!order) return lists;
+    const byId = new Map(app.state.lists.map((l) => [l.id, l]));
+    return order.map((id) => byId.get(id)).filter((l): l is List => l !== undefined);
   };
 
   async function createList() {
@@ -175,14 +207,17 @@
   <section class="lists">
     {#each grouped as [group, lists] (group)}
       {#if group !== ''}
-        <h2 class="group-header">{group}</h2>
+        <h2 class="group-header" class:drop-target={dragId !== null && dragOverGroup === group}
+          data-group-start={group}>{group}</h2>
+      {:else}
+        <div class="group-anchor" data-group-start=""></div>
       {/if}
-      {@const ids = shownLists(group, lists).map((x) => x.id)}
       {#each shownLists(group, lists) as l (l.id)}
         <div class="list-row" class:lifted={dragId === l.id}
-          data-list-row={l.id} data-testid="list-row-{l.id}">
+          animate:flip={{ duration: rowFlipMs }}
+          data-list-row={l.id} data-list-group={group} data-testid="list-row-{l.id}">
           <button class="list-grip" data-testid="list-drag-{l.id}" aria-label="drag to reorder"
-            onpointerdown={(e) => startListDrag(e, group, ids, l.id)}>
+            onpointerdown={(e) => startListDrag(e, group, l.id)}>
             <Glyph name="grip" size={12} />
           </button>
           <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
@@ -286,7 +321,18 @@
   }
   .list-grip:hover { color: var(--dim); }
   .list-grip:active { cursor: grabbing; }
-  .list-row.lifted { opacity: 0.5; }
+  /*
+    The dragged row stays fully visible and looks lifted; the gap it leaves is
+    made by its neighbours sliding, which is what tells you where it will land.
+  */
+  .list-row.lifted {
+    border-color: var(--acc-green);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.45);
+    transform: scale(1.02);
+    position: relative; z-index: 2;
+  }
+  .group-header.drop-target { color: var(--acc-green); }
+  .group-anchor { height: 0; }
   .list-row { position: relative; display: flex; align-items: stretch; }
   .list-main {
     flex: 1; display: flex; justify-content: space-between; align-items: center;

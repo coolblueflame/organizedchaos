@@ -305,6 +305,15 @@ export class AppStore {
   }
 
   /**
+   * Re-file a list under a different heading — what dragging it past one means.
+   * The empty string is the ungrouped bucket at the top, and is stored as no
+   * group at all rather than as a group literally named "".
+   */
+  async moveListToGroup(id: string, group: string): Promise<void> {
+    await this.patchList(id, { areaGroup: group.trim() || undefined });
+  }
+
+  /**
    * Commit a new home-screen order for one group. `orderedIds` is the whole
    * group in its new sequence; only rows whose position actually changed are
    * written, so an aborted drag costs nothing and syncs nothing.

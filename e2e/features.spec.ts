@@ -291,3 +291,41 @@ test('lists can be dragged into a new order, and it sticks', async ({ page }) =>
   await page.getByTestId('new-list').waitFor();
   expect(await titles()).toEqual(['Gamma', 'Alpha', 'Beta']);
 });
+
+test('a long list renders a page at a time instead of all at once', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Bulk'); // lands inside the new list
+
+  // 150 tasks written straight to storage — this is about rendering, and
+  // typing them through the UI would take longer than the test is worth.
+  await page.evaluate(async () => {
+    const listId = location.hash.split('/')[2] ?? '';
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        for (let i = 0; i < 150; i += 1) {
+          store.put({
+            id: `bulk${i}`, listId, name: `bulk task ${i}`, notes: '', tagIds: [],
+            priority: 'medium', inProgress: false, createdAt: 0, updatedAt: 0, deleted: false,
+          });
+        }
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  // A hash change alone would not re-read the database — the app is already up.
+  await page.goto('./#/sort/priority');
+  await page.reload();
+
+  const rows = page.getByTestId(/^task-row-/);
+  await expect(page.getByTestId('rows-more')).toBeAttached();
+  const first = await rows.count();
+  expect(first, 'a screenful, not the whole library').toBeLessThan(150);
+
+  // Reaching the end pulls in the next page.
+  await page.getByTestId('rows-more').scrollIntoViewIfNeeded();
+  await expect.poll(() => rows.count(), { timeout: 5000 }).toBeGreaterThan(first);
+});

@@ -55,3 +55,33 @@ export function moveWithin(ids: string[], id: string, toIndex: number): string[]
   out.splice(Math.max(0, Math.min(toIndex, out.length)), 0, id);
   return out;
 }
+
+/** Group name → the ids in that group, in display order. '' is the ungrouped bucket. */
+export type GroupedIds = Map<string, string[]>;
+
+/**
+ * Move a list to `toIndex` within `toGroup`, taking it out of wherever it was.
+ *
+ * Dragging across a heading is how a list changes group, so this has to handle
+ * the source and destination being different buckets — including the case where
+ * a list is the last one in its group and leaves an empty heading behind.
+ * Returns fresh arrays; the input is untouched.
+ */
+export function moveAcross(groups: GroupedIds, id: string, toGroup: string, toIndex: number): GroupedIds {
+  const out: GroupedIds = new Map();
+  for (const [group, ids] of groups) out.set(group, ids.filter((x) => x !== id));
+  const destination = out.get(toGroup) ?? [];
+  destination.splice(Math.max(0, Math.min(toIndex, destination.length)), 0, id);
+  out.set(toGroup, destination);
+  return out;
+}
+
+/** Flatten to `group → ids` for comparison — two drags landing the same way are equal. */
+export function sameGrouping(a: GroupedIds, b: GroupedIds): boolean {
+  if (a.size !== b.size) return false;
+  for (const [group, ids] of a) {
+    const other = b.get(group);
+    if (!other || other.length !== ids.length || other.some((id, i) => id !== ids[i])) return false;
+  }
+  return true;
+}

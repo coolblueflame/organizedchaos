@@ -40,6 +40,45 @@
 
   const selectionMode = $derived(selected.length > 0);
 
+  // ── how many rows actually reach the DOM ─────────────────────────────────
+  /*
+    A sorted view of a real library is thousands of tasks, and every row is a
+    live component — building them all is what made opening "by priority" stall
+    for a beat before the screen appeared. So rows arrive a page at a time as
+    you scroll down.
+
+    The budget only ever grows. Resetting it when `groups` changes would be
+    wrong: that happens on every edit, and it would haul you back to the top of
+    a list you had scrolled halfway down. Leaving a view unmounts the component,
+    which is what puts it back to one page.
+  */
+  const PAGE = 60;
+  let budget = $state(PAGE);
+
+  const total = $derived(groups.reduce((n, g) => n + g.tasks.length, 0));
+
+  /** Groups trimmed to the budget, in order, each still knowing its full self. */
+  const shown = $derived.by(() => {
+    let left = budget;
+    const out: Array<{ group: TaskGroup; tasks: Task[] }> = [];
+    for (const group of groups) {
+      if (left <= 0) break;
+      out.push({ group, tasks: group.tasks.slice(0, left) });
+      left -= Math.min(left, group.tasks.length);
+    }
+    return out;
+  });
+  const rendered = $derived(shown.reduce((n, g) => n + g.tasks.length, 0));
+
+  /** Grow the budget when the end of the rendered rows comes into view. */
+  function revealOnApproach(node: HTMLElement) {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) budget += PAGE;
+    }, { rootMargin: '600px' }); // load before the gap is visible, not after
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
   function toggleSelect(id: string) {
     selected = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
   }
@@ -153,7 +192,7 @@
 <svelte:window onpointermove={onPointerMove} onpointerup={() => void onPointerUp()} />
 
 <section class="groups" class:dragging={dragging !== null}>
-  {#each groups as group (group.key)}
+  {#each shown as { group, tasks } (group.key)}
     <h2
       class="group-header"
       class:drop-target={dragging !== null}
@@ -165,7 +204,7 @@
       <button class="pick-group" data-testid="select-group-{group.key}"
         onclick={() => selectGroup(group)} title="select all in this group"><Glyph name="box-all" size={12} /></button>
     </h2>
-    {#each group.tasks as task (group.key + task.id)}
+    {#each tasks as task (group.key + task.id)}
       <!-- Presentational drag wrapper; the row inside keeps all the semantics. -->
       <div
         class="draggable"
@@ -194,6 +233,11 @@
       </div>
     {/each}
   {/each}
+  {#if rendered < total}
+    <div class="more" use:revealOnApproach data-testid="rows-more">
+      {rendered} of {total} — scroll for more
+    </div>
+  {/if}
 </section>
 
 {#if dragging}
@@ -228,6 +272,10 @@
   .pick, .pick-group { display: inline-flex; align-items: center; justify-content: center; }
 
   .groups { display: flex; flex-direction: column; gap: 6px; }
+  .more {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    text-align: center; padding: 14px 0 4px;
+  }
   .groups.dragging { user-select: none; touch-action: none; }
   .group-header {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;

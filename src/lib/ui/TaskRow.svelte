@@ -180,7 +180,11 @@
   data-editing-root={expanded ? '' : undefined} data-testid="task-row-{task.id}">
   <div class="line">
     {#if completedMode}
-      <button class="restore" data-testid="task-restore-{task.id}" onclick={restore} aria-label="restore">↩</button>
+      <!-- A ticked box you untick: the same gesture that completed it, in reverse. -->
+      <button class="restore" data-testid="task-restore-{task.id}" onclick={restore}
+        aria-label="mark as not done" title="mark as not done">
+        <Glyph name="box-checked" size={15} />
+      </button>
     {:else}
       <button class="check" class:completing bind:this={checkEl}
         data-testid="task-check-{task.id}" onclick={complete} aria-label="complete"></button>
@@ -281,8 +285,10 @@
   }
   .restore {
     width: 24px; height: 24px; flex: none; background: none; border: none;
-    color: var(--acc-green); font-size: 1rem; cursor: pointer; padding: 0;
+    color: var(--acc-green); cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
   }
+  .restore:hover { color: var(--acc-cyan); }
   .body {
     flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none;
     color: var(--text); font-size: 0.9rem; padding: 10px 0; cursor: pointer;
