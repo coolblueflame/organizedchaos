@@ -118,6 +118,9 @@ export function mergeDelight(
     triviaTotal: Math.max(a.triviaTotal, b.triviaTotal),
     streakDays: streakSide.streakDays,
     lastCompletionDay: streakSide.lastCompletionDay,
+    // The record is a plain maximum; a side that predates the field reports
+    // its current streak as the floor, so old builds can't erase the record.
+    bestStreakDays: Math.max(a.bestStreakDays ?? a.streakDays, b.bestStreakDays ?? b.streakDays),
   };
 }
 

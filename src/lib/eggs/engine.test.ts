@@ -243,3 +243,37 @@ describe('absorbing progress from another device', () => {
     expect(JSON.stringify(saved!.seen), 'pacing is per-device').toBe(pacingBefore);
   });
 });
+
+describe('the streak record', () => {
+  it('tracks the high-water mark and survives the streak breaking', async () => {
+    const e = makeEngine([0.99, 0.99, 0.99, 0.99]);
+    (e as unknown as { baseChance: Record<string, number> }).baseChance = { taskCompleted: 0.5 } as never;
+    await e.ready;
+    for (let day = 0; day < 3; day++) {
+      e.handle('taskCompleted', {});
+      clock += 24 * 3600_000;
+    }
+    expect(e.bestStreakDays).toBe(3);
+    clock += 4 * 24 * 3600_000; // the streak dies
+    e.handle('taskCompleted', {});
+    expect(e.streakDays, 'current resets').toBe(1);
+    expect(e.bestStreakDays, 'the record does not').toBe(3);
+  });
+
+  it('absorbs another device\'s record by maximum, with a floor for old builds', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 2, lastCompletionDay: '2026-07-20', bestStreakDays: 9,
+    });
+    expect(e.bestStreakDays).toBe(9);
+    // A build that predates the field reports only its current streak — that
+    // becomes the floor rather than wiping the record.
+    e.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 4, lastCompletionDay: '2026-07-25',
+    });
+    expect(e.bestStreakDays).toBe(9);
+  });
+});

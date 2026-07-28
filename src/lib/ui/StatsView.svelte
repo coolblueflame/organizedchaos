@@ -104,6 +104,13 @@
       </table>
     </details>
   </section>
+  {#if app.eggBestStreak >= 3}
+    <section class="panel streak-panel" data-testid="streak-panel">
+      <span class="streak-now"><Glyph name="flame" size={15} /> {app.eggStreak}-day streak</span>
+      <span class="streak-best">longest ever: {app.eggBestStreak} days</span>
+    </section>
+  {/if}
+
   <section class="panel">
     <div class="panel-head"><h2>list health (where to point the sweep)</h2></div>
     <table class="health" data-testid="list-health">
@@ -204,6 +211,12 @@
     padding: 8px 12px; cursor: pointer;
   }
   .h-sweep:hover { border-style: solid; }
+  .streak-panel { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+  .streak-now {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem;
+  }
+  .streak-best { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
   summary { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; cursor: pointer; }
   table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 0.75rem; }
   th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); color: var(--text); }

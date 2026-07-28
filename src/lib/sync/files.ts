@@ -40,6 +40,8 @@ export interface DelightProgress {
   streakDays: number;
   /** App-day key of the most recent completion — the streak's merge key. */
   lastCompletionDay: string;
+  /** High-water mark of the streak. Absent on remotes written before it existed. */
+  bestStreakDays?: number;
 }
 
 export interface RemoteSnapshot {

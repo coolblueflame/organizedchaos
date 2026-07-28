@@ -24,6 +24,7 @@ interface StoredDelight {
   trivia?: { correct: number; total: number };
   streakDays?: number;
   lastCompletionDay?: string;
+  bestStreakDays?: number;
   [key: string]: unknown;
 }
 
@@ -36,6 +37,7 @@ function storedToProgress(stored: StoredDelight): DelightProgress {
     triviaTotal: stored.trivia?.total ?? 0,
     streakDays: stored.streakDays ?? 0,
     lastCompletionDay: stored.lastCompletionDay ?? '',
+    bestStreakDays: Math.max(stored.bestStreakDays ?? 0, stored.streakDays ?? 0),
   };
 }
 
@@ -244,6 +246,7 @@ export class Repo {
             trivia: { correct: won.triviaCorrect, total: won.triviaTotal },
             streakDays: won.streakDays,
             lastCompletionDay: won.lastCompletionDay,
+            bestStreakDays: won.bestStreakDays ?? won.streakDays,
           },
         });
       }

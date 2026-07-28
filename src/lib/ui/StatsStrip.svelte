@@ -38,30 +38,46 @@
   });
 </script>
 
-<button class="strip" data-testid="stats-strip" onclick={() => navigate({ name: 'stats' })}>
-  {#each tiles as t, i (t.label)}
-    <span class="tile">
-      <span class="num">{shown[i]}</span>
-      <span class="label">{t.label}</span>
-    </span>
-  {/each}
+<!-- The streak lives in its OWN square (2026-07-28 request): squeezed inside
+     the strip it had nowhere to grow past one digit, and a streak deserves to
+     read as a thing you keep, not a sixth counter. -->
+<div class="row">
+  <button class="strip" data-testid="stats-strip" onclick={() => navigate({ name: 'stats' })}>
+    {#each tiles as t, i (t.label)}
+      <span class="tile">
+        <span class="num">{shown[i]}</span>
+        <span class="label">{t.label}</span>
+      </span>
+    {/each}
+  </button>
   {#if app.eggStreak >= 3}
-    <span class="flame" title="{app.eggStreak}-day streak"><Glyph name="flame" size={11} /><span class="flame-n">{app.eggStreak}</span></span>
+    <button class="streak" data-testid="streak-tile" onclick={() => navigate({ name: 'stats' })}
+      title="{app.eggStreak}-day streak · best {app.eggBestStreak}">
+      <Glyph name="flame" size={15} />
+      <span class="streak-n">{app.eggStreak}</span>
+      <span class="label">streak</span>
+    </button>
   {/if}
-</button>
+</div>
 
 <style>
-  .flame { display: inline-flex; align-items: center; gap: 2px; }
 
+  .row { display: flex; gap: 8px; margin-bottom: 14px; }
   .strip {
-    width: 100%; display: flex; justify-content: space-between; gap: 4px;
+    flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 4px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px 12px; margin-bottom: 14px; cursor: pointer;
+    padding: 10px 12px; cursor: pointer;
   }
   .strip:hover { background: var(--bg2); }
   .tile { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
   .num { color: var(--acc-green); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
   .label { color: var(--dim); font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
-  .flame { display: flex; flex-direction: column; align-items: center; font-size: 0.95rem; }
-  .flame-n { color: var(--acc-orange); font-family: var(--font-mono); font-size: 0.65rem; font-weight: 700; }
+  .streak {
+    flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px; min-width: 52px; padding: 6px 10px;
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--acc-cyan); cursor: pointer;
+  }
+  .streak:hover { background: var(--bg2); }
+  .streak-n { color: var(--acc-orange); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
 </style>

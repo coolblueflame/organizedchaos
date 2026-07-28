@@ -80,13 +80,15 @@ export interface EggState {
   presentedToday: number;
   lastCompletionDay: string;
   streakDays: number;
+  /** High-water mark of the streak — the record survives the streak breaking. */
+  bestStreakDays?: number;
 }
 
 /** Factory, not a constant — nested objects must never be shared across instances. */
 const freshState = (): EggState => ({
   seen: {}, presentedTodayBy: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
   lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
-  lastCompletionDay: '', streakDays: 0,
+  lastCompletionDay: '', streakDays: 0, bestStreakDays: 0,
 });
 
 export interface EngineDeps {
@@ -183,6 +185,7 @@ export class EggEngine {
   }
 
   get streakDays(): number { return this.state.streakDays; }
+  get bestStreakDays(): number { return Math.max(this.state.bestStreakDays ?? 0, this.state.streakDays); }
   get triviaStats(): { correct: number; total: number } { return { ...this.state.trivia }; }
   get unlocks(): string[] { return [...this.state.unlocks]; }
   get storyStage(): number { return this.state.storyStage; }
@@ -201,6 +204,7 @@ export class EggEngine {
     if (this.state.lastCompletionDay === day) return;
     const yesterday = appDayKey(new Date(this.now().getTime() - 24 * 3600_000), this.rolloverHour);
     this.state.streakDays = this.state.lastCompletionDay === yesterday ? this.state.streakDays + 1 : 1;
+    this.state.bestStreakDays = Math.max(this.state.bestStreakDays ?? 0, this.state.streakDays);
     this.state.lastCompletionDay = day;
   }
 
@@ -305,10 +309,11 @@ export class EggEngine {
     unlocks: string[]; storyStage: number;
     triviaCorrect: number; triviaTotal: number;
     streakDays: number; lastCompletionDay: string;
+    bestStreakDays?: number;
   }): boolean {
     const before = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
-      this.state.streakDays, this.state.lastCompletionDay,
+      this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
     ]);
     this.state.unlocks = [...new Set([...this.state.unlocks, ...progress.unlocks])].sort();
     this.state.storyStage = Math.max(this.state.storyStage, progress.storyStage);
@@ -324,9 +329,15 @@ export class EggEngine {
     } else if (progress.lastCompletionDay === this.state.lastCompletionDay) {
       this.state.streakDays = Math.max(this.state.streakDays, progress.streakDays);
     }
+    // The record is a plain maximum — an old device that never tracked it
+    // reports its CURRENT streak as the floor, so it can't zero the record.
+    this.state.bestStreakDays = Math.max(
+      this.state.bestStreakDays ?? 0, this.state.streakDays,
+      progress.bestStreakDays ?? progress.streakDays,
+    );
     const changed = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
-      this.state.streakDays, this.state.lastCompletionDay,
+      this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
     ]) !== before;
     if (changed) this.persist();
     return changed;

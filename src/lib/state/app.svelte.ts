@@ -56,6 +56,7 @@ export class AppStore {
   private pendingEggs: Array<{ event: EggEvent; extra: { screen?: string } }> = [];
   /** Reactive mirrors of delight state the UI cares about. */
   eggStreak = $state(0);
+  eggBestStreak = $state(0);
   eggUnlocks = $state<string[]>([]);
   eggTrivia = $state({ correct: 0, total: 0 });
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -116,6 +117,7 @@ export class AppStore {
   private syncEggMirrors(): void {
     if (!this.eggs) return;
     this.eggStreak = this.eggs.streakDays;
+    this.eggBestStreak = this.eggs.bestStreakDays;
     this.eggUnlocks = this.eggs.unlocks;
     this.eggTrivia = this.eggs.triviaStats;
   }
