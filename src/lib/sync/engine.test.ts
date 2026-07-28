@@ -138,7 +138,10 @@ describe('SyncEngine', () => {
     const engine = makeEngine();
     await engine.syncNow();
     expect(engine.status).toBe('idle');
-    expect(slept).toEqual([250, 750]); // one wait per retry, increasing
+    // One wait per retry, increasing. The waits are deliberately long: a
+    // large library takes seconds per cycle, and the old millisecond-scale
+    // budget expired while the other device was still mid-push.
+    expect(slept).toEqual([500, 1500]);
   });
 
   it('gives up after repeated conflicts with status error', async () => {
@@ -176,5 +179,84 @@ describe('SyncEngine', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(client.putCount).toBe(count); // exactly one coalesced cycle
     vi.useRealTimers();
+  });
+});
+
+describe('download caching', () => {
+  /** Counts every GET so the saving is measured, not asserted by eye. */
+  function countingEngine(cache: { value: Record<string, { sha: string; json: unknown }> }) {
+    const gets: string[] = [];
+    const engine = new SyncEngine({
+      client: {
+        listFiles: () => client.listFiles(),
+        getFile: (p) => { gets.push(p); return client.getFile(p); },
+        putFile: (p, j, s) => client.putFile(p, j, s),
+      },
+      loadLocal: async () => local,
+      saveLocal: async (s) => { local = s; },
+      debounceMs: 0,
+      sleep: async () => {},
+      loadCache: async () => cache.value,
+      saveCache: async (c) => { cache.value = c; },
+    });
+    return { engine, gets };
+  }
+
+  it('re-downloads nothing when the remote has not moved', async () => {
+    // Seed the remote first — a fresh repo has nothing to download, so a
+    // first-sync-fetches assertion against an empty one proves nothing.
+    local = snap({ tasks: [task({ priority: 'high', completedAt: 1_700_000_000_000 })] });
+    await makeEngine().syncNow();
+
+    const cache = { value: {} as Record<string, { sha: string; json: unknown }> };
+    const first = countingEngine(cache);
+    await first.engine.syncNow();
+    expect(first.gets.length, 'a cold cache must actually fetch').toBeGreaterThan(0);
+
+    // Nothing changed anywhere. A second sync should read the listing and stop.
+    const second = countingEngine(cache);
+    await second.engine.syncNow();
+    expect(second.gets, 'unchanged files must not be fetched again').toEqual([]);
+  });
+
+  it('fetches only the file that actually changed', async () => {
+    local = snap({ tasks: [task({ priority: 'high', completedAt: 1_700_000_000_000 })] });
+    await makeEngine().syncNow();
+    const cache = { value: {} as Record<string, { sha: string; json: unknown }> };
+    await countingEngine(cache).engine.syncNow();
+
+    // Another device rewrites just the active file.
+    client.externallyWrite('active.json', {
+      schema: 1, lists: [], tasks: [], tags: [], templates: [],
+      currentTask: null, currentTaskUpdatedAt: 0,
+      settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    });
+
+    const next = countingEngine(cache);
+    await next.engine.syncNow();
+    expect(next.gets, 'only the moved file').toEqual(['active.json']);
+  });
+
+  it('recognises its own push instead of downloading it straight back', async () => {
+    local = snap({ tasks: [task({ priority: 'high' })] });
+    const cache = { value: {} as Record<string, { sha: string; json: unknown }> };
+    await countingEngine(cache).engine.syncNow(); // pushes
+
+    local = snap({ tasks: [task({ priority: 'low', name: 'newer', updatedAt: 9_999 })] });
+    const after = countingEngine(cache);
+    await after.engine.syncNow(); // pushes again
+    expect(after.gets, 'our own writes are already known').toEqual([]);
+  });
+
+  it('drops cache entries for files that disappeared from the repo', async () => {
+    local = snap({ tasks: [task({ priority: 'high', completedAt: 1_700_000_000_000 })] });
+    await makeEngine().syncNow();
+    const cache = { value: {} as Record<string, { sha: string; json: unknown }> };
+    await countingEngine(cache).engine.syncNow();
+    expect(Object.keys(cache.value).length).toBeGreaterThan(1);
+
+    client.files.delete('meta.json');
+    await countingEngine(cache).engine.syncNow();
+    expect(Object.keys(cache.value)).not.toContain('meta.json');
   });
 });

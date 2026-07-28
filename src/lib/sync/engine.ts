@@ -25,7 +25,20 @@ export interface EngineDeps {
   now?: () => Date;
   /** Test seam for the retry backoff. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Device-local cache of already-downloaded files, keyed by path. Optional:
+   * without it the engine simply fetches everything every time, as before.
+   */
+  loadCache?: () => Promise<FileCache | null>;
+  saveCache?: (cache: FileCache) => Promise<void>;
 }
+
+/**
+ * What we last saw at each path. Git object ids are content hashes, so an
+ * unchanged sha is a guarantee — not a hint — that the bytes are unchanged,
+ * which makes skipping the download safe rather than merely optimistic.
+ */
+export type FileCache = Record<string, { sha: string; json: unknown }>;
 
 /**
  * Backoff between conflict retries. GitHub's Contents API is eventually
@@ -35,7 +48,14 @@ export interface EngineDeps {
  * retry waits a beat first. (A stale read can never lose data — the merge is
  * union + newest-wins — it only costs us a conflict.)
  */
-const RETRY_BACKOFF_MS = [250, 750, 1750];
+/*
+ * Waits scale up as well as out. The original 250/750/1750 assumed a cycle
+ * measured in milliseconds; with a large library a full cycle can run for
+ * many seconds, so the entire retry budget used to expire while the other
+ * device was still mid-push, and the sync gave up with "conflict would not
+ * settle" every time.
+ */
+const RETRY_BACKOFF_MS = [500, 1500, 4000, 9000];
 const MAX_CONFLICT_RETRIES = RETRY_BACKOFF_MS.length + 1;
 
 export class SyncEngine {
@@ -109,11 +129,29 @@ export class SyncEngine {
   /** Returns true if a sha conflict happened (caller retries with fresh remote). */
   private async cycleOnce(): Promise<boolean> {
     const entries = await this.deps.client.listFiles();
+    const cache: FileCache = (await this.deps.loadCache?.()) ?? {};
+    const nextCache: FileCache = {};
     const remoteFiles = new Map<string, RemoteFile>();
     for (const entry of entries.filter((f) => f.path.endsWith('.json'))) {
+      // The listing already told us the content hash. If it matches what we
+      // downloaded last time, the bytes cannot have changed, so re-fetching is
+      // pure waste — and with years of logbook that waste was the bulk of
+      // every sync (measured at ~10MB for a 25k-task library).
+      const cached = cache[entry.path];
+      if (cached && cached.sha === entry.sha) {
+        remoteFiles.set(entry.path, { json: cached.json, sha: entry.sha });
+        nextCache[entry.path] = cached;
+        continue;
+      }
       const file = await this.deps.client.getFile(entry.path);
-      if (file) remoteFiles.set(entry.path, file);
+      if (file) {
+        remoteFiles.set(entry.path, file);
+        nextCache[entry.path] = { sha: file.sha, json: file.json };
+      }
     }
+    // Paths absent from the listing are gone; letting them fall out of
+    // nextCache keeps the cache from growing forever.
+    await this.deps.saveCache?.(nextCache);
     const payloads: SyncFilePayloads = {};
     for (const [path, file] of remoteFiles) payloads[path] = file.json;
 
@@ -129,8 +167,12 @@ export class SyncEngine {
       for (const [path, payload] of Object.entries(desired)) {
         const existing = remoteFiles.get(path);
         if (existing && JSON.stringify(existing.json) === JSON.stringify(payload)) continue;
-        await this.deps.client.putFile(path, payload, existing?.sha);
+        const sha = await this.deps.client.putFile(path, payload, existing?.sha);
+        // Record what we just wrote, so the next cycle recognises our own push
+        // instead of downloading it straight back.
+        nextCache[path] = { sha, json: payload };
       }
+      await this.deps.saveCache?.(nextCache);
     } catch (e) {
       if (e instanceof ConflictError) return true;
       throw e;

@@ -12,7 +12,7 @@ import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../dom
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import { reorderPatches } from '../domain/listOrder';
-import { SyncEngine, type SyncStatus } from '../sync/engine';
+import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
 import type { MappedImport } from '../import/thingsMap';
@@ -204,6 +204,11 @@ export class AppStore {
     const engine = new SyncEngine({
       client: new GithubClient(cfg),
       loadLocal: () => this.repo.loadSnapshot(),
+      // Device-local: what this device last downloaded, so unchanged files are
+      // never fetched twice. Never synced — it describes a device's view, not
+      // the user's data.
+      loadCache: () => this.repo.getKv<FileCache>('syncFileCache'),
+      saveCache: (cache) => this.repo.setKv('syncFileCache', cache),
       saveLocal: async (snap) => {
         await this.repo.replaceAll(snap);
         await this.refreshFromDisk();
