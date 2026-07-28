@@ -109,3 +109,31 @@ describe.skipIf(!TOKEN)('a logbook bigger than the inline limit', () => {
     expect((back!.json as typeof payload).tasks[8_999]!.name).toBe(rows[8_999]!.name);
   }, 120_000);
 });
+
+describe.skipIf(!TOKEN)('the assumption the download cache rests on', () => {
+  const client = new GithubClient(CFG);
+
+  it('the sha in the root listing is the same sha getFile reports', async () => {
+    // Read-only against the real data repo. The cache skips a download when
+    // the listing's sha matches what it stored last time, so if those two ever
+    // disagreed it would serve stale content — worth checking against GitHub
+    // rather than trusting that they are "obviously" the same object id.
+    const entries = (await client.listFiles()).filter((e) => e.path.endsWith('.json'));
+    expect(entries.length, 'nothing to check — is the data repo empty?').toBeGreaterThan(0);
+
+    for (const entry of entries) {
+      const file = await client.getFile(entry.path);
+      expect(file, `${entry.path} listed but not fetchable`).not.toBeNull();
+      expect(file!.sha, `${entry.path}: listing sha vs file sha`).toBe(entry.sha);
+    }
+  }, 120_000);
+
+  it('a second read of the same sha returns identical content', async () => {
+    // Idempotence of the thing being cached.
+    const entries = (await client.listFiles()).filter((e) => e.path.endsWith('.json'));
+    const first = await client.getFile(entries[0]!.path);
+    const second = await client.getFile(entries[0]!.path);
+    expect(second!.sha).toBe(first!.sha);
+    expect(JSON.stringify(second!.json)).toBe(JSON.stringify(first!.json));
+  }, 120_000);
+});
