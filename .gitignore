@@ -4,3 +4,7 @@ test-results/
 playwright-report/
 screenshots/
 .DS_Store
+
+# Python bytecode from running the extraction tool locally
+__pycache__/
+*.pyc
