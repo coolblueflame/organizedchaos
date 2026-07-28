@@ -87,7 +87,17 @@ body {
   input[type='date'], input[type='time'], input[type='datetime-local'] {
     appearance: none;
     -webkit-appearance: none;
-    min-width: 0;
+    /*
+     * Bracketed from both sides on purpose. Without the native chrome an EMPTY
+     * date input has no content to size to, and Safari collapsed it to a stub
+     * until a date was typed in — the opposite failure to the one before it.
+     * The floor keeps an empty field the size of the date it will hold; the
+     * ceiling keeps a filled one inside its container. Whatever Safari decides
+     * to measure, it cannot escape either end.
+     */
+    display: block;
+    width: 100%;
+    min-width: 11ch;
     max-width: 100%;
   }
 }

@@ -197,15 +197,27 @@ test('the date field is sized by CSS, not by native chrome', async ({ page, brow
   const date = page.getByTestId('task-deadline-input');
   const styles = await date.evaluate((el) => {
     const cs = getComputedStyle(el);
-    return { appearance: cs.appearance, minWidth: cs.minWidth };
+    return { appearance: cs.appearance, minWidth: cs.minWidth, maxWidth: cs.maxWidth };
   });
   expect(styles.appearance, 'native chrome must be off on touch').toBe('none');
-  expect(styles.minWidth).toBe('0px');
+  // Bracketed from both sides: removing the chrome fixed the overflow and then
+  // collapsed an EMPTY field to a stub instead, so it needs a floor as well as
+  // a ceiling. Losing either bound reintroduces one of the two bugs.
+  expect(parseFloat(styles.minWidth), 'needs a floor so an empty field is usable')
+    .toBeGreaterThan(0);
+  expect(styles.maxWidth, 'needs a ceiling so a filled field cannot spill').toBe('100%');
 
-  // And it stays inside the editor it lives in.
-  const inside = await date.evaluate((el) => {
-    const editor = el.closest('.editor')!;
-    return el.getBoundingClientRect().right <= editor.getBoundingClientRect().right + 1;
+  // Empty, it should still be a normal-looking field next to its siblings.
+  const widths = await page.evaluate(() => {
+    const w = (sel: string) =>
+      document.querySelector(sel)!.getBoundingClientRect().width;
+    return {
+      date: w('[data-testid="task-deadline-input"]'),
+      estimate: w('[data-testid="task-estimate-input"]'),
+      editor: document.querySelector('.editor')!.getBoundingClientRect().width,
+    };
   });
-  expect(inside, 'the date field should not overflow the editor').toBe(true);
+  expect(widths.date, 'an empty date field should not be a stub')
+    .toBeGreaterThan(widths.estimate / 2);
+  expect(widths.date, 'and should not overflow its editor').toBeLessThanOrEqual(widths.editor);
 });

@@ -250,8 +250,11 @@
   .fields input {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
-    /* Lets the native date/time control shrink below its intrinsic width. */
-    color-scheme: dark; width: 100%; min-width: 0;
+    color-scheme: dark; width: 100%;
+    /* NB: no `min-width: 0` here. It used to be, to let the native date control
+       shrink — but it outranks the global date/time rule in app.css, which now
+       sets a deliberate floor so an empty field isn't a stub. That rule handles
+       both ends; this one must not quietly flatten the floor. */
   }
   .repeat-row {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
