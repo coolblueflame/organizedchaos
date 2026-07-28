@@ -25,6 +25,54 @@
   /** The last plain-patch verdict, so a mis-tap is one "put it back" away. */
   let lastPatch = $state<{ id: string; name: string; before: Partial<Task> } | null>(null);
 
+  /*
+    Re-filing support (2026-07-28 request): a reorganisation sweep moves card
+    after card out of a catch-all into new purpose-built lists, so the last
+    destination becomes a one-tap repeat button — pick "Wind-down" once, then
+    it's a single tap per card. "+ new list…" exists because the moment you
+    realise the right list doesn't exist yet is mid-sweep, and leaving to make
+    it would break exactly the flow this screen is for.
+  */
+  let lastDest = $state<{ id: string; title: string } | null>(null);
+  let moveSelect = $state('');
+  let creatingList = $state(false);
+  let newListTitle = $state('');
+
+  const destinations = $derived(
+    app.state.lists.filter((l) => l.archived !== true && l.id !== current?.listId),
+  );
+
+  async function moveTo(listId: string) {
+    if (!current) return;
+    const dest = app.state.lists.find((l) => l.id === listId);
+    if (!dest) return;
+    laterOpen = false;
+    const snapshot = { id: current.id, name: current.name };
+    const r = await app.applySweepVerdict(current.id, 'keep', { listId });
+    if (r) lastPatch = { ...snapshot, before: r.before };
+    lastDest = { id: dest.id, title: dest.title };
+    moveSelect = '';
+    decided += 1;
+  }
+
+  async function onMovePick(value: string) {
+    if (value === '__new__') {
+      creatingList = true;
+      moveSelect = '';
+      return;
+    }
+    if (value) await moveTo(value);
+  }
+
+  async function createAndMove() {
+    const title = newListTitle.trim();
+    creatingList = false;
+    newListTitle = '';
+    if (!title) return;
+    const list = await app.addList(title);
+    await moveTo(list.id);
+  }
+
   const listTitle = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '';
   const age = (t: Task) => {
     const days = Math.floor((Date.now() - t.createdAt) / 86_400_000);
@@ -112,6 +160,35 @@
             ✕ delete
           </button>
         </div>
+        <div class="row move-row">
+          {#if lastDest}
+            <button class="again" data-testid="sweep-move-again" onclick={() => void moveTo(lastDest!.id)}>
+              ↷ move to {lastDest.title}
+            </button>
+          {/if}
+          <select class="move" data-testid="sweep-move" bind:value={moveSelect}
+            onchange={(e) => void onMovePick(e.currentTarget.value)}>
+            <option value="">move to…</option>
+            {#each destinations as l (l.id)}
+              <option value={l.id}>{l.title}</option>
+            {/each}
+            <option value="__new__">+ new list…</option>
+          </select>
+        </div>
+        {#if creatingList}
+          <div class="row">
+            <!-- svelte-ignore a11y_autofocus -->
+            <input class="new-list" data-testid="sweep-new-list" autofocus
+              placeholder="new list name…" bind:value={newListTitle}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') void createAndMove();
+                if (e.key === 'Escape') { creatingList = false; newListTitle = ''; }
+              }} />
+            <button class="create" data-testid="sweep-new-list-go" onclick={() => void createAndMove()}>
+              create + move
+            </button>
+          </div>
+        {/if}
         {#if laterOpen}
           <div class="row snooze" data-testid="sweep-snooze-row">
             {#each SNOOZE_PRESETS as preset (preset.days)}
@@ -195,6 +272,21 @@
   .row button.armed { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .row .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
   .snooze button { color: var(--acc-cyan); }
+  .move-row .again {
+    flex: 2; color: var(--acc-cyan); border-color: var(--acc-cyan);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
+  }
+  .move-row .again:hover { background: var(--acc-cyan); color: var(--bg0); }
+  .move {
+    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem;
+    padding: 11px 6px; cursor: pointer; min-width: 0;
+  }
+  .new-list {
+    flex: 2; background: var(--bg2); border: 1px solid var(--acc-blue); border-radius: 8px;
+    color: var(--text); padding: 10px; font-size: 0.85rem; outline: none; min-width: 0;
+  }
+  .create { color: var(--acc-green) !important; }
 
   .putback {
     margin-top: 12px; width: 100%; background: none; border: 1px dashed var(--line);

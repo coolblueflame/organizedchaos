@@ -934,3 +934,22 @@ describe('sweep verdicts', () => {
     expect(t.needsReview).toBe(true);
   });
 });
+
+describe('sweep re-filing', () => {
+  it('moving is a keep: new list, flag cleared, exact revert', async () => {
+    const from = await store.addList('Catch-all');
+    const to = await store.addList('Wind-down');
+    const t = await store.addTask(from.id);
+    await store.patchTask(t.id, { name: 'evening thing' });
+
+    const r = await store.applySweepVerdict(t.id, 'keep', { listId: to.id });
+    const moved = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(moved.listId).toBe(to.id);
+    expect(moved.needsReview).toBe(false);
+
+    await store.revertSweepVerdict(t.id, r!.before);
+    const back = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(back.listId, 'revert returns it to the catch-all').toBe(from.id);
+    expect(back.needsReview).toBe(true);
+  });
+});

@@ -750,12 +750,13 @@ export class AppStore {
   async applySweepVerdict(
     id: string,
     verdict: SweepVerdict,
-    opts: { priority?: Task['priority']; snoozeDays?: number } = {},
+    opts: { priority?: Task['priority']; snoozeDays?: number; listId?: string } = {},
   ): Promise<{ before: Partial<Task> } | null> {
     const task = this.state.tasks.find((t) => t.id === id);
     if (!task) return null;
     const before: Partial<Task> = {
-      needsReview: task.needsReview, priority: task.priority, notTodayUntil: task.notTodayUntil,
+      needsReview: task.needsReview, priority: task.priority,
+      notTodayUntil: task.notTodayUntil, listId: task.listId,
     };
 
     if (verdict === 'delete') {
@@ -771,9 +772,12 @@ export class AppStore {
         needsReview: false,
       });
     } else {
+      // Re-filing into a better list IS a keep — deciding where something
+      // belongs is the whole review. One gesture moves and clears the flag.
       await this.patchTask(id, {
         needsReview: false,
         ...(opts.priority && opts.priority !== task.priority ? { priority: opts.priority } : {}),
+        ...(opts.listId && opts.listId !== task.listId ? { listId: opts.listId } : {}),
       });
     }
     this.fireEgg('sweepActed');

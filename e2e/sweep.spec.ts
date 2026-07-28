@@ -116,3 +116,36 @@ test('a snoozed task wakes from its editor', async ({ page }) => {
   await page.getByTestId('task-wake').click();
   await expect(page.getByTestId('task-wake')).toHaveCount(0);
 });
+
+test('re-filing mid-sweep: pick a list once, then one tap per card', async ({ page }) => {
+  await reset(page);
+  await seedBacklog(page, ['watch that movie', 'try that game', 'call the dentist']);
+
+  await page.goto('./#/sweep');
+
+  // First move: create the destination without leaving the sweep.
+  await expect(page.getByTestId('sweep-card')).toContainText('watch that movie');
+  await page.getByTestId('sweep-move').selectOption('+ new list…');
+  await page.getByTestId('sweep-new-list').fill('Wind-down');
+  await page.getByTestId('sweep-new-list-go').click();
+
+  // Second card: the destination is now a one-tap repeat.
+  await expect(page.getByTestId('sweep-card')).toContainText('try that game');
+  await expect(page.getByTestId('sweep-move-again')).toContainText('Wind-down');
+  await page.getByTestId('sweep-move-again').click();
+
+  // Third card stays put — an unrelated task keeps its ordinary verdicts.
+  await expect(page.getByTestId('sweep-card')).toContainText('call the dentist');
+  await page.getByTestId('sweep-keep').click();
+  await expect(page.getByTestId('sweep-clear')).toContainText('3 decisions');
+
+  // Both moved tasks live in the new list, reviewed; the dentist stayed home.
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Wind-down' }).first().click();
+  await expect(page.getByText('watch that movie', { exact: true })).toBeVisible();
+  await expect(page.getByText('try that game', { exact: true })).toBeVisible();
+  await expect(page.getByTestId(/^needs-review-/)).toHaveCount(0);
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Imported' }).first().click();
+  await expect(page.getByText('call the dentist', { exact: true })).toBeVisible();
+});
