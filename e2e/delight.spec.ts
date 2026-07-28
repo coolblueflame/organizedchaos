@@ -50,6 +50,11 @@ test('trivia records the score and shows in discoveries', async ({ page }) => {
   await page.getByTestId('trivia-choice-0').click(); // right or wrong — both record
   await page.getByTestId('trivia-close').click();
   await expect(page.getByTestId('delight-trivia')).toHaveCount(0);
+
+  // The score and the discoveries list live on the stats screen now — that is
+  // where wins are celebrated, rather than buried in settings.
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').click();
   await expect(page.getByText(/Quiz score: [01]\/1/)).toBeVisible();
   await expect(page.getByTestId('discoveries')).toContainText('???');
 });

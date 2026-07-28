@@ -3,6 +3,8 @@
   time-to-completion tile with the 1h-assumption note, backlog burden line.
 -->
 <script lang="ts">
+  import { UNLOCKS } from '../eggs/content/extras';
+  import Glyph from './Glyph.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import {
@@ -98,9 +100,33 @@
       </table>
     </details>
   </section>
+  <section class="panel">
+    <h2>discoveries</h2>
+    <p class="discoveries-hint">Things you've stumbled into. There are more.
+      {#if app.eggTrivia.total > 0}&nbsp;Quiz score: {app.eggTrivia.correct}/{app.eggTrivia.total}.{/if}
+    </p>
+    <ul class="discoveries" data-testid="discoveries">
+      {#each UNLOCKS as u (u.id)}
+        <li class:found={app.eggUnlocks.includes(u.id)}>
+          {#if app.eggUnlocks.includes(u.id)}<Glyph name="award" size={11} /> {u.label}
+          {:else}<Glyph name="locked" size={11} /> ??? <span class="disc-hint">({u.hint})</span>{/if}
+        </li>
+      {/each}
+    </ul>
+  </section>
 </main>
 
 <style>
+  /* StatsView had no .hint of its own, so the blurb inherited the default
+     paragraph size and towered over the panel it sits in. */
+  .discoveries-hint { color: var(--dim); font-size: 0.8rem; margin: 0; line-height: 1.5; }
+  .discoveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .discoveries li { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 0.82rem; }
+  /* Earned ones read as gold — the medal glyph inherits it via currentColor,
+     so the whole line lifts off the dim ??? rows around it. */
+  .discoveries li.found { color: var(--acc-yellow); font-weight: 600; }
+  .disc-hint { opacity: 0.6; font-size: 0.72rem; font-style: italic; }
+
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
