@@ -219,7 +219,7 @@
 
   <div class="footer-links">
     <button data-testid="inprogress-link" onclick={() => navigate({ name: 'inprogress' })}>
-      <Glyph name="play" size={10} /> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
+      <Glyph name="play" size={15} /> In Progress{#if inProgressCount > 0}&nbsp;({inProgressCount}){/if}
     </button>
     <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
       ↻ Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
@@ -228,7 +228,7 @@
       ✓ Completed
     </button>
     <button data-testid="settings-link" onclick={() => navigate({ name: 'settings' })}>
-      <Glyph name="settings" size={11} /> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
+      <Glyph name="settings" size={15} /> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
     </button>
   </div>
 </main>
@@ -264,7 +264,7 @@
     color: var(--dim); font-size: 0.85rem; padding: 10px 12px; cursor: text; text-align: left;
   }
   .search-bar:hover { border-color: var(--acc-blue); color: var(--text); }
-  .mag { font-size: 1.1rem; color: var(--acc-blue); }
+  .mag { font-size: 1.45rem; color: var(--acc-blue); line-height: 1; }
   .sort-row { display: flex; gap: 8px; margin-bottom: 20px; }
   .sort-row button {
     flex: 1; background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
@@ -354,8 +354,8 @@
   .footer-links { margin-top: 24px; display: flex; flex-direction: column; }
   .footer-links button {
     width: 100%; background: none; border: none;
-    color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
-    padding: 10px; cursor: pointer; text-align: left;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.95rem;
+    padding: 12px 10px; cursor: pointer; text-align: left;
   }
   .footer-links button:hover { color: var(--acc-green); }
   .sync-warn { color: var(--acc-orange); }

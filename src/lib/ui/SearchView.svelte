@@ -13,13 +13,27 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let editingTaskId = $state<string | null>(null);
 
+  /*
+    The box updates instantly; the SCAN trails it by a beat. Searching a large
+    library is a pass over every task, and running that between keystrokes meant
+    the second letter had to wait for the first one's scan to finish — typing
+    appeared to hang, then stopped registering entirely.
+  */
+  let scanned = $state(searchQuery.value);
+  $effect(() => {
+    const typed = searchQuery.value;
+    const timer = setTimeout(() => (scanned = typed), 120);
+    return () => clearTimeout(timer);
+  });
+
   const results = $derived(
-    searchTasks(app.state.tasks, searchQuery.value, app.state.settings, new Date()),
+    searchTasks(app.state.tasks, scanned, app.state.settings, new Date()),
   );
   const nothing = $derived(
-    searchQuery.value.trim().length > 0 &&
-    results.open.length === 0 && results.completed.length === 0,
+    scanned.trim().length > 0 && results.openTotal === 0 && results.completedTotal === 0,
   );
+  /** True while the box is ahead of the results, so the count can't read as final. */
+  const scanning = $derived(scanned !== searchQuery.value);
 
   $effect(() => {
     inputEl?.focus();
@@ -46,26 +60,36 @@
   </header>
 
   {#if results.open.length > 0}
-    <h2 class="section">to do <span class="count">{results.open.length}</span></h2>
+    <h2 class="section">to do <span class="count">{results.openTotal}</span></h2>
     <section class="rows">
       {#each results.open as task (task.id)}
         <TaskRow {task} showList expanded={editingTaskId === task.id}
           ontoggle={() => openTask(task.id)} />
       {/each}
     </section>
+    {#if results.openTotal > results.open.length}
+      <p class="more" data-testid="search-more">
+        showing the first {results.open.length} — keep typing to narrow it down
+      </p>
+    {/if}
   {/if}
 
   {#if results.completed.length > 0}
-    <h2 class="section done-header">done <span class="count">{results.completed.length}</span></h2>
+    <h2 class="section done-header">done <span class="count">{results.completedTotal}</span></h2>
     <section class="rows done" data-testid="search-completed">
       {#each results.completed as task (task.id)}
         <TaskRow {task} showList completedMode showCompletedAt ontoggle={() => {}} />
       {/each}
     </section>
+    {#if results.completedTotal > results.completed.length}
+      <p class="more">showing the first {results.completed.length} of {results.completedTotal}</p>
+    {/if}
   {/if}
 
-  {#if nothing}
-    <p class="empty" data-testid="search-empty">// nothing matches "{searchQuery.value.trim()}"</p>
+  {#if scanning && results.openTotal === 0 && results.completedTotal === 0}
+    <p class="empty">// searching…</p>
+  {:else if nothing}
+    <p class="empty" data-testid="search-empty">// nothing matches "{scanned.trim()}"</p>
   {:else if searchQuery.value.trim().length === 0}
     <p class="empty">// type to search names and notes across every list</p>
   {/if}
@@ -90,4 +114,8 @@
   .rows.done { opacity: 0.55; }
   .rows.done:hover { opacity: 0.8; }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 20px; }
+  .more {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    margin: 8px 2px 0; text-align: center;
+  }
 </style>

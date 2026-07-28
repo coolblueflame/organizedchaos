@@ -106,3 +106,44 @@ describe('mergeSnapshots — change flags', () => {
     expect(push.remoteChanged).toBe(true);
   });
 });
+
+describe('when both sides claim the same instant', () => {
+  const row = (over = {}) => ({
+    id: 'T1', listId: 'L1', name: 'x', notes: '', tagIds: [], priority: 'medium' as const,
+    inProgress: false, createdAt: 0, updatedAt: 5_000, deleted: false, ...over,
+  });
+  const snapOf = (tasks: object[]) => ({
+    lists: [], tasks: tasks as never, tags: [], templates: [],
+    currentTask: null, currentTaskUpdatedAt: 0,
+    settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+  });
+
+  it('resolves the same way whichever device is doing the merging', () => {
+    // Writes clamp to max(now, current + 1), so two devices editing one
+    // imported row while offline land on an identical stamp — common now,
+    // where it used to take a millisecond collision. Preferring the local copy
+    // would leave each device holding different content under the same stamp,
+    // with nothing left to settle it.
+    const mine = row({ name: 'renamed on the phone' });
+    const theirs = row({ name: 'renamed on the laptop' });
+
+    const onPhone = mergeSnapshots(snapOf([mine]), snapOf([theirs])).merged.tasks[0]!;
+    const onLaptop = mergeSnapshots(snapOf([theirs]), snapOf([mine])).merged.tasks[0]!;
+    expect(onPhone, 'both devices must land on the same row').toEqual(onLaptop);
+  });
+
+  it('still prefers the tombstone over a live edit at the same instant', () => {
+    const alive = row({ name: 'edited' });
+    const buried = row({ deleted: true });
+    expect(mergeSnapshots(snapOf([alive]), snapOf([buried])).merged.tasks[0]!.deleted).toBe(true);
+    expect(mergeSnapshots(snapOf([buried]), snapOf([alive])).merged.tasks[0]!.deleted).toBe(true);
+  });
+
+  it('treats identical rows as identical however their keys are ordered', () => {
+    const a = { id: 'T1', name: 'same', updatedAt: 5_000, deleted: false, notes: 'n' };
+    const b = { notes: 'n', deleted: false, updatedAt: 5_000, name: 'same', id: 'T1' };
+    const result = mergeSnapshots(snapOf([a]), snapOf([b]));
+    expect(result.localChanged, 'key order is not a difference').toBe(false);
+    expect(result.remoteChanged).toBe(false);
+  });
+});

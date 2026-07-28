@@ -194,11 +194,22 @@
   .readout b.medium { color: var(--acc-green); }
   .readout b.high { color: var(--acc-orange); }
   .readout b.max { color: var(--acc-magenta); }
-  .field { display: flex; align-items: center; gap: 8px; }
-  .field span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; min-width: 74px; }
+  /*
+    Label above the field, not beside it. A native date control will not shrink
+    below the date it has to display, so on a phone the 74px label was taking
+    the room it needed and leaving a stub — the same failure the task editor and
+    the fill-in card both had. Side by side returns once there is width for it.
+  */
+  .field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+  .field span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .field input {
-    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    width: 100%; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none; color-scheme: dark;
+  }
+  @media (min-width: 440px) {
+    .field { flex-direction: row; align-items: center; gap: 8px; }
+    .field span { min-width: 74px; }
+    .field input { flex: 1; width: auto; }
   }
   .rule { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
   .days { display: flex; gap: 4px; }

@@ -68,6 +68,7 @@ test('the randomizer offers a fill-in prompt that clears the dot when done', asy
   await expect(page.getByTestId('draw-triage')).toContainText('needs details');
 
   await page.getByTestId('triage-estimate').fill('3');
+  await page.getByTestId('triage-notes').fill('ring the shop first, they open at 9');
   await page.getByTestId('priority-high').click();
   await page.getByTestId('triage-done').click();
 
@@ -78,6 +79,44 @@ test('the randomizer offers a fill-in prompt that clears the dot when done', asy
   await expect(page.getByTestId(`needs-review-${id}`)).toHaveCount(0);
   await page.getByText('needs details').click();
   await expect(page.getByTestId('task-estimate-input')).toHaveValue('3');
+  await expect(page.getByTestId('task-notes-input'), 'the description written during triage')
+    .toHaveValue('ring the shop first, they open at 9');
+});
+
+test('the fill-in prompt shows a description already on the task', async ({ page }) => {
+  // It is an edit surface, not just a capture form — arriving at a task that
+  // already says something and being shown a blank box would invite overwriting it.
+  await reset(page, 'triage');
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Triage');
+  await page.getByTestId('new-list-input').press('Enter');
+  const id = await addTask(page, 'has notes already');
+  await page.getByTestId('back').click();
+
+  // A task that carries a description AND still wants triage comes from an
+  // import — typing the notes by hand is itself an act of triage and clears the
+  // flag. So write that state the way the importer does, then reload into it.
+  await page.evaluate(async (taskId) => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const db = open.result;
+        const store = db.transaction('tasks', 'readwrite').objectStore('tasks');
+        const get = store.get(taskId);
+        get.onsuccess = () => {
+          const put = store.put({ ...get.result, notes: 'the existing description', needsReview: true });
+          put.onsuccess = () => resolve();
+          put.onerror = () => reject(put.error);
+        };
+        get.onerror = () => reject(get.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  }, id);
+  await page.reload();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('triage-notes')).toHaveValue('the existing description');
 });
 
 test('skipping the fill-in prompt keeps the task untriaged', async ({ page }) => {

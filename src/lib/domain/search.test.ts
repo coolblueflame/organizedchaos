@@ -50,6 +50,7 @@ describe('searchTasks', () => {
     const ghost = { ...task({ priority: 'low', name: 'milk ghost' }), deleted: true };
     const live = task({ priority: 'low', name: 'milk live' });
     expect(names(searchTasks([ghost, live], 'milk', settings, now).open)).toEqual(['milk live']);
-    expect(searchTasks([live], '   ', settings, now)).toEqual({ open: [], completed: [], terms: [] });
+    expect(searchTasks([live], '   ', settings, now))
+      .toEqual({ open: [], completed: [], openTotal: 0, completedTotal: 0, terms: [] });
   });
 });

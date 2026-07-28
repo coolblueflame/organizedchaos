@@ -119,7 +119,10 @@ test('omitting a list chip excludes it from the global draw', async ({ page }) =
   await page.getByTestId('back').click();
 
   await page.getByTestId('big-button').click();
-  // knock the "Pool" list out of the draw — chips start all-selected
+  // knock the "Pool" list out of the draw — chips start all-selected, and the
+  // whole panel starts closed so a big library doesn't bury the roll
+  await expect(page.getByTestId(/^draw-filter-list-/)).toHaveCount(0);
+  await page.getByTestId('draw-filters-toggle').click();
   await page.getByTestId(/^draw-filter-list-/).filter({ hasText: 'Pool' }).click();
   await expect(page.getByTestId('draw-card')).toContainText('outsider');
   await page.getByTestId('draw-not-now').click();
@@ -200,4 +203,30 @@ test('list-scoped randomizer only draws from that list', async ({ page }) => {
   await expect(page.getByTestId('draw-card')).toContainText('inpool');
   await page.getByTestId('draw-not-now').click();
   await expect(page.getByTestId('draw-empty')).toBeVisible(); // outsider never appears
+});
+
+test('the filter panel stays out of the way but never hides that it is on', async ({ page }) => {
+  await seed(page, ['a task']);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Drop');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('another task');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  const toggle = page.getByTestId('draw-filters-toggle');
+  await expect(toggle, 'closed by default, and honest about it').toContainText('everything in');
+
+  await toggle.click();
+  await page.getByTestId(/^draw-filter-list-/).filter({ hasText: 'Drop' }).click();
+  await expect(toggle, 'a filter left on has to be visible from the summary').toContainText('1 list off');
+
+  // Searching narrows the chips rather than making you scroll past a hundred.
+  await page.getByTestId('draw-search-lists').fill('poo');
+  await expect(page.getByTestId(/^draw-filter-list-/)).toHaveCount(1);
+
+  await page.getByTestId('draw-filter-lists-all').click();
+  await expect(toggle).toContainText('everything in');
 });

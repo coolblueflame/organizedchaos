@@ -54,6 +54,28 @@
     listId ? app.state.lists.filter((l) => l.id !== listId).map((l) => l.id) : [],
   );
   let filterTags = $state<string[]>([]);
+
+  // The filter panel is closed until asked for, and searchable once open —
+  // a real library brings dozens of lists and hundreds of tags.
+  let filtersOpen = $state(false);
+  let listQuery = $state('');
+  let tagQuery = $state('');
+  const matches = (name: string, q: string) =>
+    q.trim() === '' || name.toLowerCase().includes(q.trim().toLowerCase());
+  const shownLists = $derived(app.state.lists.filter((l) => matches(l.title, listQuery)));
+  const shownTags = $derived(app.state.tags.filter((t) => matches(t.name, tagQuery)));
+
+  /**
+   * What the filters are currently doing, in words. A closed panel must never
+   * hide the fact that the pool is narrowed — that would read as a broken
+   * randomizer rather than a filter left on.
+   */
+  const filterSummary = $derived.by(() => {
+    const parts: string[] = [];
+    if (omittedLists.length) parts.push(`${omittedLists.length} list${omittedLists.length > 1 ? 's' : ''} off`);
+    if (filterTags.length) parts.push(`${filterTags.length} tag${filterTags.length > 1 ? 's' : ''}`);
+    return parts.length ? parts.join(' · ') : 'everything in';
+  });
   let notNow = $state<string[]>([]);
   let drawn = $state<Task | null>(null);
   let editingDraw = $state(false);
@@ -242,37 +264,6 @@
     <h1>the randomizer</h1>
   </header>
 
-  <div class="filters">
-    {#if app.state.lists.length > 1}
-      <div class="filter-row">
-        <span class="filter-label">lists</span>
-        {#each app.state.lists as l (l.id)}
-          <button class="chip list-chip" class:on={!omittedLists.includes(l.id)}
-            data-testid="draw-filter-list-{l.id}"
-            title={describeWindow(l)
-              ? `scheduled ${describeWindow(l)}${l.urgentOverridesHours ? ' · urgent still gets through' : ''}`
-              : undefined}
-            onclick={() => toggleListFilter(l.id)}>
-            {#if asleepLists.includes(l.id) && !ignoringHours}<Glyph name="moon" size={9} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={9} />{/if}&nbsp;{/if}{l.title}
-          </button>
-        {/each}
-      </div>
-    {/if}
-    {#if app.state.tags.length > 0}
-      <div class="filter-row">
-        <span class="filter-label">tags</span>
-        {#each app.state.tags as t (t.id)}
-          <button class="chip" class:on={filterTags.includes(t.id)}
-            style="--c: {tagColor(t.colorIndex)}"
-            data-testid="draw-filter-tag-{t.id}"
-            onclick={() => toggleTagFilter(t.id)}>
-            <span class="dot"></span>{t.name}
-          </button>
-        {/each}
-      </div>
-    {/if}
-  </div>
-
   {#if triage}
     <section class="card triage sheen-once" data-testid="draw-triage">
       <p class="tier fillin">✎ fill in this one</p>
@@ -284,6 +275,11 @@
       <div class="triage-fields">
         <PrioritySelect value={triage.priority}
           onchange={(p) => void app.patchTask(triage!.id, { priority: p })} />
+        <label class="triage-notes"><span>description</span>
+          <textarea data-testid="triage-notes" rows="2" placeholder="what does this actually involve?"
+            value={triage.notes}
+            oninput={(e) => void app.patchTask(triage!.id, { notes: e.currentTarget.value })}></textarea>
+        </label>
         <div class="triage-row">
           <label><span>deadline</span>
             <input type="date" data-testid="triage-deadline" value={triage.deadline ?? ''}
@@ -377,6 +373,71 @@
       {/if}
     </section>
   {/if}
+
+  <!--
+    Filters live BELOW the roll and start closed. A real library has dozens of
+    lists and over a hundred tags, and a wall of chips above the result buries
+    the one thing this screen exists to show. The summary line carries whatever
+    is currently narrowing the pool, so a filter can never be silently on.
+  -->
+  {#if app.state.lists.length > 1 || app.state.tags.length > 0}
+    <section class="filters" class:open={filtersOpen}>
+      <button class="filter-toggle" data-testid="draw-filters-toggle"
+        aria-expanded={filtersOpen} onclick={() => (filtersOpen = !filtersOpen)}>
+        <span class="caret">{filtersOpen ? '▾' : '▸'}</span> filters
+        <span class="filter-summary">{filterSummary}</span>
+      </button>
+
+      {#if filtersOpen}
+        {#if app.state.lists.length > 1}
+          <div class="filter-row">
+            <span class="filter-label">lists</span>
+            <input class="filter-search" data-testid="draw-search-lists"
+              placeholder="find a list…" bind:value={listQuery} />
+            {#if omittedLists.length}
+              <button class="filter-clear" data-testid="draw-filter-lists-all"
+                onclick={() => (omittedLists = [])}>all back on</button>
+            {/if}
+          </div>
+          <div class="filter-row chips">
+            {#each shownLists as l (l.id)}
+              <button class="chip list-chip" class:on={!omittedLists.includes(l.id)}
+                data-testid="draw-filter-list-{l.id}"
+                title={describeWindow(l)
+                  ? `scheduled ${describeWindow(l)}${l.urgentOverridesHours ? ' · urgent still gets through' : ''}`
+                  : undefined}
+                onclick={() => toggleListFilter(l.id)}>
+                {#if asleepLists.includes(l.id) && !ignoringHours}<Glyph name="moon" size={11} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={11} />{/if}&nbsp;{/if}{l.title}
+              </button>
+            {/each}
+            {#if shownLists.length === 0}<span class="filter-none">nothing matches “{listQuery}”</span>{/if}
+          </div>
+        {/if}
+        {#if app.state.tags.length > 0}
+          <div class="filter-row">
+            <span class="filter-label">tags</span>
+            <input class="filter-search" data-testid="draw-search-tags"
+              placeholder="find a tag…" bind:value={tagQuery} />
+            {#if filterTags.length}
+              <button class="filter-clear" data-testid="draw-filter-tags-clear"
+                onclick={() => (filterTags = [])}>clear</button>
+            {/if}
+          </div>
+          <div class="filter-row chips">
+            {#each shownTags as t (t.id)}
+              <button class="chip" class:on={filterTags.includes(t.id)}
+                style="--c: {tagColor(t.colorIndex)}"
+                data-testid="draw-filter-tag-{t.id}"
+                onclick={() => toggleTagFilter(t.id)}>
+                <span class="dot"></span>{t.name}
+              </button>
+            {/each}
+            {#if shownTags.length === 0}<span class="filter-none">nothing matches “{tagQuery}”</span>{/if}
+          </div>
+        {/if}
+      {/if}
+    </section>
+  {/if}
 </main>
 
 <style>
@@ -388,8 +449,31 @@
   .back:hover { color: var(--text); }
   h1 { font-family: var(--font-mono); font-size: 1.1rem; margin: 0; color: var(--acc-purple); }
 
-  .filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .filters {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 28px;
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+  .filter-toggle {
+    background: none; border: none; padding: 4px 0; cursor: pointer; text-align: left;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.78rem;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .filter-toggle:hover { color: var(--text); }
+  .caret { color: var(--acc-purple); }
+  .filter-summary { color: var(--acc-cyan); }
+  .filter-search {
+    flex: 1; min-width: 120px; background: var(--bg2); border: 1px solid var(--line);
+    border-radius: 6px; color: var(--text); padding: 5px 8px; font-size: 0.78rem; outline: none;
+  }
+  .filter-search:focus { border-color: var(--acc-blue); }
+  .filter-clear {
+    background: none; border: none; color: var(--acc-blue); cursor: pointer;
+    font-size: 0.72rem; text-decoration: underline; padding: 2px 4px;
+  }
+  .filter-none { color: var(--dim); font-size: 0.75rem; }
   .filter-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  /* Long lists of chips scroll rather than pushing the page down forever. */
+  .filter-row.chips { max-height: 168px; overflow-y: auto; }
   .filter-label {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
     text-transform: uppercase; letter-spacing: 0.08em; margin-right: 2px;
@@ -419,17 +503,30 @@
   .tier.max { color: var(--acc-magenta); }
   .tier.bonus { color: var(--acc-yellow); }
   .selfcare { border-color: var(--acc-yellow); }
-  .tier.fillin { color: var(--acc-yellow); }
+  .tier.fillin { color: var(--acc-yellow); font-size: 0.95rem; }
   .triage { border-color: var(--acc-yellow); }
   .triage-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-  .triage-row { display: flex; gap: 12px; }
-  .triage-row label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .triage-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
-  .triage-row input {
+  /*
+    A grid that stacks on a phone rather than a two-column flex row. A native
+    date control will not shrink below the date it has to show, so splitting a
+    narrow screen in half squeezed it to a stub — the same failure the task
+    editor had, fixed the same way.
+  */
+  .triage-row { display: grid; grid-template-columns: 1fr; gap: 10px 12px; }
+  @media (min-width: 440px) {
+    .triage-row { grid-template-columns: 1fr 1fr; }
+  }
+  .triage-row label, .triage-notes { display: flex; flex-direction: column; gap: 4px; }
+  .triage-row span, .triage-notes span {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+  }
+  .triage-row input, .triage-notes textarea {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
     color-scheme: dark; width: 100%;
   }
+  .triage-notes textarea { font-family: inherit; resize: vertical; line-height: 1.45; }
+  .triage-notes textarea:focus, .triage-row input:focus { border-color: var(--acc-blue); }
   .task-name { font-size: 1.4rem; margin: 0 0 4px; }
   .task-name-btn {
     background: none; border: none; padding: 0; text-align: left; width: 100%;

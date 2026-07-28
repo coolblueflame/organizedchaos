@@ -17,7 +17,8 @@ import { burdenSeries, completionCounts, completionSeries } from './stats';
 import { groupByPriority, groupCompleted, openTasks } from './views';
 import { searchTasks } from './search';
 import { projectPriorities } from './project';
-import { DEFAULT_SETTINGS, type List, type Task } from './types';
+import { DEFAULT_SETTINGS, priorityRank, type List, type Task } from './types';
+import { effectivePriority } from './priority';
 
 const NOW = new Date('2026-07-28T12:00:00');
 const DAY = 86_400_000;
@@ -79,5 +80,45 @@ describe('post-import scale', () => {
     for (const [label, budget, fn] of budgets) {
       expect(time(label, fn), `${label} over budget`).toBeLessThan(budget);
     }
+  });
+});
+
+describe('search at a real library size', () => {
+  // Reported 2026-07-28: typing "A" against a 25,000-task library hung, further
+  // keystrokes did nothing, and the page eventually died. A single letter
+  // matches most of a library, and every match was being turned into a row.
+  const BIG = Array.from({ length: 25_000 }, (_, i) => ({
+    id: `t${i}`, listId: 'L1', name: `Arctic Monkeys track ${i}`, notes: 'a note about it',
+    tagIds: [], priority: (['low', 'medium', 'high'] as const)[i % 3]!,
+    inProgress: false, createdAt: 0, updatedAt: 0, deleted: false,
+    ...(i % 4 === 0 ? { completedAt: 1_700_000_000_000 + i } : {}),
+    ...(i % 7 === 0 ? { deadline: '2026-08-01' } : {}),
+  })) as Task[];
+
+  it('a single letter matching everything stays fast and bounded', () => {
+    const started = performance.now();
+    const r = searchTasks(BIG, 'a', DEFAULT_SETTINGS, new Date());
+    const elapsed = performance.now() - started;
+
+    expect(r.openTotal, 'it really does match the whole library').toBe(18_750);
+    expect(r.open.length, 'but only a screenful is handed to the UI').toBeLessThanOrEqual(50);
+    expect(r.completed.length).toBeLessThanOrEqual(50);
+    expect(elapsed, `one keystroke took ${elapsed.toFixed(0)}ms`).toBeLessThan(150);
+  });
+
+  it('keeps the best matches, not merely the first fifty found', () => {
+    const r = searchTasks(BIG, 'arctic', DEFAULT_SETTINGS, new Date());
+    const ranks = r.open.map((t) => priorityRank(effectivePriority(t, DEFAULT_SETTINGS, new Date())));
+    expect(ranks, 'the head of a sorted list, not an arbitrary slice')
+      .toEqual([...ranks].sort((a, b) => b - a));
+  });
+
+  it('a whole word of typing stays fast too', () => {
+    const started = performance.now();
+    for (const q of ['a', 'ar', 'arc', 'arct', 'arcti', 'arctic']) {
+      searchTasks(BIG, q, DEFAULT_SETTINGS, new Date());
+    }
+    const elapsed = performance.now() - started;
+    expect(elapsed, `typing "arctic" cost ${elapsed.toFixed(0)}ms of scanning`).toBeLessThan(600);
   });
 });

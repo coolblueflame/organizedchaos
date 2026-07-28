@@ -18,11 +18,37 @@ export interface MergeResult {
 
 interface Row { id: string; updatedAt: number; deleted: boolean }
 
+/**
+ * Order-independent serialisation, so two copies of a row compare equal
+ * whichever way their keys happen to be laid out — one side has come back from
+ * IndexedDB and the other from JSON, and neither guarantees key order.
+ */
+function canonical(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null';
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  return `{${Object.entries(v as Record<string, unknown>)
+    .filter(([, val]) => val !== undefined)
+    .sort(([x], [y]) => (x < y ? -1 : 1))
+    .map(([k, val]) => `${JSON.stringify(k)}:${canonical(val)}`)
+    .join(',')}}`;
+}
+
 function pick<T extends Row>(a: T, b: T): T {
   if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
   if (a.deleted !== b.deleted) return a.deleted ? a : b;
-  // Same stamp, same tombstone state: sides are equivalent for our purposes.
-  return a;
+  // Same stamp, same tombstone state, but the contents can still differ — and
+  // that happens far more readily than it used to. A write clamps to
+  // `max(now, current + 1)`, so two devices editing one row while offline both
+  // land on exactly that, where before they would have differed by whatever
+  // milliseconds separated them.
+  //
+  // Preferring "mine" would leave each device convinced it was right, holding
+  // different content under the same stamp with nothing left to break the deadlock:
+  // the disagreement would be permanent rather than merely arbitrary. So the tie
+  // breaks on the content itself, which both sides can evaluate identically.
+  // Which one wins is arbitrary; that they agree is the whole point.
+  const [ca, cb] = [canonical(a), canonical(b)];
+  return ca <= cb ? a : b;
 }
 
 /**
@@ -47,13 +73,19 @@ function mergeRows<T extends Row>(local: T[], remote: T[]): T[] {
   return [...byId.values()];
 }
 
-/** Order-insensitive deep comparison of two row sets. */
+/**
+ * Order-insensitive deep comparison of two row sets — insensitive to the order
+ * of the KEYS as well as of the rows, since "has this changed" should be a
+ * question about content, not about how the object happens to be laid out. One
+ * side has come back from IndexedDB and the other from JSON; treating a
+ * difference in key order as a change would push a byte-for-byte pointless file.
+ */
 function sameRows<T extends Row>(a: T[], b: T[]): boolean {
   if (a.length !== b.length) return false;
   const byId = new Map(a.map((r) => [r.id, r]));
   return b.every((r) => {
     const match = byId.get(r.id);
-    return match !== undefined && JSON.stringify(match) === JSON.stringify(r);
+    return match !== undefined && canonical(match) === canonical(r);
   });
 }
 
