@@ -15,7 +15,15 @@
   type Step = 'pick' | 'parsing' | 'preview' | 'importing' | 'review' | 'done';
   let step = $state<Step>('pick');
   let error = $state('');
-  let mapped = $state<MappedImport | null>(null);
+  /**
+   * NOT $state, deliberately. A real library is tens of thousands of rows, and
+   * making this reactive deep-proxies every one of them: pointless (nothing
+   * below renders them) and fatal, because IndexedDB cannot structured-clone a
+   * Proxy — a 25k-item import died with "Proxy object could not be cloned".
+   * Only the handful of fields the template shows are reactive.
+   */
+  let mapped: MappedImport | null = null;
+  let preview = $state<Pick<MappedImport, 'counts' | 'review'> | null>(null);
   let editingUuid = $state<string | null>(null);
 
   async function onFile(e: Event) {
@@ -26,6 +34,7 @@
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       mapped = mapThings(await readThingsDb(bytes));
+      preview = { counts: mapped.counts, review: mapped.review };
       step = 'preview';
     } catch (err) {
       error = `Could not read that file as a Things database — ${err instanceof Error ? err.message : err}`;
@@ -40,8 +49,9 @@
     if (!mapped) return;
     step = 'importing';
     try {
+      const review = mapped.review;
       await app.importThings(mapped, { countHistoryInTotals: countHistory });
-      step = mapped.review.length > 0 ? 'review' : 'done';
+      step = review.length > 0 ? 'review' : 'done';
     } catch (err) {
       error = `Import failed: ${err instanceof Error ? err.message : err}`;
       step = 'preview';
@@ -79,23 +89,23 @@
     <section class="panel">
       <p class="hint">{step === 'parsing' ? '// reading database…' : '// importing…'}</p>
     </section>
-  {:else if step === 'preview' && mapped}
+  {:else if step === 'preview' && preview}
     <section class="panel" data-testid="import-preview">
       <h2>found in your database</h2>
       <ul class="counts">
-        <li><b>{mapped.counts.lists}</b> lists (projects + areas)</li>
-        <li><b>{mapped.counts.openTasks}</b> open tasks</li>
-        <li><b>{mapped.counts.completedTasks}</b> completed tasks (your history — powers the stats)</li>
-        <li><b>{mapped.counts.tags}</b> tags (Things tags + headings)</li>
-        <li><b>{mapped.counts.templates}</b> recurring tasks{#if mapped.review.length}&nbsp;(will ask you to double-check them){/if}</li>
+        <li><b>{preview.counts.lists}</b> lists (projects + areas)</li>
+        <li><b>{preview.counts.openTasks}</b> open tasks</li>
+        <li><b>{preview.counts.completedTasks}</b> completed tasks (your history — powers the stats)</li>
+        <li><b>{preview.counts.tags}</b> tags (Things tags + headings)</li>
+        <li><b>{preview.counts.templates}</b> recurring tasks{#if preview.review.length}&nbsp;(will ask you to double-check them){/if}</li>
       </ul>
-      {#if mapped.counts.completedTasks > 0}
+      {#if preview.counts.completedTasks > 0}
         <label class="opt">
           <input type="checkbox" data-testid="import-count-history" bind:checked={countHistory} />
           <span>
-            count those {mapped.counts.completedTasks} finished tasks toward my totals
+            count those {preview.counts.completedTasks} finished tasks toward my totals
             <em>{countHistory
-              ? 'your lifetime score starts at ' + mapped.counts.completedTasks
+              ? 'your lifetime score starts at ' + preview.counts.completedTasks
               : 'off: the scoreboard starts fresh, but the history still shows in your graphs'}</em>
           </span>
         </label>
@@ -103,12 +113,12 @@
       {#if error}<p class="error">{error}</p>{/if}
       <button class="primary" data-testid="import-run" onclick={runImport}>import everything</button>
     </section>
-  {:else if step === 'review' && mapped}
+  {:else if step === 'review' && preview}
     <section class="panel" data-testid="import-review">
       <h2>double-check your recurring tasks</h2>
       <p class="hint">Things stores repeat rules in a private format — these were decoded
         best-effort. Tap any to adjust.</p>
-      {#each mapped.review as r (r.templateThingsUuid)}
+      {#each preview.review as r (r.templateThingsUuid)}
         {@const tpl = templateFor(r.templateThingsUuid)}
         <div class="review-row">
           <button class="review-msg" onclick={() => (editingUuid = editingUuid === r.templateThingsUuid ? null : r.templateThingsUuid)}>

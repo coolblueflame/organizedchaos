@@ -808,6 +808,14 @@ export class AppStore {
     mapped: MappedImport,
     opts: { countHistoryInTotals?: boolean } = {},
   ): Promise<MappedImport['counts']> {
+    // Belt and braces against the bug class that has now bitten this codebase
+    // three times: a reactive proxy reaching IndexedDB, which cannot
+    // structured-clone one ("Proxy object could not be cloned"). The caller is
+    // fixed not to send proxies, but this is the single choke point and the
+    // failure lands mid-import on someone's whole task history, so it is worth
+    // the one pass. A no-op on data that is already plain.
+    mapped = $state.snapshot(mapped) as MappedImport;
+
     if (opts.countHistoryInTotals) {
       // Opted in: treat imported completions as ordinary completions.
       mapped = { ...mapped, tasks: mapped.tasks.map((t) => ({ ...t, importedHistory: undefined })) };

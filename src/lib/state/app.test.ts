@@ -588,6 +588,54 @@ describe('AppStore', () => {
     expect((await persisted()).tasks).toHaveLength(1);
   });
 
+  it('importThings: a reactive-proxied mapping still imports', async () => {
+    // Reported on a 25,000-item library: "Proxy object could not be cloned".
+    // The view held the whole mapping in $state, so every row was a proxy, and
+    // IndexedDB cannot structured-clone one. A bare Proxy stands in for a
+    // Svelte state proxy — structuredClone rejects both the same way.
+    const plain = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Proxied', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [],
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'through a proxy', notes: '',
+        priority: 'medium' as const, tagIds: [], inProgress: false,
+        createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      // A recurring template matters here: the upsert rebuilds task rows field
+      // by field, so their proxies fall away, but a template's `mode` object is
+      // only shallow-spread and stays proxied all the way to the write. That
+      // nested object is what actually breaks the clone.
+      templates: [{
+        id: 'TR1', thingsUuid: 'TR1', listId: 'TP1', name: 'water plants', notes: '',
+        tagIds: [], priority: 'medium' as const,
+        mode: { kind: 'weekly' as const, weekdays: [1, 4] },
+        paused: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      review: [],
+      counts: { lists: 1, tags: 0, openTasks: 1, completedTasks: 0, templates: 1 },
+    };
+    // A DEEP proxy, because that is what $state actually is. A bare
+    // `new Proxy(obj, {})` only wraps the root, so the nested rows stay plain
+    // and reach IndexedDB perfectly happily — it would not reproduce this at
+    // all. What breaks the write is a proxied row several levels down.
+    const deepProxy = <T,>(o: T): T =>
+      o !== null && typeof o === 'object'
+        ? (new Proxy(o as object, {
+            get: (t, k, r) => deepProxy(Reflect.get(t, k, r) as unknown),
+          }) as T)
+        : o;
+
+    const proxied = deepProxy(plain);
+    // Sanity: the nested rows really are unclonable, so this test means something.
+    expect(() => structuredClone(proxied.tasks[0])).toThrow();
+
+    await store.importThings(proxied);
+    expect(store.state.tasks.find((t) => t.thingsUuid === 'TT1')?.name).toBe('through a proxy');
+    // And it genuinely reached disk, which is where the clone happens.
+    expect((await persisted()).tasks.find((t) => t.thingsUuid === 'TT1')?.name)
+      .toBe('through a proxy');
+  });
+
   it('importThings: everything you made by hand survives untouched', async () => {
     // The question anyone asks before a big import: does this ADD, or replace?
     // It adds. Matching is by Things UUID, and hand-made rows have none, so
