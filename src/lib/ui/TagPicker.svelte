@@ -125,8 +125,11 @@
       {#if suggestions.length > 0}
         <div class="suggestions">
           {#each suggestions as tag (tag.id)}
+            <!-- A distinct testid from the attached chips: the same tag can be
+                 in both places across a single interaction, and one id for both
+                 makes every query about tags ambiguous. -->
             <button class="chip" style="--c: {tagColor(tag.colorIndex)}"
-              data-testid="tag-chip-{tag.id}" onclick={() => pick(tag.id)}>
+              data-testid="tag-suggest-{tag.id}" onclick={() => pick(tag.id)}>
               <span class="dot"></span>{tag.name}
             </button>
           {/each}
