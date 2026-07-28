@@ -57,17 +57,44 @@ test('rename, delete and undo a tag', async ({ page }) => {
 test('merges two spellings of the same tag, keeping both tasks', async ({ page }) => {
   await reset(page);
   await setUpList(page);
-  await taskWithTag(page, 'send invoices', 'work');
-  await taskWithTag(page, 'book travel', 'Work');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+
+  // Typing "Work" when "work" exists now reuses it rather than making a second
+  // tag, so a case-variant duplicate can only arrive the way Ben's did — from an
+  // import. Write that state directly, which is also fewer moving parts than
+  // driving two editors.
+  await page.evaluate(async () => {
+    const listId = (document.querySelector('[data-testid^="list-row-"]') as HTMLElement).dataset.testid!
+      .replace('list-row-', '');
+    const stamp = { createdAt: 0, updatedAt: 1, deleted: false };
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const tx = open.result.transaction(['tags', 'tasks'], 'readwrite');
+        tx.objectStore('tags').put({ id: 'lower', name: 'work', colorIndex: 1, ...stamp });
+        tx.objectStore('tags').put({ id: 'upper', name: 'Work', colorIndex: 2, ...stamp });
+        const task = (id: string, name: string, tagIds: string[]) => ({
+          id, listId, name, notes: '', tagIds, priority: 'medium',
+          inProgress: false, ...stamp,
+        });
+        tx.objectStore('tasks').put(task('t-lower', 'send invoices', ['lower']));
+        tx.objectStore('tasks').put(task('t-upper', 'book travel', ['upper']));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
   await page.goto('./#/tags');
+  await page.reload();
 
   // Both spellings are flagged as one tag typed twice.
   const group = page.getByTestId(/^dupe-group-/).first();
   await expect(group).toContainText('work');
   await expect(group).toContainText('Work');
 
-  const mergeButton = page.getByTestId(/^merge-group-/).first();
-  await mergeButton.click();
+  await page.getByTestId(/^merge-group-/).first().click();
 
   // One tag left, wearing both tasks.
   await expect(page.getByTestId(/^tag-row-/)).toHaveCount(1);
@@ -76,6 +103,7 @@ test('merges two spellings of the same tag, keeping both tasks', async ({ page }
 
   // And the tasks kept their tag rather than losing it with the merge.
   await page.goto('./#/sort/tag');
+  await page.reload();
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
 });
 
@@ -87,10 +115,16 @@ test('clears out tags nothing is using, in one go', async ({ page }) => {
   await page.getByTestId('new-task').click();
   await page.getByTestId('task-name-input').fill('a task');
   for (const name of ['alpha', 'beta', 'gamma']) {
-    await page.getByTestId('new-tag').click();
+    // Adding a tag rewrites the task, which can re-sort and remount the row —
+    // so re-open the box rather than assuming it survived.
+    if (await page.getByTestId('new-tag').isVisible()) await page.getByTestId('new-tag').click();
     await page.getByTestId('new-tag-input').fill(name);
     await page.getByTestId('new-tag-input').press('Enter');
-    await page.getByRole('button', { name, exact: true }).click(); // toggle straight back off
+  }
+  if (await page.getByTestId('new-tag-done').isVisible()) await page.getByTestId('new-tag-done').click();
+  // Take all three back off so every one of them reads as unused.
+  for (const name of ['alpha', 'beta', 'gamma']) {
+    await page.getByRole('button', { name, exact: true }).click();
   }
   await page.getByTestId('task-collapse').click();
 
