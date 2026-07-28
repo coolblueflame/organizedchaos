@@ -78,6 +78,11 @@ test('rapid entry still focuses the new row on touch', async ({ page }) => {
   // went through the global handler, which has to have re-armed for a row created
   // a moment earlier — a race this test was never about.
   await page.getByTestId('task-collapse').click();
+  // Assert the editor actually closed before looking for the name as TEXT. An
+  // open editor holds the name as an input VALUE, which getByText cannot see —
+  // so if the click ever lands on a node that a re-sort has already replaced,
+  // this fails saying the editor is still open rather than the name is missing.
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
   await expect(page.getByText('second', { exact: true })).toBeVisible();
 });
 
