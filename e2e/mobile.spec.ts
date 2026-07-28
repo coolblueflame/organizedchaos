@@ -67,10 +67,16 @@ test('rapid entry still focuses the new row on touch', async ({ page }) => {
 
   await expect(page.getByTestId('task-name-input')).toBeFocused();
   await page.getByTestId('task-name-input').fill('second');
-  // Close with the collapse button, which flushes the name and then closes in
-  // one path. Escape went through the global handler instead, which has to have
-  // re-armed for a row created a moment earlier — a race that took CI red once,
-  // and one this test was never about.
+  // Two paths save a name: the first keystroke into an empty task saves at once
+  // (so a discard check can never see it as pristine), everything else debounces
+  // by 400ms. Which one a fill() lands on depends on what the row believes its
+  // current name is, so wait out the slower one rather than assume the faster.
+  // This assertion failed twice on CI and never once locally across ~40 runs,
+  // including a 6x-throttled CPU and a single-worker full suite.
+  await page.waitForTimeout(600);
+  // Close with the collapse button, which flushes and closes in one path; Escape
+  // went through the global handler, which has to have re-armed for a row created
+  // a moment earlier — a race this test was never about.
   await page.getByTestId('task-collapse').click();
   await expect(page.getByText('second', { exact: true })).toBeVisible();
 });
