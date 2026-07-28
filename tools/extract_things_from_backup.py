@@ -106,7 +106,11 @@ def extract_plain(backup: Path) -> None:
 
 def extract_encrypted(backup: Path) -> None:
     try:
-        from iphone_backup_decrypt import EncryptedBackup, RelativePathsLike  # type: ignore
+        # NB: only EncryptedBackup. `RelativePathsLike` is a namespace of ready-made
+        # path constants (CAMERA_ROLL and friends), NOT something you construct —
+        # calling it raised "takes no arguments" before any decryption happened,
+        # which the retry loop then reported as if it were a bad password.
+        from iphone_backup_decrypt import EncryptedBackup  # type: ignore
     except ImportError:
         sys.exit(
             "This backup is ENCRYPTED. Install the decryptor first:\n"
@@ -125,6 +129,10 @@ def extract_encrypted(backup: Path) -> None:
         "Press Enter on an empty prompt, or Ctrl-C, to stop.\n"
     )
 
+    # Step one is ONLY about the password. Keeping it separate from the
+    # extraction means "wrong password" (retry) can never be confused with
+    # "password fine, but no Things database in this backup" (a different
+    # problem entirely, and no amount of retyping fixes it).
     attempt = 0
     while True:
         attempt += 1
@@ -135,31 +143,48 @@ def extract_encrypted(backup: Path) -> None:
         if not password:
             sys.exit("cancelled — no password given.")
 
-        # A stale main.sqlite from an earlier run would look exactly like success.
-        Path("main.sqlite").unlink(missing_ok=True)
-        print("  working… (the slow key derivation is the whole point)")
+        print("  checking… (the slow key derivation is the whole point)")
         try:
             b = EncryptedBackup(backup_directory=str(backup), passphrase=password)
-            b.extract_files(
-                relative_paths_like=RelativePathsLike("%main.sqlite"),
-                output_folder=".",
-                preserve_folders=False,
-            )
+            b.test_decryption()
         except KeyboardInterrupt:
             sys.exit("\ncancelled.")
-        except Exception as exc:  # noqa: BLE001 - any failure here means "try again"
-            # Usually a wrong passphrase, but print it: a genuine fault should not
-            # be mistaken for a typo you keep retyping.
-            print(f"  no luck — {type(exc).__name__}: {exc}\n")
+        except ValueError as exc:
+            print(f"  no — {exc}\n")
             continue
+        except Exception as exc:  # noqa: BLE001
+            # Not a passphrase problem. Say so plainly rather than letting it
+            # look like one more wrong guess.
+            sys.exit(f"\nerror: {type(exc).__name__}: {exc}\n(That is not a password problem.)")
+        break
 
-        if Path("main.sqlite").exists():
+    print(f"password accepted (attempt {attempt}). extracting…")
+
+    # A stale file from an earlier run would look exactly like success.
+    for name in ("main.sqlite", "Things.sqlite3"):
+        Path(name).unlink(missing_ok=True)
+
+    # Scoped to Things' own domain as well as the filename: the two filters are
+    # ANDed, and "%main.sqlite" alone would happily match another app's database.
+    for pattern in ("%main.sqlite", "%Things.sqlite3"):
+        b.extract_files(
+            relative_paths_like=pattern,
+            domain_like=THINGS_DOMAIN_LIKE,
+            output_folder=".",
+            preserve_folders=False,
+        )
+        got = next((Path(n) for n in ("main.sqlite", "Things.sqlite3") if Path(n).exists()), None)
+        if got:
             # replace(), not rename(): on Windows renaming onto an existing file
-            # raises, which would turn a successful retry into a crash.
-            Path("main.sqlite").replace("things-main.sqlite")
-            print(f"\nextracted -> things-main.sqlite (attempt {attempt})")
+            # raises, which would turn a perfectly good second run into a crash.
+            got.replace("things-main.sqlite")
+            print(f"extracted {got.name} -> things-main.sqlite")
             return
-        print("  decryption ran but produced no main.sqlite — most likely a wrong password.\n")
+
+    sys.exit(
+        "error: the backup decrypted fine, but it contains no Things database.\n"
+        "Is Things installed on that phone, and was it included in this backup?"
+    )
 
 
 def main() -> None:
