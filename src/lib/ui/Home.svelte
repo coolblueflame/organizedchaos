@@ -311,10 +311,10 @@
       </button>
     {/if}
     <button data-testid="recurring-link" onclick={() => navigate({ name: 'recurring' })}>
-      <span class="ico">↻</span> Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
+      <span class="ico ico-text">↻</span> Recurring{#if recurringCount > 0}&nbsp;({recurringCount}){/if}
     </button>
     <button data-testid="completed-link" onclick={() => navigate({ name: 'completed' })}>
-      <span class="ico">✓</span> Completed
+      <span class="ico ico-text">✓</span> Completed
     </button>
     <button data-testid="settings-link" onclick={() => navigate({ name: 'settings' })}>
       <span class="ico"><Glyph name="settings" size={15} /></span> Settings{#if app.syncStatus === 'error' || app.syncStatus === 'offline'}&nbsp;<span class="sync-warn">●</span>{/if}
@@ -397,7 +397,7 @@
   .list-title { font-weight: 500; }
   .prompt {
     color: var(--acc-green); font-family: var(--font-mono); font-weight: 700;
-    margin-right: 2px; opacity: 0.75; flex: none;
+    margin-right: 6px; opacity: 0.75; flex: none;
   }
   .list-row:hover .prompt { opacity: 1; }
   /* Sits right of the title, left of the count: a glance tells you which lists
@@ -508,5 +508,8 @@
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; flex: none; font-size: 0.95rem; line-height: 1;
   }
+  /* Typographic marks fill less of their em box than a drawn 15px glyph fills
+     its viewBox — same nominal size reads smaller. Compensate. */
+  .ico-text { font-size: 1.2rem; }
   .sync-warn { color: var(--acc-orange); }
 </style>
