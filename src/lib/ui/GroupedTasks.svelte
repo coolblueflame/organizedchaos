@@ -15,6 +15,7 @@
   import { haptic } from './fx/haptics';
   import { burstAt, motionOk } from './fx/particles';
   import Glyph from './Glyph.svelte';
+  import { revealOnApproach } from './lazyReveal';
 
   let {
     groups,
@@ -71,14 +72,7 @@
   });
   const rendered = $derived(shown.reduce((n, g) => n + g.tasks.length, 0));
 
-  /** Grow the budget when the end of the rendered rows comes into view. */
-  function revealOnApproach(node: HTMLElement) {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) budget += PAGE;
-    }, { rootMargin: '600px' }); // load before the gap is visible, not after
-    observer.observe(node);
-    return { destroy: () => observer.disconnect() };
-  }
+
 
   function toggleSelect(id: string) {
     selected = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
@@ -257,7 +251,7 @@
     {/each}
   {/each}
   {#if rendered < total}
-    <div class="more" use:revealOnApproach data-testid="rows-more">
+    <div class="more" use:revealOnApproach={() => (budget += PAGE)} data-testid="rows-more">
       {rendered} of {total} — scroll for more
     </div>
   {/if}

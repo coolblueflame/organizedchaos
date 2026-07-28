@@ -414,3 +414,44 @@ test('a daily ritual is the top pick inside its window and leaves no backlog', a
   await page.getByTestId('big-button').click();
   await expect(page.getByTestId('draw-card')).toContainText('file the accounts');
 });
+
+test('the completed screen renders history a page at a time', async ({ page }) => {
+  // The library import brings YEARS of completions. Building a row for every
+  // one of them froze this screen the moment it opened — the same failure mode
+  // search and the sort views already had.
+  await reset(page);
+  await makeList(page, 'History');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+
+  await page.evaluate(async () => {
+    const listId = (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow!;
+    const day = 86_400_000;
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        for (let i = 0; i < 150; i += 1) {
+          store.put({
+            id: `done${i}`, listId, name: `finished thing ${i}`, notes: '', tagIds: [],
+            priority: 'medium', inProgress: false, createdAt: 0, updatedAt: 1,
+            completedAt: Date.now() - Math.floor(i / 10) * day, deleted: false,
+          });
+        }
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.goto('./#/completed');
+  await page.reload();
+
+  const rows = page.getByTestId(/^task-row-/);
+  await expect(page.getByTestId('rows-more')).toBeAttached();
+  const first = await rows.count();
+  expect(first, 'a screenful, not the whole logbook').toBeLessThan(150);
+
+  await page.getByTestId('rows-more').scrollIntoViewIfNeeded();
+  await expect.poll(() => rows.count(), { timeout: 5000 }).toBeGreaterThan(first);
+});

@@ -9,10 +9,33 @@
   import { appDayKey } from '../domain/time';
   import { winsList } from '../domain/stats';
   import TaskRow from './TaskRow.svelte';
+  import { revealOnApproach } from './lazyReveal';
 
   const groups = $derived(
     groupCompleted(app.state.tasks, app.state.settings.rolloverHour),
   );
+
+  /*
+    Rows mount a page at a time. An imported library holds YEARS of completions
+    — tens of thousands of rows — and building a component for each froze this
+    screen solid the moment it opened. Newest days come first, so the head of
+    the list is exactly what a visit here is for; the rest arrives on approach.
+    The budget only grows — resetting on data changes would yank the scroll.
+  */
+  const PAGE = 60;
+  let budget = $state(PAGE);
+  const total = $derived(groups.reduce((n, g) => n + g.tasks.length, 0));
+  const shown = $derived.by(() => {
+    let left = budget;
+    const out: Array<{ key: string; label: string; tasks: typeof groups[number]['tasks'] }> = [];
+    for (const group of groups) {
+      if (left <= 0) break;
+      out.push({ ...group, tasks: group.tasks.slice(0, left) });
+      left -= Math.min(left, group.tasks.length);
+    }
+    return out;
+  });
+  const rendered = $derived(shown.reduce((n, g) => n + g.tasks.length, 0));
 
   // ── share today's wins ───────────────────────────────────────────────────
   const wins = $derived(winsList(app.state.tasks, new Date(), app.state.settings.rolloverHour));
@@ -91,12 +114,17 @@
   {/if}
 
   <section class="groups">
-    {#each groups as group (group.key)}
+    {#each shown as group (group.key)}
       <h2 class="group-header">{dayLabel(group.key)}</h2>
       {#each group.tasks as task (task.id)}
         <TaskRow {task} completedMode showList ontoggle={() => {}} />
       {/each}
     {/each}
+    {#if rendered < total}
+      <div class="more" use:revealOnApproach={() => (budget += PAGE)} data-testid="rows-more">
+        {rendered} of {total} — scroll for more
+      </div>
+    {/if}
     {#if groups.length === 0}
       <p class="empty">// nothing completed yet — the button awaits</p>
     {/if}
@@ -125,6 +153,10 @@
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
   .groups { display: flex; flex-direction: column; gap: 6px; }
+  .more {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    text-align: center; padding: 14px 0 4px;
+  }
   .group-header {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
     text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 2px; font-weight: 600;
