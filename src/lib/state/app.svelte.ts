@@ -12,6 +12,7 @@ import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../dom
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import { ritualExclusions, withRitualLifts } from '../domain/ritual';
+import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { reorderPatches } from '../domain/listOrder';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
@@ -720,6 +721,57 @@ export class AppStore {
       this.state.tasks.push(trashed);
     }
     this.requestSync();
+  }
+
+  // ── the triage sweep ─────────────────────────────────────────────────────
+
+  /**
+   * One sweep decision. Routed through the same store operations the rest of
+   * the app uses, so every rule (undo entries, recurrence, sync, delight)
+   * behaves exactly as it would if the user had done the thing by hand:
+   * - keep: reviewed, optionally re-prioritised
+   * - someday: reviewed + sunk to the bottom tier
+   * - later: reviewed + out of the draw until the chosen day's rollover
+   * - done: the ordinary completion path ("I already did this")
+   * - delete: the ordinary (undoable) removal
+   * Returns what it changed, so the sweep screen can offer "put it back".
+   */
+  async applySweepVerdict(
+    id: string,
+    verdict: SweepVerdict,
+    opts: { priority?: Task['priority']; snoozeDays?: number } = {},
+  ): Promise<{ before: Partial<Task> } | null> {
+    const task = this.state.tasks.find((t) => t.id === id);
+    if (!task) return null;
+    const before: Partial<Task> = {
+      needsReview: task.needsReview, priority: task.priority, notTodayUntil: task.notTodayUntil,
+    };
+
+    if (verdict === 'delete') {
+      await this.removeTask(id); // its own undo toast
+    } else if (verdict === 'done') {
+      // bulk: a sweep is not "finishing the current task" — no auto-draw.
+      await this.completeTask(id, { bulk: true });
+    } else if (verdict === 'someday') {
+      await this.patchTask(id, { priority: 'someday', needsReview: false });
+    } else if (verdict === 'later') {
+      await this.patchTask(id, {
+        notTodayUntil: snoozeUntilTs(opts.snoozeDays ?? 7, this.state.settings.rolloverHour, new Date()),
+        needsReview: false,
+      });
+    } else {
+      await this.patchTask(id, {
+        needsReview: false,
+        ...(opts.priority && opts.priority !== task.priority ? { priority: opts.priority } : {}),
+      });
+    }
+    this.fireEgg('sweepActed');
+    return { before };
+  }
+
+  /** The sweep screen's "put it back" for verdicts that are plain patches. */
+  async revertSweepVerdict(id: string, before: Partial<Task>): Promise<void> {
+    await this.patchTask(id, before);
   }
 
   // ── undo ─────────────────────────────────────────────────────────────────

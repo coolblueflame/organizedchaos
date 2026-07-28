@@ -20,7 +20,8 @@ export type Route =
   | { name: 'stats' }
   | { name: 'search' }
   | { name: 'tags' }
-  | { name: 'rituals' };
+  | { name: 'rituals' }
+  | { name: 'sweep' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -38,6 +39,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'search') return { name: 'search' };
   if (parts[0] === 'tags') return { name: 'tags' };
   if (parts[0] === 'rituals') return { name: 'rituals' };
+  if (parts[0] === 'sweep') return { name: 'sweep' };
   return { name: 'home' };
 }
 
@@ -56,6 +58,7 @@ function toHash(r: Route): string {
     case 'search': return '#/search';
     case 'tags': return '#/tags';
     case 'rituals': return '#/rituals';
+    case 'sweep': return '#/sweep';
   }
 }
 

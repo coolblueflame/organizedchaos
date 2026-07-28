@@ -77,6 +77,7 @@
   const ritualCount = $derived(
     app.state.tasks.filter((t) => !t.deleted && t.ritual !== undefined).length,
   );
+  const reviewCount = $derived(app.tasksNeedingReview().length);
   const ritualsDue = $derived(
     app.state.tasks.filter((t) =>
       !t.deleted && isRitualDue(t, new Date(), app.state.settings.rolloverHour)).length,
@@ -226,6 +227,13 @@
     <button data-testid="sort-priority" onclick={() => navigate({ name: 'sort', mode: 'priority' })}>by priority</button>
     <button data-testid="sort-tag" onclick={() => navigate({ name: 'sort', mode: 'tag' })}>by tag</button>
   </nav>
+
+  {#if reviewCount > 0}
+    <button class="sweep-banner" data-testid="sweep-banner" onclick={() => navigate({ name: 'sweep' })}>
+      <span class="sweep-lead">✎ {reviewCount} task{reviewCount === 1 ? '' : 's'} never reviewed</span>
+      <span class="sweep-cta">sweep →</span>
+    </button>
+  {/if}
 
   <section class="lists">
     {#each grouped as [group, lists] (group)}
@@ -450,6 +458,17 @@
   }
   .footer-links button:hover { color: var(--acc-green); }
   .due-count { color: var(--acc-magenta); }
+  .sweep-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; margin-bottom: 14px;
+    background: var(--bg1); border: 1px dashed var(--acc-yellow); border-radius: 10px;
+    color: var(--text); font-family: var(--font-mono); font-size: 0.78rem;
+    padding: 11px 14px; cursor: pointer;
+  }
+  .sweep-banner:hover { border-style: solid; }
+  .sweep-lead { color: var(--acc-yellow); }
+  .sweep-cta { color: var(--dim); }
+  .sweep-banner:hover .sweep-cta { color: var(--acc-yellow); }
   /* One column for the icon whatever it is — drawn glyph or typographic mark —
      so the four labels start on the same pixel. */
   .ico {

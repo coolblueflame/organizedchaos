@@ -14,6 +14,7 @@
   import TaskEditor from './TaskEditor.svelte';
   import Glyph from './Glyph.svelte';
   import { describeRitual, ritualState } from '../domain/ritual';
+  import { isLongSnooze } from '../domain/sweep';
   import { motionOk } from './fx/particles';
   import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
@@ -246,6 +247,12 @@
                 : `daily · ${describeRitual(task.ritual)}`} />
           </span>
         {/if}
+        {#if !completedMode && isLongSnooze(task, new Date(), app.state.settings.rolloverHour)}
+          <span class="mark snoozed" data-testid="snoozed-mark-{task.id}">
+            <Glyph name="moon" size={11}
+              title="asleep until {new Date(task.notTodayUntil!).toLocaleDateString()} — the randomizer skips it until then" />
+          </span>
+        {/if}
         {#if !completedMode && task.timeboxMinutes}
           <span class="mark" data-testid="timeboxed-{task.id}">
             <Glyph name="timebox" size={11}
@@ -303,6 +310,7 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   .restore:hover { color: var(--acc-cyan); }
+  .mark.snoozed { color: var(--acc-purple); }
   .mark.ritual-due { color: var(--acc-magenta); }
   .mark.ritual-done { color: var(--acc-green); }
   .body {

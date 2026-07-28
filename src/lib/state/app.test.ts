@@ -3,6 +3,7 @@ import { openDb } from '../storage/db';
 import { Repo } from '../storage/repo';
 import { AppStore } from './app.svelte';
 import { undoStack } from './undo.svelte';
+import { eligibleForDraw } from '../domain/randomizer';
 
 let store: AppStore;
 let dbName: string;
@@ -869,5 +870,67 @@ describe('tag housekeeping', () => {
     expect(await store.mergeTags(tag.id, tag.id)).toBe(0);
     expect(await store.mergeTags(tag.id, 'nope')).toBe(0);
     expect(store.state.tags).toHaveLength(1);
+  });
+});
+
+describe('sweep verdicts', () => {
+  async function reviewable(name: string) {
+    const listId = store.state.lists[0]?.id ?? (await store.addList('Backlog')).id;
+    const t = await store.addTask(listId);
+    await store.patchTask(t.id, { name });
+    // addTask marks fresh tasks needsReview; the name patch leaves it alone.
+    expect(store.state.tasks.find((x) => x.id === t.id)!.needsReview).toBe(true);
+    return t.id;
+  }
+
+  it('keep clears the flag, optionally re-prioritising', async () => {
+    const id = await reviewable('keeper');
+    await store.applySweepVerdict(id, 'keep', { priority: 'high' });
+    const t = store.state.tasks.find((x) => x.id === id)!;
+    expect(t.needsReview).toBe(false);
+    expect(t.priority).toBe('high');
+  });
+
+  it('someday sinks it to the bottom tier, reviewed', async () => {
+    const id = await reviewable('eventually');
+    await store.applySweepVerdict(id, 'someday');
+    const t = store.state.tasks.find((x) => x.id === id)!;
+    expect(t.priority).toBe('someday');
+    expect(t.needsReview).toBe(false);
+  });
+
+  it('later takes it out of the draw until the chosen day', async () => {
+    const id = await reviewable('autumn thing');
+    await store.applySweepVerdict(id, 'later', { snoozeDays: 30 });
+    const t = store.state.tasks.find((x) => x.id === id)!;
+    expect(t.notTodayUntil).toBeGreaterThan(Date.now() + 28 * 86_400_000);
+    expect(t.needsReview).toBe(false);
+    expect(
+      eligibleForDraw(store.state.tasks, new Date()).map((x) => x.id),
+      'the randomizer must not offer it',
+    ).not.toContain(id);
+  });
+
+  it('done and delete ride the ordinary, undoable paths', async () => {
+    const doneId = await reviewable('already did this');
+    await store.applySweepVerdict(doneId, 'done');
+    expect(store.state.tasks.find((x) => x.id === doneId)!.completedAt).toBeDefined();
+    await undoStack.undo();
+    expect(store.state.tasks.find((x) => x.id === doneId)!.completedAt).toBeUndefined();
+
+    const goneId = await reviewable('junk');
+    await store.applySweepVerdict(goneId, 'delete');
+    expect(store.state.tasks.find((x) => x.id === goneId)).toBeUndefined();
+    await undoStack.undo();
+    expect(store.state.tasks.find((x) => x.id === goneId)).toBeDefined();
+  });
+
+  it('revert puts a patch verdict back exactly', async () => {
+    const id = await reviewable('oops');
+    const r = await store.applySweepVerdict(id, 'someday');
+    await store.revertSweepVerdict(id, r!.before);
+    const t = store.state.tasks.find((x) => x.id === id)!;
+    expect(t.priority).toBe('medium');
+    expect(t.needsReview).toBe(true);
   });
 });

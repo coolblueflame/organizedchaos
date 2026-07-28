@@ -214,6 +214,13 @@
     </button>
   {/if}
 
+  {#if task.notTodayUntil && task.notTodayUntil > Date.now()}
+    <button class="repeat-row snoozed" data-testid="task-wake"
+      onclick={() => { void app.patchTask(task.id, { notTodayUntil: undefined }); touched(); }}>
+      ☾ asleep until {new Date(task.notTodayUntil).toLocaleDateString()} — tap to wake
+    </button>
+  {/if}
+
   <!--
     A daily ritual sits next to recurrence on purpose: they are the two ways a
     task repeats, and the difference between them is the thing a user has to
@@ -340,6 +347,7 @@
   }
   .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
+  .repeat-row.snoozed { color: var(--acc-purple); border-color: var(--acc-purple); }
   .ritual-editor {
     display: flex; flex-direction: column; gap: 8px;
     border: 1px solid var(--acc-cyan); border-radius: 6px; padding: 10px;

@@ -12,7 +12,7 @@ export type EggEvent =
   | 'taskCompleted' | 'drawAccepted' | 'drawSkipped'
   | 'screenVisited' | 'appOpened' | 'bigButtonPressed'
   | 'timeboxFinished' | 'workPeriodStarted' | 'bulkActed' | 'taskDragged'
-  | 'taskUnblocked' | 'ritualCompleted';
+  | 'taskUnblocked' | 'ritualCompleted' | 'sweepActed';
 
 export interface EggContext {
   event: EggEvent;
@@ -112,6 +112,8 @@ const DEFAULT_CHANCE: Record<EggEvent, number> = {
   screenVisited: 0.05, appOpened: 0.12, bigButtonPressed: 0.04,
   timeboxFinished: 0.6, workPeriodStarted: 0.35, bulkActed: 0.3, taskDragged: 0.05,
   taskUnblocked: 0.55, ritualCompleted: 0.5,
+  // Sweeping is rapid-fire by design; keep its voice rare or it becomes noise.
+  sweepActed: 0.05,
 };
 
 /**
@@ -128,6 +130,7 @@ const DEFAULT_CHANCE: Record<EggEvent, number> = {
  */
 const EVENT_GAP: Partial<Record<EggEvent, number>> = {
   taskCompleted: 20_000,
+  sweepActed: 90_000,
   ritualCompleted: 20_000,
   taskUnblocked: 20_000,
   timeboxFinished: 20_000,

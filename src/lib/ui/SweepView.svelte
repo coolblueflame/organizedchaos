@@ -1,0 +1,213 @@
+<!--
+  The triage sweep (#/sweep): one imported task at a time, a verdict in seconds.
+
+  Built for volume. The drip-triage card in the randomizer is maintenance; this
+  is how a 2,000-task imported backlog actually gets reviewed — list by list,
+  oldest first, with a progress count that visibly moves. Every verdict routes
+  through the same store paths the rest of the app uses, so nothing here is a
+  special case: delete has its usual undo toast, done is an ordinary completion.
+-->
+<script lang="ts">
+  import { app } from '../state/app.svelte';
+  import { navigate } from './router.svelte';
+  import { SNOOZE_PRESETS, sweepQueue } from '../domain/sweep';
+  import type { Task } from '../domain/types';
+  import { PRIORITIES, type Priority } from '../domain/types';
+  import Glyph from './Glyph.svelte';
+
+  const queue = $derived(sweepQueue(app.state.tasks, app.state.lists));
+  const current = $derived(queue[0]);
+
+  /** Session tally — the number that makes a sweep feel like winning. */
+  let decided = $state(0);
+  let laterOpen = $state(false);
+
+  /** The last plain-patch verdict, so a mis-tap is one "put it back" away. */
+  let lastPatch = $state<{ id: string; name: string; before: Partial<Task> } | null>(null);
+
+  const listTitle = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '';
+  const age = (t: Task) => {
+    const days = Math.floor((Date.now() - t.createdAt) / 86_400_000);
+    if (days < 30) return days <= 1 ? 'new' : `${days} days old`;
+    if (days < 365) return `${Math.round(days / 30)} months old`;
+    const years = Math.floor(days / 365);
+    return `${years} year${years === 1 ? '' : 's'} old`;
+  };
+
+  async function verdict(v: 'keep' | 'someday' | 'done' | 'delete', priority?: Priority) {
+    if (!current) return;
+    laterOpen = false;
+    const snapshot = { id: current.id, name: current.name };
+    const r = await app.applySweepVerdict(current.id, v, { priority });
+    // done/delete announce themselves via the undo toast; patches get our row.
+    lastPatch = (v === 'keep' || v === 'someday') && r
+      ? { ...snapshot, before: r.before }
+      : null;
+    decided += 1;
+  }
+
+  async function later(days: number) {
+    if (!current) return;
+    laterOpen = false;
+    const snapshot = { id: current.id, name: current.name };
+    const r = await app.applySweepVerdict(current.id, 'later', { snoozeDays: days });
+    if (r) lastPatch = { ...snapshot, before: r.before };
+    decided += 1;
+  }
+
+  async function putBack() {
+    if (!lastPatch) return;
+    await app.revertSweepVerdict(lastPatch.id, lastPatch.before);
+    lastPatch = null;
+    decided = Math.max(0, decided - 1);
+  }
+</script>
+
+<main>
+  <header>
+    <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
+    <h1>Sweep</h1>
+    <span class="tally" data-testid="sweep-tally">
+      {#if decided > 0}{decided} decided · {/if}{queue.length} left
+    </span>
+  </header>
+
+  {#if current}
+    {#key current.id}
+      <section class="card" data-testid="sweep-card">
+        <p class="meta">
+          <span class="list">{listTitle(current.listId)}</span>
+          <span class="age">· {age(current)}</span>
+        </p>
+        <h2 class="name">{current.name || 'untitled'}</h2>
+        {#if current.notes.trim()}
+          <p class="notes">{current.notes}</p>
+        {/if}
+
+        <!-- Keep-with-priority: one tap reviews AND files it where it belongs. -->
+        <div class="priorities">
+          {#each PRIORITIES as p (p)}
+            <button
+              class="tier {p}"
+              class:current={current.priority === p}
+              data-testid="sweep-priority-{p}"
+              onclick={() => void verdict('keep', p)}>{p === 'medium' ? 'med' : p === 'someday' ? 'some day' : p}</button>
+          {/each}
+        </div>
+      </section>
+
+      <div class="verdicts">
+        <button class="keep" data-testid="sweep-keep" onclick={() => void verdict('keep')}>
+          keep as-is →
+        </button>
+        <div class="row">
+          <button data-testid="sweep-later" class:armed={laterOpen}
+            onclick={() => (laterOpen = !laterOpen)}>
+            <Glyph name="moon" size={12} /> later…
+          </button>
+          <button data-testid="sweep-done" onclick={() => void verdict('done')}>
+            <Glyph name="box-checked" size={12} /> already done
+          </button>
+          <button class="danger" data-testid="sweep-delete" onclick={() => void verdict('delete')}>
+            ✕ delete
+          </button>
+        </div>
+        {#if laterOpen}
+          <div class="row snooze" data-testid="sweep-snooze-row">
+            {#each SNOOZE_PRESETS as preset (preset.days)}
+              <button data-testid="sweep-snooze-{preset.days}" onclick={() => void later(preset.days)}>
+                {preset.label}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/key}
+
+  {:else}
+    <section class="clear" data-testid="sweep-clear">
+      <p class="big">// nothing left to review</p>
+      <p class="small">
+        {#if decided > 0}
+          {decided} decisions this session. The backlog is officially curated.
+        {:else}
+          Every task has been looked at. The yellow dots will call you back if that changes.
+        {/if}
+      </p>
+      <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>
+    </section>
+  {/if}
+
+  <!-- Outside the queue branch on purpose: the decision most worth taking back
+       is often the one that just emptied the queue. -->
+  {#if lastPatch}
+    <button class="putback" data-testid="sweep-putback" onclick={() => void putBack()}>
+      ↩ put “{lastPatch.name || 'untitled'}” back
+    </button>
+  {/if}
+</main>
+
+<style>
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
+  h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
+  .tally { margin-left: auto; color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; }
+
+  .card {
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .meta { margin: 0; font-family: var(--font-mono); font-size: 0.7rem; color: var(--dim); }
+  .meta .list { color: var(--acc-cyan); }
+  .name { margin: 0; font-size: 1.25rem; line-height: 1.35; overflow-wrap: anywhere; }
+  .notes {
+    margin: 0; color: var(--dim); font-size: 0.85rem; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .priorities { display: flex; gap: 6px; margin-top: 4px; }
+  .tier {
+    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 8px 0; cursor: pointer;
+  }
+  .tier.current { border-color: var(--dim); color: var(--text); }
+  .tier.someday:hover { color: var(--acc-purple); border-color: var(--acc-purple); }
+  .tier.low:hover { color: var(--acc-blue); border-color: var(--acc-blue); }
+  .tier.medium:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  .tier.high:hover { color: var(--acc-orange); border-color: var(--acc-orange); }
+  .tier.max:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
+
+  .verdicts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .keep {
+    background: var(--bg2); border: 1px solid var(--acc-green); border-radius: 10px;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 1rem; font-weight: 700;
+    padding: 14px; cursor: pointer;
+  }
+  .keep:hover { background: var(--acc-green); color: var(--bg0); }
+  .row { display: flex; gap: 8px; }
+  .row button {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem;
+    padding: 11px 6px; cursor: pointer;
+  }
+  .row button:hover { color: var(--text); }
+  .row button.armed { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  .row .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
+  .snooze button { color: var(--acc-cyan); }
+
+  .putback {
+    margin-top: 12px; width: 100%; background: none; border: 1px dashed var(--line);
+    border-radius: 8px; color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 9px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .putback:hover { color: var(--acc-blue); border-color: var(--acc-blue); }
+
+  .clear { text-align: center; margin-top: 40px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .big { color: var(--acc-green); font-family: var(--font-mono); margin: 0; }
+  .small { color: var(--dim); font-size: 0.85rem; margin: 0; max-width: 40ch; line-height: 1.6; }
+  .reset {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); font-family: var(--font-mono); padding: 10px 18px; cursor: pointer; margin-top: 8px;
+  }
+</style>
