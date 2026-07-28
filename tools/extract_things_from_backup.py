@@ -115,18 +115,51 @@ def extract_encrypted(backup: Path) -> None:
         )
     import getpass
 
-    password = getpass.getpass("backup password: ")
-    b = EncryptedBackup(backup_directory=str(backup), passphrase=password)
-    b.extract_files(
-        relative_paths_like=RelativePathsLike("%main.sqlite"),
-        output_folder=".",
-        preserve_folders=False,
+    print(
+        "\nThis backup is encrypted. Guessing costs nothing but time: decryption\n"
+        "happens entirely on this machine, nothing contacts Apple, and no counter\n"
+        "is ticking (the ten-attempts limit belongs to the device passcode, not\n"
+        "this). Each try is slow on purpose — the key derivation runs millions of\n"
+        "rounds — so wrong answers are re-prompted here rather than making you\n"
+        "re-run the whole script.\n"
+        "Press Enter on an empty prompt, or Ctrl-C, to stop.\n"
     )
-    if Path("main.sqlite").exists():
-        Path("main.sqlite").rename("things-main.sqlite")
-        print("extracted -> things-main.sqlite")
-    else:
-        sys.exit("error: decryption ran but no main.sqlite came out — check the password?")
+
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            password = getpass.getpass(f"backup password (attempt {attempt}): ")
+        except (EOFError, KeyboardInterrupt):
+            sys.exit("\ncancelled.")
+        if not password:
+            sys.exit("cancelled — no password given.")
+
+        # A stale main.sqlite from an earlier run would look exactly like success.
+        Path("main.sqlite").unlink(missing_ok=True)
+        print("  working… (the slow key derivation is the whole point)")
+        try:
+            b = EncryptedBackup(backup_directory=str(backup), passphrase=password)
+            b.extract_files(
+                relative_paths_like=RelativePathsLike("%main.sqlite"),
+                output_folder=".",
+                preserve_folders=False,
+            )
+        except KeyboardInterrupt:
+            sys.exit("\ncancelled.")
+        except Exception as exc:  # noqa: BLE001 - any failure here means "try again"
+            # Usually a wrong passphrase, but print it: a genuine fault should not
+            # be mistaken for a typo you keep retyping.
+            print(f"  no luck — {type(exc).__name__}: {exc}\n")
+            continue
+
+        if Path("main.sqlite").exists():
+            # replace(), not rename(): on Windows renaming onto an existing file
+            # raises, which would turn a successful retry into a crash.
+            Path("main.sqlite").replace("things-main.sqlite")
+            print(f"\nextracted -> things-main.sqlite (attempt {attempt})")
+            return
+        print("  decryption ran but produced no main.sqlite — most likely a wrong password.\n")
 
 
 def main() -> None:
