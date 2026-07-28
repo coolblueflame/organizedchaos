@@ -12,9 +12,19 @@ import {
   type CurrentTaskRef, type List, type RecurrenceTemplate, type Settings,
   type Tag, type Task, type TaskDraft,
 } from '../domain/types';
-import type { RemoteSnapshot } from '../sync/files';
+import type { DelightProgress, RemoteSnapshot } from '../sync/files';
 import type { SyncConfig } from '../sync/githubClient';
 import type { AppDb } from './db';
+
+/** The parts of the stored delight blob the repo needs to see. */
+interface StoredDelight {
+  unlocks?: string[];
+  storyStage?: number;
+  trivia?: { correct: number; total: number };
+  streakDays?: number;
+  lastCompletionDay?: string;
+  [key: string]: unknown;
+}
 
 export interface AppState {
   lists: List[];
@@ -149,11 +159,25 @@ export class Repo {
   /** Full store INCLUDING tombstones — what the sync merge operates on. */
   async loadSnapshot(): Promise<RemoteSnapshot> {
     const state = await this.loadState();
-    const [lists, tasks, tags, templates] = await Promise.all([
+    const [lists, tasks, tags, templates, eggs] = await Promise.all([
       this.db.lists.toArray(), this.db.tasks.toArray(),
       this.db.tags.toArray(), this.db.templates.toArray(),
+      this.getKv<StoredDelight>('eggState'),
     ]);
-    return { ...state, lists, tasks, tags, templates };
+    // Only the achievement half travels. The rest of eggState is pacing — what
+    // has been shown lately, the quiet-time clock — which describes this device
+    // and would gag another one if it were shared.
+    const delight: DelightProgress | undefined = eggs
+      ? {
+          unlocks: [...(eggs.unlocks ?? [])],
+          storyStage: eggs.storyStage ?? 0,
+          triviaCorrect: eggs.trivia?.correct ?? 0,
+          triviaTotal: eggs.trivia?.total ?? 0,
+          streakDays: eggs.streakDays ?? 0,
+          lastCompletionDay: eggs.lastCompletionDay ?? '',
+        }
+      : undefined;
+    return { ...state, lists, tasks, tags, templates, ...(delight ? { delight } : {}) };
   }
 
   /** Swap the whole store for a merged snapshot — one transaction, all-or-nothing. */
@@ -171,6 +195,24 @@ export class Repo {
         this.db.kv.put({ key: 'currentTask', value: { data: snap.currentTask, updatedAt: snap.currentTaskUpdatedAt } }),
         this.db.kv.put({ key: 'settings', value: { data: snap.settings, updatedAt: snap.settingsUpdatedAt } }),
       ]);
+      // Merge the achievement half back in WITHOUT touching this device's
+      // pacing fields (seen / lastPresentedAt / presentedToday). Read-modify-
+      // write inside the same transaction so a concurrent save cannot lose it.
+      if (snap.delight) {
+        const row = await this.db.kv.get('eggState');
+        const current = (row?.value as StoredDelight | undefined) ?? {};
+        await this.db.kv.put({
+          key: 'eggState',
+          value: {
+            ...current,
+            unlocks: snap.delight.unlocks,
+            storyStage: snap.delight.storyStage,
+            trivia: { correct: snap.delight.triviaCorrect, total: snap.delight.triviaTotal },
+            streakDays: snap.delight.streakDays,
+            lastCompletionDay: snap.delight.lastCompletionDay,
+          },
+        });
+      }
     });
   }
 

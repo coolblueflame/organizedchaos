@@ -136,3 +136,45 @@ describe('deleting lists across two devices', () => {
     console.log('after a post-delete edit elsewhere ->', 'pc:', pc.visible, 'phone:', phone.visible);
   });
 });
+
+describe('discoveries travel between devices', () => {
+  const withDelight = (d: Partial<import('./files').DelightProgress>) => ({
+    unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+    streakDays: 0, lastCompletionDay: '', ...d,
+  });
+
+  it('an unlock earned on the phone shows up on the PC, and vice versa', async () => {
+    // The reported symptom: "First! is unlocked on my phone but not my PC."
+    // Delight state was device-local and never travelled at all.
+    phone.snap.delight = withDelight({ unlocks: ['first-blood'] });
+    await phone.engine.syncNow();
+
+    pc.snap.delight = withDelight({ unlocks: ['night-owl'] });
+    await pc.engine.syncNow();
+    expect(pc.snap.delight!.unlocks, 'the union, not a replacement')
+      .toEqual(['first-blood', 'night-owl']);
+
+    await phone.engine.syncNow();
+    expect(phone.snap.delight!.unlocks).toEqual(['first-blood', 'night-owl']);
+  });
+
+  it('a device that never earned one cannot take it away', async () => {
+    pc.snap.delight = withDelight({ unlocks: ['keymaster'] });
+    await pc.engine.syncNow();
+
+    // Phone knows nothing about it and syncs its empty set.
+    phone.snap.delight = withDelight({});
+    await phone.engine.syncNow();
+    await pc.engine.syncNow();
+    expect(pc.snap.delight!.unlocks).toEqual(['keymaster']);
+    expect(phone.snap.delight!.unlocks).toEqual(['keymaster']);
+  });
+
+  it('survives a repo written before delight synced at all', async () => {
+    // Older remotes simply have no delight field; that must merge, not throw.
+    await pc.engine.syncNow(); // seeds a remote with no delight
+    phone.snap.delight = withDelight({ unlocks: ['boxer'] });
+    await phone.engine.syncNow();
+    expect(phone.snap.delight!.unlocks).toEqual(['boxer']);
+  });
+});

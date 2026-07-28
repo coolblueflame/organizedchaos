@@ -285,6 +285,49 @@ export class EggEngine {
     this.persist();
   }
 
+  /**
+   * Take on progress that arrived from another device.
+   *
+   * The engine keeps its state in memory and rewrites the whole blob on every
+   * event, so a sync that only updated storage would be silently undone by the
+   * next completion. This folds the incoming values in by the same rules the
+   * merge uses — union and maxima, so nothing already earned can be taken away
+   * — and leaves this device's pacing untouched.
+   *
+   * Returns true if anything actually changed, so callers can refresh the UI
+   * without doing so on every quiet sync.
+   */
+  absorb(progress: {
+    unlocks: string[]; storyStage: number;
+    triviaCorrect: number; triviaTotal: number;
+    streakDays: number; lastCompletionDay: string;
+  }): boolean {
+    const before = JSON.stringify([
+      this.state.unlocks, this.state.storyStage, this.state.trivia,
+      this.state.streakDays, this.state.lastCompletionDay,
+    ]);
+    this.state.unlocks = [...new Set([...this.state.unlocks, ...progress.unlocks])].sort();
+    this.state.storyStage = Math.max(this.state.storyStage, progress.storyStage);
+    this.state.trivia = {
+      correct: Math.max(this.state.trivia.correct, progress.triviaCorrect),
+      total: Math.max(this.state.trivia.total, progress.triviaTotal),
+    };
+    // The streak is a single number whose meaning depends on when it was last
+    // touched, so the more recent side wins rather than the larger one.
+    if (progress.lastCompletionDay > this.state.lastCompletionDay) {
+      this.state.streakDays = progress.streakDays;
+      this.state.lastCompletionDay = progress.lastCompletionDay;
+    } else if (progress.lastCompletionDay === this.state.lastCompletionDay) {
+      this.state.streakDays = Math.max(this.state.streakDays, progress.streakDays);
+    }
+    const changed = JSON.stringify([
+      this.state.unlocks, this.state.storyStage, this.state.trivia,
+      this.state.streakDays, this.state.lastCompletionDay,
+    ]) !== before;
+    if (changed) this.persist();
+    return changed;
+  }
+
   /** True if newly granted; false if already discovered. */
   grantUnlock(id: string): boolean {
     if (this.state.unlocks.includes(id)) return false;

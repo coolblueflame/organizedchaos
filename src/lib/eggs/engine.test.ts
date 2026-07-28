@@ -169,3 +169,77 @@ describe('EggEngine', () => {
     expect(e.streakDays).toBe(1);
   });
 });
+
+describe('absorbing progress from another device', () => {
+  it('unions discoveries rather than replacing them', async () => {
+    // The property that matters: a device that has not heard of an unlock must
+    // never be able to take it away from one that earned it.
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('mine');
+    const changed = e.absorb({
+      unlocks: ['theirs'], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 0, lastCompletionDay: '',
+    });
+    expect(changed).toBe(true);
+    expect(e.unlocks).toEqual(['mine', 'theirs']);
+  });
+
+  it('takes the best of story and trivia, never the worst', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.advanceStory(4);
+    e.recordTrivia(true);
+    e.recordTrivia(true);
+    e.absorb({
+      unlocks: [], storyStage: 1, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 0, lastCompletionDay: '',
+    });
+    expect(e.storyStage, 'a device further behind cannot rewind the story').toBe(4);
+    expect(e.triviaStats).toEqual({ correct: 2, total: 2 });
+  });
+
+  it('the streak follows whichever device completed something more recently', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 3, lastCompletionDay: '2026-07-20',
+    });
+    expect(e.streakDays).toBe(3);
+    // An older report loses even though its number is bigger.
+    e.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 99, lastCompletionDay: '2026-07-10',
+    });
+    expect(e.streakDays).toBe(3);
+    // A newer one wins even though its number is smaller.
+    e.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 1, lastCompletionDay: '2026-07-25',
+    });
+    expect(e.streakDays).toBe(1);
+  });
+
+  it('reports no change when there is nothing new, so quiet syncs stay quiet', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('a');
+    expect(e.absorb({
+      unlocks: ['a'], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 0, lastCompletionDay: '',
+    })).toBe(false);
+  });
+
+  it('leaves this device\'s pacing alone', async () => {
+    const e = makeEngine([0, 0.5]);
+    await e.ready;
+    e.handle('taskCompleted', {}); // records a `seen` entry and the quiet clock
+    const pacingBefore = JSON.stringify(saved!.seen);
+    e.absorb({
+      unlocks: ['x'], storyStage: 2, triviaCorrect: 1, triviaTotal: 1,
+      streakDays: 5, lastCompletionDay: '2026-07-25',
+    });
+    expect(JSON.stringify(saved!.seen), 'pacing is per-device').toBe(pacingBefore);
+  });
+});

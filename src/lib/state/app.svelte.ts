@@ -212,6 +212,10 @@ export class AppStore {
       saveLocal: async (snap) => {
         await this.repo.replaceAll(snap);
         await this.refreshFromDisk();
+        // The engine holds its state in memory and rewrites it on every event,
+        // so storage alone is not enough: without this, the next completion
+        // would overwrite whatever the other device had just taught us.
+        if (snap.delight && this.eggs?.absorb(snap.delight)) this.syncEggMirrors();
       },
     });
     engine.onStatus = (status, detail) => {
