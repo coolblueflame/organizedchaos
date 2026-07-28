@@ -95,10 +95,32 @@ body {
      * ceiling keeps a filled one inside its container. Whatever Safari decides
      * to measure, it cannot escape either end.
      */
+    /*
+     * !important for the same reason the 16px font rule needs it: Svelte
+     * scoped styles are class selectors and outrank this element rule, so any
+     * component's own `input` styling silently wins otherwise.
+     */
     display: block;
-    width: 100%;
-    min-width: 11ch;
+    width: 100% !important;
+    min-width: 11ch !important;
     max-width: 100%;
+    min-height: 2.3em;
+  }
+
+  /*
+   * The layer the earlier fix missed. iOS renders a date/time input's value in
+   * a shadow element, and while the field is EMPTY that element has nothing to
+   * size against and collapses to zero — shrinking the visible box no matter
+   * what floors the input itself carries. Give the shadow element its own
+   * minimum so an empty field holds the shape of the date it will contain.
+   * (Not reproducible in Playwright's webkit; the proof is on a real device.)
+   */
+  input[type='date']::-webkit-date-and-time-value,
+  input[type='time']::-webkit-date-and-time-value,
+  input[type='datetime-local']::-webkit-date-and-time-value {
+    min-height: 1.3em;
+    min-width: 9ch;
+    text-align: left;
   }
 }
 
