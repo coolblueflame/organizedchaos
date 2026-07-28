@@ -110,25 +110,30 @@ test('merges two spellings of the same tag, keeping both tasks', async ({ page }
 test('clears out tags nothing is using, in one go', async ({ page }) => {
   await reset(page);
   await setUpList(page);
-  // Three tags made on one task, then all three toggled back off, so every one
-  // of them exists while nothing wears it.
-  await page.getByTestId('new-task').click();
-  await page.getByTestId('task-name-input').fill('a task');
-  for (const name of ['alpha', 'beta', 'gamma']) {
-    // Adding a tag rewrites the task, which can re-sort and remount the row —
-    // so re-open the box rather than assuming it survived.
-    if (await page.getByTestId('new-tag').isVisible()) await page.getByTestId('new-tag').click();
-    await page.getByTestId('new-tag-input').fill(name);
-    await page.getByTestId('new-tag-input').press('Enter');
-  }
-  if (await page.getByTestId('new-tag-done').isVisible()) await page.getByTestId('new-tag-done').click();
-  // Take all three back off so every one of them reads as unused.
-  for (const name of ['alpha', 'beta', 'gamma']) {
-    await page.getByRole('button', { name, exact: true }).click();
-  }
-  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
 
+  // Tags that exist while nothing wears them — what an import leaves behind.
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const tx = open.result.transaction('tags', 'readwrite');
+        for (const [i, name] of ['alpha', 'beta', 'gamma'].entries()) {
+          tx.objectStore('tags').put({
+            id: `unused-${name}`, name, colorIndex: i,
+            createdAt: 0, updatedAt: 1, deleted: false,
+          });
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
   await page.goto('./#/tags');
+  await page.reload();
+
   await expect(page.getByTestId(/^tag-row-/)).toHaveCount(3);
   await page.getByTestId('delete-unused').click();
   await expect(page.getByTestId(/^tag-row-/)).toHaveCount(0);

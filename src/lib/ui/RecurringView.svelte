@@ -51,10 +51,15 @@
     {#each templates as tpl (tpl.id)}
       <div class="row" data-testid="recurring-row-{tpl.id}">
         <div class="line">
-          <div class="info">
+          <!-- The row itself opens the editor, same as the pencil: tapping the
+               thing you want to change is the obvious gesture, and the pencil is
+               a small target on a phone. -->
+          <button class="info" data-testid="recurring-open-{tpl.id}"
+            aria-expanded={editingId === tpl.id}
+            onclick={() => (editingId = editingId === tpl.id ? null : tpl.id)}>
             <span class="name" class:dim={tpl.paused}>{tpl.name || 'untitled'}</span>
             <span class="cadence">↻ {describeRecurrence(tpl.mode, tpl.deadlineOffsetDays)} · {nextInfo(tpl)}</span>
-          </div>
+          </button>
           <div class="btns">
             <button data-testid="recurring-pause-{tpl.id}"
               onclick={() => void app.updateRecurring(tpl.id, { paused: !tpl.paused })}>
@@ -89,7 +94,12 @@
   .rows { display: flex; flex-direction: column; gap: 6px; }
   .row { background: var(--bg1); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
   .line { display: flex; align-items: center; gap: 8px; }
-  .info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .info {
+    flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+    background: none; border: none; padding: 2px 0; text-align: left;
+    color: inherit; font: inherit; cursor: pointer;
+  }
+  .info:hover .name { color: var(--acc-cyan); }
   .name { font-size: 0.9rem; font-weight: 500; }
   .name.dim { color: var(--dim); }
   .cadence { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem; }

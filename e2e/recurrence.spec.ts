@@ -54,6 +54,16 @@ test('recurring screen lists, pauses, and deletes templates', async ({ page }) =
   await expect(row).toContainText('weekly thing');
   await expect(row).toContainText('every Mon');
   const id = (await row.getAttribute('data-testid'))!.replace('recurring-row-', '');
+
+  // Tapping the row opens the cadence editor, same as the pencil does.
+  await page.getByTestId(`recurring-open-${id}`).click();
+  await expect(page.getByTestId('recur-save')).toBeVisible();
+  await page.getByTestId(`recurring-open-${id}`).click(); // and closes it again
+  await expect(page.getByTestId('recur-save')).toHaveCount(0);
+  await page.getByTestId(`recurring-edit-${id}`).click();
+  await expect(page.getByTestId('recur-save'), 'the pencil still works too').toBeVisible();
+  await page.getByTestId(`recurring-edit-${id}`).click();
+
   await page.getByTestId(`recurring-pause-${id}`).click();
   await expect(row).toContainText('paused');
   page.on('dialog', (d) => void d.accept());
