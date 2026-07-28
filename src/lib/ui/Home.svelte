@@ -10,6 +10,7 @@
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
+  import { moveWithin, sortLists } from '../domain/listOrder';
   import ListSettings from './ListSettings.svelte';
   import type { List } from '../domain/types';
   import { nextPhrase } from './phrases';
@@ -65,9 +66,58 @@
       bucket.push(l);
       buckets.set(key, bucket);
     }
-    return [...buckets.entries()].sort(([a], [b]) =>
-      a === '' ? -1 : b === '' ? 1 : a.localeCompare(b));
+    return [...buckets.entries()]
+      .map(([key, bucket]) => [key, sortLists(bucket)] as [string, List[]])
+      .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
   });
+
+  // ── drag to reorder (2026-07-28 request) ─────────────────────────────────
+  // Same contract as the task rows: the drag starts on a grip that carries
+  // `touch-action: none`, so a finger anywhere else on the row still scrolls.
+  let dragId = $state<string | null>(null);
+  /** Live sequence while dragging, so the list reflows under your finger. */
+  let dragOrder = $state<string[] | null>(null);
+  let dragGroup: string | null = null;
+
+  function startListDrag(e: PointerEvent, group: string, ids: string[], id: string) {
+    e.preventDefault();
+    dragId = id;
+    dragGroup = group;
+    dragOrder = [...ids];
+  }
+
+  function onListDragMove(e: PointerEvent) {
+    if (!dragId || !dragOrder) return;
+    // Where does the pointer sit relative to the rows currently on screen?
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-list-row]')]
+      .filter((el) => dragOrder!.includes(el.dataset.listRow!));
+    let target = dragOrder.indexOf(dragId);
+    rows.forEach((el, i) => {
+      const box = el.getBoundingClientRect();
+      if (e.clientY > box.top && e.clientY < box.bottom) target = i;
+    });
+    const next = moveWithin(dragOrder, dragId, target);
+    if (next.join() !== dragOrder.join()) {
+      dragOrder = next;
+      haptic('tick');
+    }
+  }
+
+  async function endListDrag() {
+    const ids = dragOrder;
+    const moved = dragId !== null;
+    dragId = null;
+    dragOrder = null;
+    dragGroup = null;
+    if (moved && ids) await app.reorderLists(ids);
+  }
+
+  /** The sequence to render for a group: the live drag order if it owns one. */
+  const shownLists = (group: string, lists: List[]): List[] => {
+    if (dragGroup !== group || !dragOrder) return lists;
+    const byId = new Map(lists.map((l) => [l.id, l]));
+    return dragOrder.map((id) => byId.get(id)).filter((l): l is List => l !== undefined);
+  };
 
   async function createList() {
     const title = newListTitle.trim();
@@ -86,6 +136,8 @@
     if (newListOpen) newListInput?.focus();
   });
 </script>
+
+<svelte:window onpointermove={onListDragMove} onpointerup={() => void endListDrag()} />
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
@@ -125,8 +177,14 @@
       {#if group !== ''}
         <h2 class="group-header">{group}</h2>
       {/if}
-      {#each lists as l (l.id)}
-        <div class="list-row" data-testid="list-row-{l.id}">
+      {@const ids = shownLists(group, lists).map((x) => x.id)}
+      {#each shownLists(group, lists) as l (l.id)}
+        <div class="list-row" class:lifted={dragId === l.id}
+          data-list-row={l.id} data-testid="list-row-{l.id}">
+          <button class="list-grip" data-testid="list-drag-{l.id}" aria-label="drag to reorder"
+            onpointerdown={(e) => startListDrag(e, group, ids, l.id)}>
+            <Glyph name="grip" size={12} />
+          </button>
           <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
             <span class="list-title">{l.title}</span>
             {#if l.deadline}
@@ -220,6 +278,15 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
     text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 2px; font-weight: 600;
   }
+  .list-grip {
+    flex: none; align-self: center; background: none; border: none;
+    color: var(--line); cursor: grab; padding: 8px 4px;
+    /* The drag must never turn into a page scroll — same as the task rows. */
+    touch-action: none;
+  }
+  .list-grip:hover { color: var(--dim); }
+  .list-grip:active { cursor: grabbing; }
+  .list-row.lifted { opacity: 0.5; }
   .list-row { position: relative; display: flex; align-items: stretch; }
   .list-main {
     flex: 1; display: flex; justify-content: space-between; align-items: center;

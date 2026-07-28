@@ -11,6 +11,7 @@ import { nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
+import { reorderPatches } from '../domain/listOrder';
 import { SyncEngine, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
@@ -292,6 +293,16 @@ export class AppStore {
   /** Whole-list edit from the settings sheet (name, group, deadline, hours). */
   async updateList(id: string, patch: Partial<List>): Promise<void> {
     await this.patchList(id, patch);
+  }
+
+  /**
+   * Commit a new home-screen order for one group. `orderedIds` is the whole
+   * group in its new sequence; only rows whose position actually changed are
+   * written, so an aborted drag costs nothing and syncs nothing.
+   */
+  async reorderLists(orderedIds: string[]): Promise<void> {
+    const patches = reorderPatches(orderedIds, this.state.lists);
+    for (const { id, order } of patches) await this.patchList(id, { order });
   }
 
   private async patchList(id: string, patch: Partial<List>): Promise<void> {

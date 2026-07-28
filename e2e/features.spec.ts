@@ -262,3 +262,32 @@ test('a completed task records how long it took', async ({ page }) => {
   await page.getByTestId('search-input').fill('quick one');
   await expect(page.getByTestId('search-completed')).toContainText('⧗');
 });
+
+test('lists can be dragged into a new order, and it sticks', async ({ page }) => {
+  await reset(page);
+  for (const name of ['Alpha', 'Beta', 'Gamma']) {
+    await makeList(page, name);
+    await page.getByTestId('back').click();
+  }
+  // Read the title element rather than the row's whole text: the row also
+  // carries a grip, a count and a menu button.
+  const titles = () => page.locator('[data-list-row] .list-title').allTextContents();
+  expect(await titles()).toEqual(['Alpha', 'Beta', 'Gamma']);
+
+  // Drag Gamma up above Alpha by its grip.
+  const gamma = page.getByTestId(/^list-row-/).filter({ hasText: 'Gamma' }).first();
+  const id = (await gamma.getAttribute('data-testid'))!.replace('list-row-', '');
+  const from = (await page.getByTestId(`list-drag-${id}`).boundingBox())!;
+  const target = (await page.getByTestId(/^list-row-/).first().boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + 6, { steps: 12 });
+  await page.mouse.up();
+
+  await expect.poll(titles).toEqual(['Gamma', 'Alpha', 'Beta']);
+
+  // And it survives a reload — the order is persisted, not just on screen.
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+  expect(await titles()).toEqual(['Gamma', 'Alpha', 'Beta']);
+});

@@ -705,3 +705,23 @@ describe('AppStore', () => {
     expect((await db.templates.get(tpl.id))!.deleted).toBe(true);
   });
 });
+
+describe('list ordering', () => {
+  it('reorderLists numbers the group and persists only what moved', async () => {
+    const a = await store.addList('Alpha');
+    const b = await store.addList('Beta');
+    const c = await store.addList('Gamma');
+
+    await store.reorderLists([c.id, a.id, b.id]);
+    const orderOf = (id: string) => store.state.lists.find((l) => l.id === id)!.order;
+    expect(orderOf(c.id)).toBe(0);
+    expect(orderOf(a.id)).toBe(1);
+    expect(orderOf(b.id)).toBe(2);
+    expect((await persisted()).lists.find((l) => l.id === c.id)!.order).toBe(0);
+
+    // Re-committing the same sequence is a no-op — nothing to write or sync.
+    const stamps = store.state.lists.map((l) => l.updatedAt);
+    await store.reorderLists([c.id, a.id, b.id]);
+    expect(store.state.lists.map((l) => l.updatedAt)).toEqual(stamps);
+  });
+});

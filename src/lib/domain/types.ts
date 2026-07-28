@@ -31,6 +31,14 @@ export interface List extends Base {
   title: string;
   /** Display grouping label on the home screen (imported from Things areas). */
   areaGroup?: string;
+  /**
+   * Manual position on the home screen, low to high, within its group
+   * (2026-07-28 request: pin the important list up top, sink the cruft).
+   * Absent on anything never dragged — those keep their existing order, which
+   * is why the comparator has to treat "no order" as "stay put" rather than
+   * as zero.
+   */
+  order?: number;
   /** Last sort mode used in this list's view (spec §6: remembered per list). */
   sortMode: SortMode;
   /**
