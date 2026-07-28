@@ -201,6 +201,8 @@
   }
   .discoveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .discoveries li { color: var(--dim); font-size: 0.82rem; }
-  .discoveries li.found { color: var(--text); }
+  /* Earned ones read as gold — the medal glyph inherits it via currentColor,
+     so the whole line lifts off the dim ??? rows around it. */
+  .discoveries li.found { color: var(--acc-yellow); font-weight: 600; }
   .disc-hint { opacity: 0.6; font-size: 0.72rem; font-style: italic; }
 </style>
