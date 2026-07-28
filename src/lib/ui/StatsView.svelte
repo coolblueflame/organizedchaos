@@ -7,6 +7,7 @@
   import Glyph from './Glyph.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
+  import { listHealth, shortAge } from '../domain/listHealth';
   import {
     averageActiveMs, burdenSeries, completionSeries, formatDuration, formatElapsed,
     totalEstimateHours,
@@ -25,6 +26,9 @@
 
   const estimateHours = $derived(totalEstimateHours(app.state.tasks));
   const avgActive = $derived(averageActiveMs(app.state.tasks));
+
+  const health = $derived(listHealth(app.state.lists, app.state.tasks, new Date()));
+  const totalUntriaged = $derived(health.reduce((n, r) => n + r.untriaged, 0));
 
   const burden = $derived.by(() => {
     const tasks = app.state.tasks;
@@ -101,6 +105,34 @@
     </details>
   </section>
   <section class="panel">
+    <div class="panel-head"><h2>list health (where to point the sweep)</h2></div>
+    <table class="health" data-testid="list-health">
+      <thead><tr><th>list</th><th>open</th><th>untriaged</th><th>median age</th></tr></thead>
+      <tbody>
+        {#each health as row (row.list.id)}
+          <tr class:done={row.untriaged === 0 && row.open === 0}>
+            <td class="h-title">
+              <button class="h-link" onclick={() => navigate({ name: 'list', id: row.list.id })}>
+                {row.list.title}
+              </button>
+            </td>
+            <td>{row.open}</td>
+            <td class:warn={row.untriaged > 0}>{row.untriaged || '—'}</td>
+            <td>{row.open ? shortAge(row.medianAgeDays) : '—'}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+    {#if totalUntriaged > 0}
+      <button class="h-sweep" data-testid="health-sweep" onclick={() => navigate({ name: 'sweep' })}>
+        ✎ sweep the {totalUntriaged} untriaged →
+      </button>
+    {:else}
+      <p class="footnote">every task has been looked at — the sweep is caught up</p>
+    {/if}
+  </section>
+
+  <section class="panel">
     <h2>discoveries</h2>
     <p class="discoveries-hint">Things you've stumbled into. There are more.
       {#if app.eggTrivia.total > 0}&nbsp;Quiz score: {app.eggTrivia.correct}/{app.eggTrivia.total}.{/if}
@@ -151,6 +183,27 @@
   .seg button.on { background: var(--bg2); color: var(--acc-green); }
   .footnote { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; margin: 8px 0 0; }
   details { margin-top: 8px; }
+  .health { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .health th {
+    text-align: left; color: var(--dim); font-family: var(--font-mono); font-size: 0.65rem;
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 8px 6px 0; font-weight: 600;
+  }
+  .health td { padding: 5px 8px 5px 0; border-top: 1px solid var(--line); font-family: var(--font-mono); color: var(--dim); }
+  .health td.warn { color: var(--acc-yellow); }
+  .health tr.done td { opacity: 0.5; }
+  .h-title { max-width: 0; width: 55%; }
+  .h-link {
+    background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+    color: var(--text); font: inherit; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
+  }
+  .h-link:hover { color: var(--acc-cyan); }
+  .h-sweep {
+    margin-top: 10px; background: none; border: 1px dashed var(--acc-yellow); border-radius: 8px;
+    color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 8px 12px; cursor: pointer;
+  }
+  .h-sweep:hover { border-style: solid; }
   summary { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; cursor: pointer; }
   table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 0.75rem; }
   th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); color: var(--text); }

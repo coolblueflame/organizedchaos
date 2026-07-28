@@ -272,7 +272,11 @@ test('lists can be dragged into a new order, and it sticks', async ({ page }) =>
   // Read the title element rather than the row's whole text: the row also
   // carries a grip, a count and a menu button.
   const titles = () => page.locator('[data-list-row] .list-title').allTextContents();
-  expect(await titles()).toEqual(['Alpha', 'Beta', 'Gamma']);
+  // Poll, don't read: allTextContents() takes whatever is there RIGHT NOW, and
+  // right now is mid-navigation — under a loaded machine Home hasn't mounted
+  // its rows yet and the read comes back empty. This was the whole flake; the
+  // drag below was never the problem.
+  await expect.poll(titles).toEqual(['Alpha', 'Beta', 'Gamma']);
 
   // Drag Gamma up above Alpha by its grip.
   const gamma = page.getByTestId(/^list-row-/).filter({ hasText: 'Gamma' }).first();
@@ -289,7 +293,7 @@ test('lists can be dragged into a new order, and it sticks', async ({ page }) =>
   // And it survives a reload — the order is persisted, not just on screen.
   await page.reload();
   await page.getByTestId('new-list').waitFor();
-  expect(await titles()).toEqual(['Gamma', 'Alpha', 'Beta']);
+  await expect.poll(titles).toEqual(['Gamma', 'Alpha', 'Beta']);
 });
 
 test('a long list renders a page at a time instead of all at once', async ({ page }) => {

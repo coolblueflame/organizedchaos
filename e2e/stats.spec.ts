@@ -38,3 +38,33 @@ test('completions feed the strip and the stats screen renders both charts', asyn
   await page.getByTestId('stats-gran-week').click(); // toggle doesn't explode
   await expect(page.locator('svg[role="img"]')).toHaveCount(2);
 });
+
+test('list health names the list most in need of the sweep', async ({ page }) => {
+  // beforeEach already reset. Tidy list: one task, triaged by touching a field.
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Tidy');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('reviewed thing');
+  await page.getByTestId('priority-high').click(); // touching a field = triaged
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Messy');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('never looked at');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('stats-strip').click();
+  const table = page.getByTestId('list-health');
+  await expect(table).toBeVisible();
+  const firstRow = table.locator('tbody tr').first();
+  await expect(firstRow, 'the untriaged list leads').toContainText('Messy');
+  await expect(firstRow).toContainText('1');
+  await page.getByTestId('health-sweep').click();
+  await expect(page.getByTestId('sweep-card')).toContainText('never looked at');
+});
