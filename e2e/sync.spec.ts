@@ -100,7 +100,12 @@ test('a wiped device rehydrates everything from the remote', async ({ page }) =>
   await seedTask(page, 'precious data');
   await connect(page);
 
-  // catastrophic local loss (or: a brand-new device)
+  // Catastrophic local loss (or: a brand-new device). Disconnect FIRST: the
+  // token lives in the database being wiped, so a real fresh device boots
+  // unauthenticated. Wiping while still connected raced the boot sync — which
+  // would rehydrate the data mid-wipe and fail the emptiness check below not
+  // because the wipe failed, but because the product had already done its job.
+  await page.getByTestId('settings-disconnect').click();
   await reset(page);
   await expect(page.getByTestId(/^list-row-/)).toHaveCount(0);
   await connect(page);

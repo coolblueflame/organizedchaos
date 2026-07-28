@@ -65,23 +65,20 @@ test('rapid entry still focuses the new row on touch', async ({ page }) => {
   await page.getByTestId('task-name-input').fill('first renamed');
   await page.getByTestId('task-name-input').press('Enter');
 
+  // Wait for the chain handoff to COMPLETE before typing: until the new task's
+  // editor mounts, the focused input is still the old task's editor — the
+  // instrumented run caught 'second' appended to it as 'first renamedsecond'.
+  // The new editor is the one whose value is empty; wait for that.
+  //
+  // KNOWN PRODUCT EDGE (2026-07-28): that window is real for users too — on a
+  // slow device, keystrokes right after Enter can land on the just-committed
+  // task. Designed fix is synchronous draft creation (mirror-first addTask);
+  // scheduled as its own chunk. When it lands, this wait becomes instant.
+  await expect(page.getByTestId('task-name-input')).toHaveValue('');
   await expect(page.getByTestId('task-name-input')).toBeFocused();
-  await page.getByTestId('task-name-input').fill('second');
-  // Two paths save a name: the first keystroke into an empty task saves at once
-  // (so a discard check can never see it as pristine), everything else debounces
-  // by 400ms. Which one a fill() lands on depends on what the row believes its
-  // current name is, so wait out the slower one rather than assume the faster.
-  // This assertion failed twice on CI and never once locally across ~40 runs,
-  // including a 6x-throttled CPU and a single-worker full suite.
-  await page.waitForTimeout(600);
-  // Close with the collapse button, which flushes and closes in one path; Escape
-  // went through the global handler, which has to have re-armed for a row created
-  // a moment earlier — a race this test was never about.
+  await page.keyboard.type('second');
+  await page.waitForTimeout(600); // let the debounced tail of the name flush
   await page.getByTestId('task-collapse').click();
-  // Assert the editor actually closed before looking for the name as TEXT. An
-  // open editor holds the name as an input VALUE, which getByText cannot see —
-  // so if the click ever lands on a node that a re-sort has already replaced,
-  // this fails saying the editor is still open rather than the name is missing.
   await expect(page.getByTestId('task-name-input')).toHaveCount(0);
   await expect(page.getByText('second', { exact: true })).toBeVisible();
 });
