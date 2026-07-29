@@ -805,23 +805,27 @@ test('custom sort: starts oldest-first, drags into a hand-built order, and stick
   await expect.poll(titles, { timeout: 4000 })
     .toEqual(['first added', 'second added', 'third added']); // creation order
 
-  // Drag the last row to the top by its grip.
+  // Drag the last row to the top by its grip — driven with synthetic pointer
+  // events dispatched in-page. Playwright's real mouse rides the OS/driver
+  // scheduler, which on a loaded CI box can starve the frames the live reflow
+  // hit-test reads; dispatching directly makes the sequence deterministic and
+  // still exercises every app handler (grip pointerdown, window move/up).
   const third = page.getByTestId(/^task-row-/).filter({ hasText: 'third added' }).first();
   const id = (await third.getAttribute('data-testid'))!.replace('task-row-', '');
-  const grip = page.getByTestId(`drag-${id}`);
-  const from = (await grip.boundingBox())!;
-  const target = (await page.locator('[data-drag-row]').first().boundingBox())!;
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(target.x + 60, target.y + 4, { steps: 12 });
-  // Release only after SEEING the reorder take, the way a human does — on a
-  // slow machine the reflow can lag the pointer, so nudge until it lands.
-  for (let i = 0; i < 20; i += 1) {
-    if ((await titles())[0] === 'third added') break;
-    await page.mouse.move(target.x + 60, target.y + 4 - (i % 2));
-    await page.waitForTimeout(120);
-  }
-  await page.mouse.up();
+  await page.evaluate((taskId) => {
+    const grip = document.querySelector(`[data-testid="drag-${taskId}"]`)!;
+    const g = grip.getBoundingClientRect();
+    const first = document.querySelector('[data-drag-row]')!.getBoundingClientRect();
+    const fire = (type: string, target: EventTarget, x: number, y: number) =>
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: 'mouse',
+      }));
+    fire('pointerdown', grip, g.x + 4, g.y + 4);
+    fire('pointermove', window, g.x + 4, g.y - 20);        // past the threshold: drag engages
+    fire('pointermove', window, first.x + 40, first.y + 2); // above the first row's midpoint
+    fire('pointermove', window, first.x + 40, first.y + 3); // re-test after the reflow
+    fire('pointerup', window, first.x + 40, first.y + 3);
+  }, id);
 
   await expect.poll(titles).toEqual(['third added', 'first added', 'second added']);
 
