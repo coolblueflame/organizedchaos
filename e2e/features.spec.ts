@@ -789,3 +789,46 @@ test('finishing tracked work with an estimate splashes the comparison', async ({
   await expect(page.getByTestId(`done-estimate-${id}`))
     .toContainText('estimated 1h · took 30m — 30m under the estimate');
 });
+
+test('custom sort: starts oldest-first, drags into a hand-built order, and sticks', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Arranged');
+  for (const name of ['first added', 'second added', 'third added']) {
+    await addTask(page, name);
+  }
+
+  // Cycle sort to custom: priority → date → tag → custom.
+  for (let i = 0; i < 3; i += 1) await page.getByTestId('list-sort').click();
+  await expect(page.getByTestId('list-sort')).toContainText('custom');
+
+  const titles = () => page.locator('[data-drag-row] .name').allTextContents();
+  await expect.poll(titles, { timeout: 4000 })
+    .toEqual(['first added', 'second added', 'third added']); // creation order
+
+  // Drag the last row to the top by its grip.
+  const third = page.getByTestId(/^task-row-/).filter({ hasText: 'third added' }).first();
+  const id = (await third.getAttribute('data-testid'))!.replace('task-row-', '');
+  const grip = page.getByTestId(`drag-${id}`);
+  const from = (await grip.boundingBox())!;
+  const target = (await page.locator('[data-drag-row]').first().boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + 60, target.y + 4, { steps: 12 });
+  // Hold: the rows slide apart (160ms flip), and the hit-test recomputes on
+  // the next move — a human releases after seeing the gap open, so do we.
+  await page.waitForTimeout(250);
+  await page.mouse.move(target.x + 60, target.y + 3);
+  await page.mouse.up();
+
+  await expect.poll(titles).toEqual(['third added', 'first added', 'second added']);
+
+  // Survives a reload — the order is data, not screen state.
+  await page.reload();
+  await expect.poll(titles, { timeout: 4000 })
+    .toEqual(['third added', 'first added', 'second added']);
+
+  // A task added after arranging joins at the bottom, disturbing nothing.
+  await addTask(page, 'newcomer');
+  await expect.poll(titles)
+    .toEqual(['third added', 'first added', 'second added', 'newcomer']);
+});

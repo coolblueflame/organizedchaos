@@ -18,7 +18,7 @@ export function priorityRank(p: Priority): number {
   return PRIORITIES.indexOf(p);
 }
 
-export type SortMode = 'priority' | 'date' | 'tag';
+export type SortMode = 'priority' | 'date' | 'tag' | 'custom';
 
 interface Base {
   id: string;
@@ -94,6 +94,11 @@ export interface Task extends Base {
   inProgress: boolean;
   /** "Not Today" snooze — excludes from the randomizer pool ONLY, until this moment. */
   notTodayUntil?: number;
+  /**
+   * Manual position within the list's CUSTOM sort (see domain/views.ts
+   * customOrder). Absent until the first drag; new tasks join at the bottom.
+   */
+  order?: number;
   /**
    * A daily ritual's window (see domain/ritual.ts). Present = this task is a
    * standing daily thing rather than a one-off: it is never spawned, never

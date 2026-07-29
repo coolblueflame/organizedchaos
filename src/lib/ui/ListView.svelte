@@ -7,7 +7,7 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import {
-    groupByDate, groupByPriority, groupByTag, subSortGroups,
+    groupByDate, groupCustom, groupByPriority, groupByTag, subSortGroups,
     SUB_SORT_LABELS, type SubSort,
   } from '../domain/views';
   import type { SortMode } from '../domain/types';
@@ -24,7 +24,8 @@
   const list = $derived(app.state.lists.find((l) => l.id === id));
   const listTasks = $derived(app.state.tasks.filter((t) => t.listId === id));
 
-  const nextMode: Record<SortMode, SortMode> = { priority: 'date', date: 'tag', tag: 'priority' };
+  const nextMode: Record<SortMode, SortMode> =
+    { priority: 'date', date: 'tag', tag: 'custom', custom: 'priority' };
 
   /*
     The list's own history, Things-style: a collapsed section at the bottom.
@@ -50,6 +51,7 @@
     const now = new Date();
     if (mode === 'date') return groupByDate(listTasks, app.state.settings, now);
     if (mode === 'tag') return groupByTag(listTasks, app.state.tags, app.state.settings, now);
+    if (mode === 'custom') return groupCustom(listTasks);
     return groupByPriority(listTasks, app.state.settings, now);
   });
 
@@ -58,7 +60,9 @@
   const cycleSubSort = () => {
     subSort = SUB_CYCLE[(SUB_CYCLE.indexOf(subSort) + 1) % SUB_CYCLE.length]!;
   };
-  const sortedGroups = $derived(subSortGroups(groups, subSort));
+  const sortedGroups = $derived(
+    list?.sortMode === 'custom' ? groups : subSortGroups(groups, subSort),
+  );
 
   async function cycleSort() {
     if (!list) return;
@@ -133,10 +137,12 @@
     <button class="sort" data-testid="list-sort" onclick={cycleSort}>
       sort: {list?.sortMode ?? 'priority'}
     </button>
-    <button class="sort" data-testid="list-subsort" onclick={cycleSubSort}
-      title="order within each group">
-      ↳ {SUB_SORT_LABELS[subSort]}
-    </button>
+    {#if list?.sortMode !== 'custom'}
+      <button class="sort" data-testid="list-subsort" onclick={cycleSubSort}
+        title="order within each group">
+        ↳ {SUB_SORT_LABELS[subSort]}
+      </button>
+    {/if}
   </header>
 
   <GroupedTasks

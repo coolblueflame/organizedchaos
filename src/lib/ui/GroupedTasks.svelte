@@ -17,6 +17,9 @@
   import Glyph from './Glyph.svelte';
   import { revealOnApproach } from './lazyReveal';
   import { createDragScroller } from './dragScroll';
+  import { moveWithin } from '../domain/listOrder';
+  import { flip } from 'svelte/animate';
+  import { motionOk as motionOkFlip } from './fx/particles';
 
   let {
     groups,
@@ -26,8 +29,9 @@
     onenter,
   }: {
     groups: TaskGroup[];
-    /** Which attribute a drop assigns; null disables dragging. */
-    mode: 'priority' | 'tag' | 'date' | null;
+    /** Which attribute a drop assigns; 'custom' makes dragging REORDER
+     *  instead of regroup; null disables dragging. */
+    mode: 'priority' | 'tag' | 'date' | 'custom' | null;
     editingTaskId: string | null;
     showList?: boolean;
     onenter?: (name: string) => void;
@@ -153,9 +157,36 @@
     origin = { x: e.clientX, y: e.clientY };
   }
 
+  /*
+    Custom mode: dragging rearranges rather than regroups. The live sequence
+    reflows under the finger (rows slide apart at each midpoint), exactly the
+    feedback the home-screen list drag already has.
+  */
+  let customOrder = $state<string[] | null>(null);
+  const rowFlipMs = motionOkFlip() ? 160 : 0;
+
   /** Re-runs on every pointermove AND every auto-scrolled frame: the page
    *  moves under a parked finger, so position alone goes stale. */
   function hitTest() {
+    if (mode === 'custom') {
+      if (!dragging) return;
+      const base = customOrder ?? groups[0]?.tasks.map((t) => t.id) ?? [];
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-drag-row]')]
+        .filter((el) => el.dataset.dragRow !== dragging!.id);
+      let index = rows.length;
+      for (let i = 0; i < rows.length; i += 1) {
+        const box = rows[i]!.getBoundingClientRect();
+        if (pointerY < box.top + box.height / 2) { index = i; break; }
+      }
+      const next = moveWithin(base, dragging.id, index);
+      if (next.join() !== base.join()) {
+        customOrder = next;
+        haptic('tick');
+      } else if (customOrder === null) {
+        customOrder = base;
+      }
+      return;
+    }
     const el = document.elementFromPoint(pointerX, pointerY);
     hoverKey = el?.closest<HTMLElement>('[data-group-key]')?.dataset.groupKey ?? null;
   }
@@ -192,6 +223,19 @@
 
   async function onPointerUp() {
     scroller.stop();
+    if (mode === 'custom') {
+      const order = customOrder;
+      const moved = dragging !== null && order !== null;
+      candidate = null;
+      origin = null;
+      dragging = null;
+      customOrder = null;
+      if (moved && order) {
+        await app.reorderTasksInList(order);
+        haptic('success');
+      }
+      return;
+    }
     const carried = dragPayload;
     const key = hoverKey;
     candidate = null;
@@ -221,6 +265,7 @@
 
 <section class="groups" class:dragging={dragging !== null}>
   {#each shown as { group, tasks } (group.key)}
+    {#if mode !== 'custom'}
     <h2
       class="group-header"
       class:drop-target={dragging !== null}
@@ -232,11 +277,16 @@
       <button class="pick-group" data-testid="select-group-{group.key}"
         onclick={() => selectGroup(group)} title="select all in this group"><Glyph name="box-all" size={17} /></button>
     </h2>
-    {#each tasks as task (group.key + task.id)}
+    {/if}
+    {#each mode === 'custom' && customOrder
+      ? customOrder.map((cid) => tasks.find((t) => t.id === cid)).filter((t) => t !== undefined)
+      : tasks as task (group.key + task.id)}
       <!-- Presentational drag wrapper; the row inside keeps all the semantics. -->
       <div
         class="draggable"
         role="presentation"
+        animate:flip={{ duration: rowFlipMs }}
+        data-drag-row={task.id}
         class:lifted={dragging?.id === task.id}
         class:picked={selected.includes(task.id)}
         onpointerdown={(e) => onPointerDown(e, task)}>

@@ -115,6 +115,38 @@ export function groupByTag(tasks: Task[], tags: Tag[], settings: Settings, now: 
   return groups;
 }
 
+/**
+ * The CUSTOM sort: one unlabeled group the user arranges by hand.
+ *
+ * Starts as oldest-first (creation order — the sequence things arrived in),
+ * and once anything has been dragged, explicit `order` wins. Ordered rows sort
+ * among themselves; rows without an order (new tasks, other devices' adds)
+ * join BELOW in creation order, so a hand-built arrangement is never silently
+ * interleaved.
+ */
+export function groupCustom(tasks: Task[]): TaskGroup[] {
+  const open = openTasks(tasks);
+  const sorted = [...open].sort((a, b) => {
+    if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+    if (a.order !== undefined) return -1;
+    if (b.order !== undefined) return 1;
+    return a.createdAt - b.createdAt;
+  });
+  return sorted.length ? [{ key: 'custom', label: '', tasks: sorted }] : [];
+}
+
+/** The patches to store `orderedIds` as the new custom sequence — whole-list
+ *  numbering, changed rows only (same contract as list reordering). */
+export function customOrderPatches(orderedIds: string[], tasks: Task[]): Array<{ id: string; order: number }> {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const patches: Array<{ id: string; order: number }> = [];
+  orderedIds.forEach((id, index) => {
+    const task = byId.get(id);
+    if (task && task.order !== index) patches.push({ id, order: index });
+  });
+  return patches;
+}
+
 /** Completed tasks bucketed by completion app-day (4am rule), newest day + completion first. */
 export function groupCompleted(tasks: Task[], rolloverHour: number): TaskGroup[] {
   const done = tasks

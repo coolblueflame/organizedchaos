@@ -15,6 +15,7 @@ import { ritualExclusions, withRitualLifts } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
 import { reorderPatches } from '../domain/listOrder';
+import { customOrderPatches } from '../domain/views';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
 import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
@@ -321,6 +322,12 @@ export class AppStore {
   /** Shelve or revive a list — see domain/archive.ts for what that means. */
   async setListArchived(id: string, archived: boolean): Promise<void> {
     await this.patchList(id, { archived: archived || undefined });
+  }
+
+  /** Commit a hand-arranged custom order for one list's open tasks. */
+  async reorderTasksInList(orderedIds: string[]): Promise<void> {
+    const patches = customOrderPatches(orderedIds, this.state.tasks);
+    for (const { id, order } of patches) await this.patchTask(id, { order });
   }
 
   /**
