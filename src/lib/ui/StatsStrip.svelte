@@ -4,7 +4,7 @@
   import { navigate } from './router.svelte';
   import { completionCounts } from '../domain/stats';
   import { motionOk } from './fx/particles';
-  import Glyph from './Glyph.svelte';
+  import FlameGlyph from './FlameGlyph.svelte';
 
   const counts = $derived(completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour));
 
@@ -53,7 +53,8 @@
   {#if app.eggStreak >= 3}
     <button class="streak" data-testid="streak-tile" onclick={() => navigate({ name: 'stats' })}
       title="{app.eggStreak}-day streak · best {app.eggBestStreak}">
-      <Glyph name="flame" size={15} />
+      <!-- flareKey: every completion today makes the fire surge for a beat. -->
+      <FlameGlyph size={15} flareKey={counts.today} />
       <span class="streak-n">{app.eggStreak}</span>
       <span class="label">streak</span>
     </button>

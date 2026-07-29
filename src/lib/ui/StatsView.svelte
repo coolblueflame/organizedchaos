@@ -5,6 +5,7 @@
 <script lang="ts">
   import { UNLOCKS } from '../eggs/content/extras';
   import Glyph from './Glyph.svelte';
+  import FlameGlyph from './FlameGlyph.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { listHealth, shortAge } from '../domain/listHealth';
@@ -128,7 +129,7 @@
   </section>
   {#if app.eggBestStreak >= 3}
     <section class="panel streak-panel" data-testid="streak-panel">
-      <span class="streak-now"><Glyph name="flame" size={15} /> {app.eggStreak}-day streak</span>
+      <span class="streak-now"><FlameGlyph size={15} /> {app.eggStreak}-day streak</span>
       <span class="streak-best">longest ever: {app.eggBestStreak} days</span>
     </section>
   {/if}
