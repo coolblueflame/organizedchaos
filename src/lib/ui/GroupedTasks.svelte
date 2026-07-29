@@ -224,6 +224,7 @@
   async function onPointerUp() {
     scroller.stop();
     if (mode === 'custom') {
+      hitTest(); // one last look from the final pointer position
       const order = customOrder;
       const moved = dragging !== null && order !== null;
       candidate = null;

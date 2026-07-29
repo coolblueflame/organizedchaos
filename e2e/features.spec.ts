@@ -814,10 +814,13 @@ test('custom sort: starts oldest-first, drags into a hand-built order, and stick
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + 60, target.y + 4, { steps: 12 });
-  // Hold: the rows slide apart (160ms flip), and the hit-test recomputes on
-  // the next move — a human releases after seeing the gap open, so do we.
-  await page.waitForTimeout(250);
-  await page.mouse.move(target.x + 60, target.y + 3);
+  // Release only after SEEING the reorder take, the way a human does — on a
+  // slow machine the reflow can lag the pointer, so nudge until it lands.
+  for (let i = 0; i < 20; i += 1) {
+    if ((await titles())[0] === 'third added') break;
+    await page.mouse.move(target.x + 60, target.y + 4 - (i % 2));
+    await page.waitForTimeout(120);
+  }
   await page.mouse.up();
 
   await expect.poll(titles).toEqual(['third added', 'first added', 'second added']);
