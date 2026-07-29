@@ -623,3 +623,42 @@ test('a done-for-the-day ritual can still be edited and moved from the rituals s
   await page.getByTestId(`ritual-list-${id}`).click();
   await expect(page.getByText('eat lunch', { exact: true })).toBeVisible();
 });
+
+test('every screen opens at its top, not at the last screen\'s scroll', async ({ page }) => {
+  // Reported: the completed screen always opened ~a page down — the browser
+  // keeps scroll across in-place route swaps, and the footer links live a page
+  // down on home. Seed enough history to make the completed screen tall.
+  await reset(page);
+  await makeList(page, 'History');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+  await page.evaluate(async () => {
+    const listId = (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow!;
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        for (let i = 0; i < 80; i += 1) {
+          store.put({
+            id: `h${i}`, listId, name: `done ${i}`, notes: '', tagIds: [], priority: 'medium',
+            inProgress: false, createdAt: 0, updatedAt: 1, completedAt: Date.now() - i * 60_000,
+            deleted: false,
+          });
+        }
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.reload();
+
+  // Scroll deep into completed, leave, come back: top again, newest visible.
+  await page.getByTestId('completed-link').click();
+  await page.getByTestId(/^task-row-/).first().waitFor();
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  await page.getByTestId('back').click();
+  await page.getByTestId('completed-link').click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.getByText('done 0', { exact: true })).toBeInViewport();
+});

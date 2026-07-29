@@ -70,6 +70,11 @@ class Router {
       this.current = parse(window.location.hash);
       window.addEventListener('hashchange', () => {
         this.current = parse(window.location.hash);
+        // Screens swap in place, so the browser happily keeps the old scroll —
+        // and most navigation starts from home's FOOTER, a page down, which
+        // opened every screen pre-scrolled past its newest content. Every
+        // screen opens at its top; predictable beats clever here.
+        window.scrollTo(0, 0);
       });
     }
   }
