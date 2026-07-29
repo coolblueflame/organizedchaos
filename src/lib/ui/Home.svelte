@@ -13,6 +13,7 @@
   import { moveAcross, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import { isRitualDue } from '../domain/ritual';
   import { createDragScroller } from './dragScroll';
+  import { primeKeyboard } from './keyboardBridge';
   import ListSettings from './ListSettings.svelte';
   import { flip } from 'svelte/animate';
   import { motionOk } from './fx/particles';
@@ -237,7 +238,8 @@
   </button>
 
   <div class="capture-row">
-    <button class="search-bar" data-testid="search-entry" onclick={() => navigate({ name: 'search' })}>
+    <button class="search-bar" data-testid="search-entry"
+      onclick={() => { primeKeyboard(); navigate({ name: 'search' }); }}>
       <span class="mag">⌕</span> search everything…
     </button>
     {#if app.state.lists.length > 0}

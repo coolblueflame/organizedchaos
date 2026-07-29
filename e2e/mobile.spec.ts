@@ -227,3 +227,21 @@ test('the date field is sized by CSS, not by native chrome', async ({ page, brow
     .toBeGreaterThan(widths.estimate / 2);
   expect(widths.date, 'and should not overflow its editor').toBeLessThanOrEqual(widths.editor);
 });
+
+test('new todo focuses its name field in the same gesture', async ({ page }) => {
+  // The old path awaited two round-trips before opening the editor, which on
+  // iOS means a dead keyboard and a second tap. Focus must land immediately;
+  // the keyboard half of the claim is only provable on a real device.
+  await reset(page);
+  await makeListWithTask(page, 'Focus', 'existing');
+  await page.getByTestId('new-task').click();
+  await expect(page.getByTestId('task-name-input')).toBeFocused();
+});
+
+test('the search bar hands focus to the search field in one tap', async ({ page }) => {
+  await reset(page);
+  await page.getByTestId('search-entry').click();
+  await expect(page.getByTestId('search-input')).toBeFocused();
+  // The keyboard bridge cleans up after itself.
+  await expect(page.locator('#kb-bridge')).toHaveCount(0);
+});

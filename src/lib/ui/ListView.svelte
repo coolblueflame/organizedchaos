@@ -73,10 +73,16 @@
     if (prev) await app.discardIfPristine(prev);
   }
 
-  async function newTask() {
-    await stopEditing();
-    const task = await app.addTask(id);
-    editingTaskId = task.id;
+  /**
+   * Synchronous for the same reason the Enter-chain is: iOS opens the keyboard
+   * only for a focus landed inside the tap's own event turn. The old version
+   * awaited two round-trips first, so the editor appeared with a dead keyboard
+   * and the name field needed a second tap.
+   */
+  function newTask() {
+    const prev = editingTaskId;
+    editingTaskId = app.addTaskEager(id).id;
+    if (prev) void app.discardIfPristine(prev); // background; writes are serialized
   }
 
   function toggle(taskId: string) {

@@ -9,6 +9,7 @@
   import { searchQuery } from './searchState.svelte';
   import TaskRow from './TaskRow.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
+  import { adoptKeyboard } from './keyboardBridge';
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let editingTaskId = $state<string | null>(null);
@@ -36,7 +37,7 @@
   const scanning = $derived(scanned !== searchQuery.value);
 
   $effect(() => {
-    inputEl?.focus();
+    adoptKeyboard(inputEl); // takes over the keyboard the home tap primed
   });
 
   $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => (editingTaskId = null)));
