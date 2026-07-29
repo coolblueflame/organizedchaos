@@ -15,6 +15,7 @@ import { ritualExclusions, withRitualLifts } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
 import { liveQueueIds } from '../domain/dayQueue';
+import { ensureNotificationPermission } from '../ui/notify';
 import { reorderPatches } from '../domain/listOrder';
 import { customOrderPatches } from '../domain/views';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
@@ -1029,6 +1030,10 @@ export class AppStore {
 
   /** Start (or restart) a countdown on a task; minutes 0 clears it. */
   async startTimebox(taskId: string, minutes: number): Promise<void> {
+    // Every timebox start asks now rather than at fire time — this also covers
+    // boxes auto-started by accepting a task with a default. Synchronously,
+    // before any await, to stay inside whatever user gesture brought us here.
+    if (minutes > 0) ensureNotificationPermission();
     await this.patchTask(taskId, {
       timeboxMinutes: minutes > 0 ? minutes : undefined,
       timeboxEndsAt: minutes > 0 ? Date.now() + minutes * 60_000 : undefined,

@@ -13,6 +13,7 @@
   import type { Task } from '../domain/types';
   import { burstAt, motionOk } from './fx/particles';
   import { haptic } from './fx/haptics';
+  import { ensureNotificationPermission } from './notify';
   import Glyph from './Glyph.svelte';
 
   let { task }: { task: Task } = $props();
@@ -60,7 +61,8 @@
   async function notify() {
     try {
       if (!('Notification' in window)) return;
-      if (Notification.permission === 'default') await Notification.requestPermission();
+      // No prompt HERE: permission was requested when the box started (a real
+      // gesture); a backgrounded app can't show a prompt at fire time anyway.
       if (Notification.permission !== 'granted') return;
       const body = `"${task.name || 'your task'}" — time's up.`;
       const reg = await navigator.serviceWorker?.getRegistration();
@@ -104,6 +106,8 @@
   }
 
   async function start(minutes: number) {
+    // Inside the tap's own gesture, so the permission prompt can actually show.
+    ensureNotificationPermission();
     picking = false;
     await app.startTimebox(task.id, minutes);
   }
