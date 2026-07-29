@@ -165,7 +165,14 @@
       }
       haptic('success');
     } catch { /* never block completion on fx */ }
-    setTimeout(() => void app.completeTask(task.id), motionOk() ? 280 : 0);
+    setTimeout(() => {
+      // Release the flag once the mutation settles. Ordinary rows unmount on
+      // completion so this is moot for them — but a RITUAL's row stays (it has
+      // to exist tomorrow), and a stuck flag left its box ticked forever and
+      // ate every later tap: the next window of a per-window ritual, or the
+      // fresh completion after an undo.
+      void app.completeTask(task.id).finally(() => (completing = false));
+    }, motionOk() ? 280 : 0);
   }
 
   function restore() {

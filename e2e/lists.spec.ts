@@ -156,6 +156,56 @@ test('undo brings back a completed task via keyboard', async ({ page }) => {
   await expect(page.getByTestId(`task-row-${id}`)).toContainText('finish me');
 });
 
+test('an immediate undo brings the task back with an EMPTY checkbox', async ({ page }) => {
+  await makeList(page, 'Undoable');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('changed my mind');
+  await page.getByTestId('task-collapse').click();
+  const id = await firstTaskId(page);
+
+  // Undo the moment the toast lands — the row's leave animation is still
+  // playing, so Svelte cancels the outro and REVIVES the same component
+  // instance rather than making a fresh one. The checkbox must not stay
+  // wearing the completion tick it picked up on the way out.
+  await page.getByTestId(`task-check-${id}`).click();
+  await page.getByTestId('undo-toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toContainText('changed my mind');
+  await expect(page.getByTestId(`task-check-${id}`)).not.toHaveClass(/completing/);
+  // And it must be completable again — the guard flag can't be stuck either.
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+});
+
+test("a ritual's checkbox lets go after completing — and after an undo", async ({ page }) => {
+  await makeList(page, 'Life');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('eat lunch');
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-collapse').click();
+  const id = await firstTaskId(page);
+
+  // A ritual's row NEVER leaves the list on completion — it has to exist
+  // tomorrow — so this is the one place the checkbox outlives its own tick.
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toBeVisible();
+  await expect(page.getByTestId(`task-check-${id}`)).not.toHaveClass(/completing/);
+
+  await expect(page.getByTestId(`ritual-mark-${id}`)).toHaveClass(/ritual-done/);
+
+  // Undoing must hand back an empty checkbox AND an undone ritual — the mark
+  // returns to due, not a lingering "done today".
+  await page.getByTestId('undo-toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId(`task-check-${id}`)).not.toHaveClass(/completing/);
+  await expect(page.getByTestId(`ritual-mark-${id}`)).toHaveClass(/ritual-due/);
+
+  // And completing again must genuinely take: the mark goes back to done.
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`ritual-mark-${id}`)).toHaveClass(/ritual-done/);
+});
+
 test('deleting a task takes two taps, and undo restores it', async ({ page }) => {
   await makeList(page, 'Twice');
   await page.getByTestId('new-task').click();

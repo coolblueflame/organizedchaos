@@ -118,6 +118,32 @@ describe('per-window rituals', () => {
     )).toHaveLength(2);
   });
 
+  it("undo restores ritualDoneDay to what it WAS, not to today's mutated value", async () => {
+    vi.setSystemTime(new Date('2026-07-29T12:00:00'));
+    const list = await store.addList('Life');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, {
+      name: 'feed cats',
+      ritual: { days: [0, 1, 2, 3, 4, 5, 6], from: '00:00', to: '23:59' },
+    });
+
+    await store.completeTask(t.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.ritualDoneDay).toBe('2026-07-29');
+
+    // The undo closure must have captured the PRE-completion value — patchTask
+    // mutates the mirror row in place, so a late read sees today and the
+    // "restored" ritual stays done, silently no-oping every later completion.
+    await store.undoLast();
+    expect(store.state.tasks.find((x) => x.id === t.id)!.ritualDoneDay).toBeUndefined();
+
+    // Completing again genuinely takes.
+    await store.completeTask(t.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.ritualDoneDay).toBe('2026-07-29');
+    expect(store.state.tasks.filter(
+      (x) => x.name === 'feed cats' && x.completedAt !== undefined,
+    )).toHaveLength(1);
+  });
+
   it('undo lifts the slot and the history record together', async () => {
     vi.setSystemTime(new Date('2026-07-29T09:10:00'));
     const list = await store.addList('Health');

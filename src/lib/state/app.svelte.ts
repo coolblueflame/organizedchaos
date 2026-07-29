@@ -640,6 +640,11 @@ export class AppStore {
     // Accepting a ritual makes it current and in-progress like anything else,
     // and finishing it has to put that down — otherwise it sits there flagged
     // as started, with a clock running, until tomorrow.
+    // Captured BEFORE the patch below: patchTask mutates the mirror row in
+    // place, so a read inside (or after) it sees the completed state — the
+    // undo then "restores" today's mark and the ritual stays silently done,
+    // eating every later completion as an already-done no-op.
+    const priorDoneDay = task.ritualDoneDay;
     const priorSlots = task.ritualDoneSlots ? [...task.ritualDoneSlots] : undefined;
     // Per-window: append today's credited slot (dropping stale days — only
     // today's marks ever matter again); the day is "done" once every window is.
@@ -660,7 +665,6 @@ export class AppStore {
 
     const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
     const ritualTiming = ritualOutcome ? ` · ${ritualOutcome.actual} — ${ritualOutcome.verdict}` : '';
-    const priorDoneDay = task.ritualDoneDay;
     this.pushUndo(`Completed "${task.name || 'task'}"${ritualTiming}`, async () => {
       await this.removeTask(record.id, { silent: true });
       await this.patchTask(task.id, {
