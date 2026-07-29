@@ -1,9 +1,10 @@
 <!-- Router shell: boot splash until the store hydrates, then the active screen. -->
 <script lang="ts">
   import { app } from './lib/state/app.svelte';
-  import { navigate, router } from './lib/ui/router.svelte';
+  import { liveRoute, navigate, router } from './lib/ui/router.svelte';
   import { nextRolloverTs } from './lib/domain/time';
   import { toast } from './lib/ui/toast.svelte';
+  import { searchQuery } from './lib/ui/searchState.svelte';
 
   // Spawn-sweep triggers beyond init (spec §5): returning to the app, and the
   // 4am rollover while it stays open. The timer re-arms itself each rollover.
@@ -75,6 +76,11 @@
         ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k');
       if (wantsSearch) {
         e.preventDefault();
+        // A shortcut from anywhere else starts a NEW search; on the search
+        // screen itself it just refocuses and must not eat what was typed.
+        // liveRoute, not router.current: right after a navigate the mirrored
+        // route is still the OLD screen (hashchange is async).
+        if (liveRoute().name !== 'search') searchQuery.beginFresh();
         navigate({ name: 'search' });
       }
     };

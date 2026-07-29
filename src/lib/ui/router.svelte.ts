@@ -82,6 +82,16 @@ class Router {
 
 export const router = new Router();
 
+/**
+ * The route the address bar says RIGHT NOW. `router.current` updates on the
+ * async hashchange event, so immediately after a navigate() it can still hold
+ * the previous screen — event handlers that branch on "where am I" (e.g. the
+ * search shortcut deciding whether to clear the query) must read this instead.
+ */
+export function liveRoute(): Route {
+  return parse(window.location.hash);
+}
+
 export function navigate(r: Route): void {
   window.location.hash = toHash(r);
 }

@@ -72,6 +72,34 @@ test('narrowing the query with a second term filters further; no match says so',
   await expect(page.getByTestId('search-empty')).toBeVisible();
 });
 
+test('a fresh search starts blank, but refocusing an open search keeps it', async ({ page }) => {
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Errands');
+  await page.getByTestId('new-list-input').press('Enter');
+  await addTask(page, 'buy milk');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('search-entry').click();
+  await page.getByTestId('search-input').fill('milk');
+  await expect(page.getByText('buy milk', { exact: true })).toBeVisible();
+
+  // Cmd/Ctrl+K on the search screen refocuses — it must not eat the query.
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByTestId('search-input')).toHaveValue('milk');
+
+  // Leaving and tapping the bar again is a NEW search: blank, not last time's text.
+  await page.getByTestId('back').click();
+  await page.getByTestId('search-entry').click();
+  await expect(page.getByTestId('search-input')).toHaveValue('');
+
+  // The "/" shortcut from home starts fresh too.
+  await page.getByTestId('search-input').fill('bread');
+  await page.getByTestId('back').click();
+  await page.keyboard.press('/');
+  await expect(page.getByTestId('search-input')).toHaveValue('');
+});
+
 test('the "/" shortcut opens search, and results are editable in place', async ({ page }) => {
   await reset(page);
   await page.getByTestId('new-list').click();
