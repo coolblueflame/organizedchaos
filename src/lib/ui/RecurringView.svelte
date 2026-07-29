@@ -15,6 +15,20 @@
 
   const templates = $derived(app.state.templates.filter((t) => !t.deleted));
 
+  /** Template id → its live spawned copy, when one exists. */
+  const openByTpl = $derived(
+    new Map(
+      app.state.tasks
+        .filter((t) => t.recurrenceId && !t.deleted && t.completedAt === undefined)
+        .map((t) => [t.recurrenceId!, t]),
+    ),
+  );
+
+  const listTitle = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '?';
+  /** Non-archived destinations, plus the template's own list even if archived. */
+  const destinationsFor = (tpl: RecurrenceTemplate) =>
+    app.state.lists.filter((l) => !l.deleted && (l.archived !== true || l.id === tpl.listId));
+
   function nextInfo(tpl: RecurrenceTemplate): string {
     if (tpl.paused) return 'paused';
     if (tpl.nextSpawnAt === undefined) {
@@ -72,6 +86,24 @@
               onclick={() => remove(tpl)}>✕</button>
           </div>
         </div>
+        <!-- 2026-07-29 ask: it was never clear whether a live copy exists, and
+             re-homing a rule meant hunting its task down separately. -->
+        <div class="sub">
+          {#if openByTpl.get(tpl.id)}
+            <button class="jump" data-testid="recurring-jump-{tpl.id}"
+              onclick={() => navigate({ name: 'list', id: openByTpl.get(tpl.id)!.listId })}>
+              ▸ open copy in {listTitle(openByTpl.get(tpl.id)!.listId)}
+            </button>
+          {:else}
+            <span class="nocopy">no open copy right now</span>
+          {/if}
+          <select class="move" data-testid="recurring-move-{tpl.id}" value={tpl.listId}
+            onchange={(e) => void app.moveRecurringToList(tpl.id, e.currentTarget.value)}>
+            {#each destinationsFor(tpl) as l (l.id)}
+              <option value={l.id}>{l.title}</option>
+            {/each}
+          </select>
+        </div>
         {#if editingId === tpl.id}
           <RecurrenceEditor
             initial={{ mode: tpl.mode, deadlineOffsetDays: tpl.deadlineOffsetDays }}
@@ -112,4 +144,17 @@
   @media (hover: hover) { .btns button:hover { color: var(--text); } }
   @media (hover: hover) { .btns .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); } }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; }
+
+  .sub { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+  .jump {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.7rem;
+  }
+  @media (hover: hover) { .jump:hover { text-decoration: underline; text-underline-offset: 3px; } }
+  .nocopy { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .move {
+    margin-left: auto; max-width: 34vw; min-width: 0;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 4px 6px;
+  }
 </style>

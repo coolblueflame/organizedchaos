@@ -12,7 +12,7 @@
  * handing that many rows to the UI is what took the screen down.
  */
 import { effectivePriority } from './priority';
-import { priorityRank, type Settings, type Task } from './types';
+import { priorityRank, type RecurrenceTemplate, type Settings, type Task } from './types';
 
 export interface SearchResults {
   /** The head of the matches, at most `limit` long. */
@@ -35,6 +35,27 @@ function terms(query: string): string[] {
 function matches(task: Task, needles: string[]): boolean {
   const hay = `${task.name}\n${task.notes}`.toLowerCase();
   return needles.every((n) => hay.includes(n));
+}
+
+/**
+ * Recurring templates matching the same terms (2026-07-29 ask): a template's
+ * spawned copy isn't always alive, so searching for "water the plants" could
+ * come up empty while the rule quietly exists. Shown between open and
+ * completed — more actionable than history, less urgent than live work.
+ */
+export function searchTemplates(
+  templates: RecurrenceTemplate[],
+  query: string,
+  limit = 20,
+): RecurrenceTemplate[] {
+  const needles = terms(query);
+  if (needles.length === 0) return [];
+  return templates
+    .filter(
+      (t) => !t.deleted && needles.every((n) => `${t.name}\n${t.notes}`.toLowerCase().includes(n)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, limit);
 }
 
 export function searchTasks(

@@ -81,6 +81,28 @@ describe('the day queue', () => {
   });
 });
 
+describe('moveRecurringToList', () => {
+  it('re-homes the template and its open spawned copy together', async () => {
+    const a = await store.addList('A');
+    const b = await store.addList('B');
+    const t = await store.addTask(a.id);
+    const template = await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.moveRecurringToList(template.id, b.id);
+    expect(store.state.templates.find((x) => x.id === template.id)!.listId).toBe(b.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.listId).toBe(b.id);
+  });
+
+  it('leaves completed history where it happened', async () => {
+    const a = await store.addList('A');
+    const b = await store.addList('B');
+    const t = await store.addTask(a.id);
+    const template = await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.completeTask(t.id);
+    await store.moveRecurringToList(template.id, b.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.listId).toBe(a.id);
+  });
+});
+
 describe('AppStore', () => {
   it('starts ready with empty state on a fresh db', () => {
     expect(store.ready).toBe(true);

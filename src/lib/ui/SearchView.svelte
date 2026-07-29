@@ -5,7 +5,8 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
-  import { searchTasks } from '../domain/search';
+  import { searchTasks, searchTemplates } from '../domain/search';
+  import { describeRecurrence } from './recurrenceText';
   import { searchQuery } from './searchState.svelte';
   import TaskRow from './TaskRow.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
@@ -30,8 +31,10 @@
   const results = $derived(
     searchTasks(app.state.tasks, scanned, app.state.settings, new Date()),
   );
+  const tplResults = $derived(searchTemplates(app.state.templates, scanned));
   const nothing = $derived(
-    scanned.trim().length > 0 && results.openTotal === 0 && results.completedTotal === 0,
+    scanned.trim().length > 0 &&
+      results.openTotal === 0 && results.completedTotal === 0 && tplResults.length === 0,
   );
   /** True while the box is ahead of the results, so the count can't read as final. */
   const scanning = $derived(scanned !== searchQuery.value);
@@ -73,6 +76,21 @@
         showing the first {results.open.length} — keep typing to narrow it down
       </p>
     {/if}
+  {/if}
+
+  {#if tplResults.length > 0}
+    <!-- Between live and done (2026-07-29 ask): a rule can exist while no copy
+         of it is currently alive, and it should still be findable. -->
+    <h2 class="section tpl-header">recurring <span class="count">{tplResults.length}</span></h2>
+    <section class="rows" data-testid="search-recurring">
+      {#each tplResults as tpl (tpl.id)}
+        <button class="tpl-row" data-testid="search-tpl-{tpl.id}"
+          onclick={() => navigate({ name: 'recurring' })}>
+          <span class="tpl-name">{tpl.name || 'untitled'}</span>
+          <span class="tpl-cadence">↻ {describeRecurrence(tpl.mode, tpl.deadlineOffsetDays)}</span>
+        </button>
+      {/each}
+    </section>
   {/if}
 
   {#if results.completed.length > 0}
@@ -121,4 +139,14 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
     margin: 8px 2px 0; text-align: center;
   }
+  .tpl-header { color: var(--acc-cyan); }
+  .tpl-row {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    width: 100%; text-align: left; cursor: pointer;
+    background: var(--bg1); border: 1px solid color-mix(in srgb, var(--acc-cyan) 25%, var(--line));
+    border-radius: 8px; padding: 9px 12px; color: var(--text);
+  }
+  @media (hover: hover) { .tpl-row:hover { background: var(--bg2); } }
+  .tpl-name { font-size: 0.88rem; font-weight: 500; }
+  .tpl-cadence { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.68rem; }
 </style>

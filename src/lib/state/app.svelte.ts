@@ -1098,6 +1098,19 @@ export class AppStore {
     return tpl;
   }
 
+  /**
+   * Re-home a recurring rule AND its open spawned copy in one move
+   * (2026-07-29 ask — reorganising rules is pointless if the live copy stays
+   * behind). Completed history keeps the list it happened in.
+   */
+  async moveRecurringToList(id: string, listId: string): Promise<void> {
+    await this.updateRecurring(id, { listId });
+    const open = this.state.tasks.find(
+      (t) => t.recurrenceId === id && !t.deleted && t.completedAt === undefined,
+    );
+    if (open && open.listId !== listId) await this.patchTask(open.id, { listId });
+  }
+
   async updateRecurring(id: string, patch: Partial<RecurrenceTemplate>): Promise<void> {
     // Cadence edits re-arm scheduled modes (afterCompletion re-arms on next completion).
     if (patch.mode) {

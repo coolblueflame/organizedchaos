@@ -71,6 +71,52 @@ test('recurring screen lists, pauses, and deletes templates', async ({ page }) =
   await expect(page.getByTestId(`recurring-row-${id}`)).toHaveCount(0);
 });
 
+test('recurring rows surface the live copy, re-home it, and turn up in search', async ({ page }) => {
+  // Two lists; the recurring task starts in Rec.
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Garden');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('back').click();
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Rec');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('water the ferns');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('3');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('recurring-link').click();
+  const row = page.getByTestId(/^recurring-row-/).first();
+  const tplId = (await row.getAttribute('data-testid'))!.replace('recurring-row-', '');
+
+  // The live copy is named, and the jump lands in its list.
+  await expect(page.getByTestId(`recurring-jump-${tplId}`)).toContainText('open copy in Rec');
+  await page.getByTestId(`recurring-jump-${tplId}`).click();
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'water the ferns' })).toHaveCount(1);
+  await page.getByTestId('back').click();
+
+  // Re-homing the rule moves the open copy with it.
+  await page.getByTestId('recurring-link').click();
+  const garden = await page.getByTestId(`recurring-move-${tplId}`)
+    .locator('option', { hasText: 'Garden' }).getAttribute('value');
+  await page.getByTestId(`recurring-move-${tplId}`).selectOption(garden!);
+  await expect(page.getByTestId(`recurring-jump-${tplId}`)).toContainText('open copy in Garden');
+  await page.getByTestId(`recurring-jump-${tplId}`).click();
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'water the ferns' })).toHaveCount(1);
+  await page.getByTestId('back').click();
+
+  // The RULE is findable by search, between live and done.
+  await page.getByTestId('search-entry').click();
+  await page.getByTestId('search-input').fill('ferns');
+  await expect(page.getByTestId('search-recurring')).toContainText('water the ferns');
+  await page.getByTestId(`search-tpl-${tplId}`).click();
+  await expect(page.getByTestId(`recurring-row-${tplId}`)).toBeVisible();
+});
+
 test('editor shows the cadence summary on a recurring task', async ({ page }) => {
   await page.getByTestId('new-list').click();
   await page.getByTestId('new-list-input').fill('Rec');

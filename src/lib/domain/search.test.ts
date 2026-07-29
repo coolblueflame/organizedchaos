@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, type Priority, type Task } from './types';
-import { searchTasks } from './search';
+import { DEFAULT_SETTINGS, type Priority, type RecurrenceTemplate, type Task } from './types';
+import { searchTasks, searchTemplates } from './search';
 
 const now = new Date('2026-07-15T12:00:00');
 const settings = { ...DEFAULT_SETTINGS };
@@ -12,6 +12,28 @@ const task = (over: Partial<Task> & { priority: Priority }): Task => ({
 });
 
 const names = (ts: Task[]) => ts.map((t) => t.name);
+
+const tpl = (over: Partial<RecurrenceTemplate> = {}): RecurrenceTemplate => ({
+  id: `r${n++}`, listId: 'L1', name: 'water plants', notes: '', tagIds: [], priority: 'medium',
+  mode: { kind: 'afterCompletion', interval: 3, unit: 'days' }, paused: false,
+  createdAt: 0, updatedAt: 0, deleted: false, ...over,
+});
+
+describe('searchTemplates', () => {
+  it('matches names and notes with the same AND-of-terms rule, alphabetical', () => {
+    const zeta = tpl({ name: 'zeta watering' });
+    const byNotes = tpl({ name: 'greenhouse', notes: 'deep WATERING day' });
+    const miss = tpl({ name: 'take out trash' });
+    const res = searchTemplates([zeta, byNotes, miss], 'watering');
+    expect(res.map((t) => t.name)).toEqual(['greenhouse', 'zeta watering']);
+  });
+
+  it('ignores deleted templates and blank queries', () => {
+    const ghost = tpl({ name: 'watering ghost', deleted: true });
+    expect(searchTemplates([ghost], 'watering')).toEqual([]);
+    expect(searchTemplates([tpl()], '  ')).toEqual([]);
+  });
+});
 
 describe('searchTasks', () => {
   it('is case-insensitive and searches notes as well as names', () => {
