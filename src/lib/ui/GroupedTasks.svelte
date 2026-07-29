@@ -351,6 +351,14 @@
     color: var(--text); font-family: var(--font-mono); font-size: 0.72rem;
     padding: 5px 9px; cursor: pointer;
   }
+  /*
+    A native select's intrinsic minimum width is its LONGEST OPTION, and with a
+    real library one long tag or list name makes the control wider than the
+    whole bar — it burst straight through the border (reported with a
+    screenshot, 2026-07-28). The closed control only ever needs to show its
+    own label; the dropdown still shows every option at full length.
+  */
+  .bulk select { max-width: 34vw; min-width: 0; }
   .bulk .danger { color: var(--acc-magenta); }
   .bulk .danger.armed {
     background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);

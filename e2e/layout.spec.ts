@@ -135,3 +135,32 @@ test('a tag with a very long name stays inside the editor card', async ({ page }
   });
   expect(overflow, 'chip right edge must not pass the card').toBeLessThanOrEqual(0);
 });
+
+test('the bulk bar contains its controls even with long tag names', async ({ page }) => {
+  // A native select's intrinsic minimum width is its LONGEST OPTION, so one
+  // long imported tag name made "+ tag…" burst 100px through the bar's border
+  // (reported with a screenshot). The closed control shows only its label; the
+  // dropdown still shows every option in full.
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('L');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('a task');
+  await page.getByTestId('new-tag').click();
+  await page.getByTestId('new-tag-input').fill('waiting on the replacement part from the manufacturer');
+  await page.getByTestId('new-tag-input').press('Enter');
+  await page.getByTestId('new-tag-done').click();
+  await page.getByTestId('task-collapse').click();
+
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`select-${id}`).click();
+  await page.getByTestId('bulk-bar').waitFor();
+  const overflow = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="bulk-bar"]')!.getBoundingClientRect();
+    const kids = [...document.querySelectorAll('[data-testid="bulk-bar"] > *')];
+    return Math.max(...kids.map((k) => k.getBoundingClientRect().right)) - bar.right;
+  });
+  expect(overflow, 'no control may pass the bar edge').toBeLessThanOrEqual(0);
+});

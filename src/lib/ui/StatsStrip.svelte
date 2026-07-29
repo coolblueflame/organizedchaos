@@ -64,10 +64,14 @@
 
   .row { display: flex; gap: 8px; margin-bottom: 14px; }
   .strip {
+    /* align-items: center — "all time" wraps to two lines on a narrow screen,
+       and with default stretch the one-line tiles hung from the top beside it. */
     flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 4px;
+    align-items: center;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 10px;
     padding: 10px 12px; cursor: pointer;
   }
+  .tile .label { text-align: center; }
   .strip:hover { background: var(--bg2); }
   .tile { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
   .num { color: var(--acc-green); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
