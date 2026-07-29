@@ -13,6 +13,7 @@ const snap = (over: Partial<RemoteSnapshot> = {}): RemoteSnapshot => ({
   lists: [], tasks: [], tags: [], templates: [],
   currentTask: null, currentTaskUpdatedAt: 0,
   settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+  queueIds: [], queueUpdatedAt: 0,
   ...over,
 });
 
@@ -87,6 +88,57 @@ describe('mergeSnapshots — singletons', () => {
   });
 });
 
+describe('when merge keys tie, the honest clock decides', () => {
+  // The exact 2026-07-29 shape: the import repair stamped a row at corrupt+1
+  // with no editedAt; the phone, still holding the unrepaired base, edited it
+  // and ALSO landed on corrupt+1 — but its write carries a real editedAt.
+  const CORRUPT = new Date('2053-04-01').getTime();
+
+  it("the user's edit beats the repair's re-stamp at the same merge key, both directions", () => {
+    const repaired = task({ priority: 'medium', name: 'imported', updatedAt: CORRUPT });
+    const userEdit = { ...repaired, priority: 'max' as Priority, editedAt: Date.now() };
+    const r1 = mergeSnapshots(snap({ tasks: [userEdit] }), snap({ tasks: [{ ...repaired }] }));
+    expect(r1.merged.tasks[0]!.priority).toBe('max');
+    const r2 = mergeSnapshots(snap({ tasks: [{ ...repaired }] }), snap({ tasks: [userEdit] }));
+    expect(r2.merged.tasks[0]!.priority).toBe('max');
+  });
+
+  it('two stamped edits at the same merge key: the later real-time edit wins', () => {
+    const base = task({ priority: 'low', updatedAt: CORRUPT });
+    const earlier = { ...base, priority: 'medium' as Priority, editedAt: 1000 };
+    const later = { ...base, priority: 'max' as Priority, editedAt: 2000 };
+    expect(mergeSnapshots(snap({ tasks: [earlier] }), snap({ tasks: [later] }))
+      .merged.tasks[0]!.priority).toBe('max');
+    expect(mergeSnapshots(snap({ tasks: [later] }), snap({ tasks: [earlier] }))
+      .merged.tasks[0]!.priority).toBe('max');
+  });
+
+  it('a tombstone still beats an equal-stamp edit regardless of editedAt', () => {
+    const base = task({ priority: 'low', updatedAt: CORRUPT });
+    const edited = { ...base, priority: 'max' as Priority, editedAt: 2000 };
+    const gone = { ...base, deleted: true, editedAt: 1000 };
+    expect(mergeSnapshots(snap({ tasks: [edited] }), snap({ tasks: [gone] }))
+      .merged.tasks[0]!.deleted).toBe(true);
+  });
+});
+
+describe('mergeSnapshots — the day queue singleton', () => {
+  it('follows the newer stamp, both directions', () => {
+    const mine = snap({ queueIds: ['a', 'b'], queueUpdatedAt: 200 });
+    const theirs = snap({ queueIds: ['c'], queueUpdatedAt: 100 });
+    expect(mergeSnapshots(mine, theirs).merged.queueIds).toEqual(['a', 'b']);
+    expect(mergeSnapshots(theirs, mine).merged.queueIds).toEqual(['a', 'b']);
+  });
+
+  it('a pre-queue remote (stamp 0) never erases a planned day', () => {
+    const planned = snap({ queueIds: ['a'], queueUpdatedAt: 5 });
+    const oldRemote = snap();
+    const r = mergeSnapshots(planned, oldRemote);
+    expect(r.merged.queueIds).toEqual(['a']);
+    expect(r.remoteChanged).toBe(true); // the queue must be pushed out
+  });
+});
+
 describe('mergeSnapshots — change flags', () => {
   it('identical snapshots report no changes', () => {
     const t = task({ priority: 'low' });
@@ -116,6 +168,7 @@ describe('when both sides claim the same instant', () => {
     lists: [], tasks: tasks as never, tags: [], templates: [],
     currentTask: null, currentTaskUpdatedAt: 0,
     settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
   });
 
   it('resolves the same way whichever device is doing the merging', () => {

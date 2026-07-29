@@ -16,7 +16,7 @@ export interface MergeResult {
   remoteChanged: boolean;
 }
 
-interface Row { id: string; updatedAt: number; deleted: boolean }
+interface Row { id: string; updatedAt: number; deleted: boolean; editedAt?: number }
 
 /**
  * Order-independent serialisation, so two copies of a row compare equal
@@ -36,6 +36,15 @@ function canonical(v: unknown): string {
 function pick<T extends Row>(a: T, b: T): T {
   if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
   if (a.deleted !== b.deleted) return a.deleted ? a : b;
+  // The honest clock breaks the tie before the arbitrary one does. Ties are
+  // ROUTINE for rows that came through the import-timestamp repair: their
+  // merge keys sit decades ahead, so every edit clamps to current+1 and two
+  // devices editing from the same base collide exactly. editedAt is real
+  // wall-clock, so the genuinely later edit wins; a side that has one beats a
+  // side that lacks one (it was written by code that stamps it, i.e. later).
+  const ea = a.editedAt ?? 0;
+  const eb = b.editedAt ?? 0;
+  if (ea !== eb) return ea > eb ? a : b;
   // Same stamp, same tombstone state, but the contents can still differ — and
   // that happens far more readily than it used to. A write clamps to
   // `max(now, current + 1)`, so two devices editing one row while offline both
@@ -127,6 +136,7 @@ export function mergeDelight(
 export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): MergeResult {
   const currentNewer = remote.currentTaskUpdatedAt > local.currentTaskUpdatedAt ? remote : local;
   const settingsNewer = remote.settingsUpdatedAt > local.settingsUpdatedAt ? remote : local;
+  const queueNewer = remote.queueUpdatedAt > local.queueUpdatedAt ? remote : local;
 
   const delight = mergeDelight(local.delight, remote.delight);
 
@@ -139,6 +149,8 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     currentTaskUpdatedAt: currentNewer.currentTaskUpdatedAt,
     settings: settingsNewer.settings,
     settingsUpdatedAt: settingsNewer.settingsUpdatedAt,
+    queueIds: queueNewer.queueIds,
+    queueUpdatedAt: queueNewer.queueUpdatedAt,
     ...(delight ? { delight } : {}),
   };
 
@@ -151,6 +163,8 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     merged.currentTaskUpdatedAt === side.currentTaskUpdatedAt &&
     JSON.stringify(merged.settings) === JSON.stringify(side.settings) &&
     merged.settingsUpdatedAt === side.settingsUpdatedAt &&
+    JSON.stringify(merged.queueIds) === JSON.stringify(side.queueIds) &&
+    merged.queueUpdatedAt === side.queueUpdatedAt &&
     JSON.stringify(merged.delight ?? null) === JSON.stringify(side.delight ?? null);
 
   return { merged, localChanged: !sameAs(local), remoteChanged: !sameAs(remote) };

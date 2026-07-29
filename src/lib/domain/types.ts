@@ -24,6 +24,19 @@ interface Base {
   id: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * True wall-clock time of the last edit. `updatedAt` is the merge KEY, but
+   * it is clamped upward (`max(now, current+1)`) — rows that came through the
+   * import-timestamp repair sit decades in the future, so two devices editing
+   * such a row from the same base both land on exactly `current+1` and TIE.
+   * The 2026-07-29 max→medium reverts were this: Ben's phone re-priority tied
+   * the repair's own stamp and half his edits lost the arbitrary content
+   * tiebreak. This field carries the honest time so ties break on actual
+   * recency instead. Optional: rows written before it existed lack it, and a
+   * side with an editedAt beats one without (an edit under current code is
+   * by definition more recent than one from before the field shipped).
+   */
+  editedAt?: number;
   deleted: boolean;
 }
 
