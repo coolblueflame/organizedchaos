@@ -587,3 +587,39 @@ test('dragging to a screen edge scrolls the page, faster the closer you get', as
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.scrollY), 'no scrolling after release').toBe(y2);
 });
+
+test('a done-for-the-day ritual can still be edited and moved from the rituals screen', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Life');
+  await addTask(page, 'eat lunch');
+  await page.getByText('eat lunch', { exact: true }).click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+  await makeList(page, 'Wind-down');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('rituals-link').click();
+  const row = page.getByTestId(/^ritual-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('ritual-row-', '');
+
+  // Done for the day — the reported state where editing was unreachable.
+  await page.getByTestId(`ritual-complete-${id}`).click();
+  await expect(page.getByTestId(`ritual-complete-${id}`)).toBeDisabled();
+
+  // Tapping the ritual now opens its editor in place…
+  await page.getByTestId(`ritual-edit-${id}`).click();
+  await expect(page.getByTestId('ritual-editor-sheet')).toContainText('eat lunch');
+  // …with the full move control.
+  await page.getByTestId('ritual-editor-sheet').getByTestId('task-move-list')
+    .selectOption({ label: 'Wind-down' });
+  await page.getByTestId('ritual-editor-close').click();
+
+  // Moved, still a ritual, still done today.
+  await expect(page.getByTestId(`ritual-row-${id}`)).toContainText('every day');
+  await page.getByTestId(`ritual-list-${id}`).click();
+  await expect(page.getByText('eat lunch', { exact: true })).toBeVisible();
+});
