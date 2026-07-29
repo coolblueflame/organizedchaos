@@ -26,5 +26,9 @@ export function describeRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: nu
       base = `monthly on the ${ordinal(mode.dayOfMonth)}`;
       break;
   }
-  return deadlineOffsetDays ? `${base} · deadline +${deadlineOffsetDays}d` : base;
+  // !== undefined, not truthy: 0 is "due the day it appears" and must show.
+  if (deadlineOffsetDays === undefined) return base;
+  return deadlineOffsetDays === 0
+    ? `${base} · due same day`
+    : `${base} · deadline +${deadlineOffsetDays}d`;
 }

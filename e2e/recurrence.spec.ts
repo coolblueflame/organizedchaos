@@ -83,4 +83,10 @@ test('editor shows the cadence summary on a recurring task', async ({ page }) =>
   await page.getByTestId('recur-deadline-offset').fill('5');
   await page.getByTestId('recur-save').click();
   await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the 1st · deadline +5d');
+
+  // 0 is not "unset": it means due the day the task appears, and must survive save.
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-deadline-offset').fill('0');
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the 1st · due same day');
 });

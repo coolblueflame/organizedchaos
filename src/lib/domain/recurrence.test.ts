@@ -79,6 +79,18 @@ describe('sweepSpawns', () => {
     expect(res.updates[0]!.nextSpawnAt).toBe(at('2026-07-27T04:00:00').getTime());
   });
 
+  it('offset 0 means due the day it spawns — 0 is a value, not "unset"', () => {
+    const t = tpl({ nextSpawnAt: at('2026-07-20T04:00:00').getTime(), deadlineOffsetDays: 0 });
+    const res = sweepSpawns([t], [], now, DEFAULT_SETTINGS);
+    expect(res.drafts[0]!.deadline).toBe('2026-07-20');
+  });
+
+  it('no offset means no deadline on the spawn', () => {
+    const t = tpl({ nextSpawnAt: at('2026-07-20T04:00:00').getTime() });
+    const res = sweepSpawns([t], [], now, DEFAULT_SETTINGS);
+    expect(res.drafts[0]!.deadline).toBeUndefined();
+  });
+
   it('skip-if-open: no draft while an instance is open, but schedule still advances', () => {
     const t = tpl({ nextSpawnAt: at('2026-07-20T04:00:00').getTime() });
     const res = sweepSpawns([t], [openInstance('r1')], now, DEFAULT_SETTINGS);

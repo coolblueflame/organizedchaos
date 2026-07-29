@@ -51,7 +51,8 @@
       kind === 'weekly' ? { kind, weekdays: [...weekdays].sort() } :
       { kind, dayOfMonth: monthday };
     const off = parseInt(offset, 10);
-    onsave(mode, Number.isFinite(off) && off > 0 ? off : undefined);
+    // 0 is a real answer — "due the day it appears" — only blank/negative mean unset.
+    onsave(mode, Number.isFinite(off) && off >= 0 ? off : undefined);
   }
 </script>
 
@@ -93,8 +94,8 @@
 
   <div class="line">
     <span>deadline</span>
-    <input type="number" min="1" placeholder="—" data-testid="recur-deadline-offset" bind:value={offset} />
-    <span>days after it appears <em>(optional)</em></span>
+    <input type="number" min="0" placeholder="—" data-testid="recur-deadline-offset" bind:value={offset} />
+    <span>days after it appears <em>(optional; 0 = due that day)</em></span>
   </div>
 
   <div class="actions">
