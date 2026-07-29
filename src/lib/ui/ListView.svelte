@@ -74,14 +74,17 @@
   }
 
   /** Enter commits and opens the next one; Enter on an empty name ends the chain. */
-  async function chainNext(currentName: string) {
+  /**
+   * SYNCHRONOUS from keystroke to new editor — that is the entire fix for
+   * fast typing bleeding into the just-committed task. Any await before
+   * editingTaskId is a window where the old editor still owns the keyboard.
+   */
+  function chainNext(currentName: string) {
     if (!currentName.trim()) {
-      await stopEditing();
+      void stopEditing();
       return;
     }
-    editingTaskId = null;
-    const task = await app.addTask(id);
-    editingTaskId = task.id;
+    editingTaskId = app.addTaskEager(id).id;
   }
 
   // Leaving the screen with an untouched new task open discards it too.
@@ -113,7 +116,7 @@
     groups={sortedGroups}
     mode={list?.sortMode ?? 'priority'}
     bind:editingTaskId
-    onenter={(name) => void chainNext(name)} />
+    onenter={chainNext} />
   {#if groups.length === 0}
     <p class="empty">// nothing here yet</p>
   {/if}

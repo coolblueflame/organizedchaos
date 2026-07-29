@@ -65,19 +65,13 @@ test('rapid entry still focuses the new row on touch', async ({ page }) => {
   await page.getByTestId('task-name-input').fill('first renamed');
   await page.getByTestId('task-name-input').press('Enter');
 
-  // Wait for the chain handoff to COMPLETE before typing: until the new task's
-  // editor mounts, the focused input is still the old task's editor — the
-  // instrumented run caught 'second' appended to it as 'first renamedsecond'.
-  // The new editor is the one whose value is empty; wait for that.
-  //
-  // KNOWN PRODUCT EDGE (2026-07-28): that window is real for users too — on a
-  // slow device, keystrokes right after Enter can land on the just-committed
-  // task. Designed fix is synchronous draft creation (mirror-first addTask);
-  // scheduled as its own chunk. When it lands, this wait becomes instant.
-  await expect(page.getByTestId('task-name-input')).toHaveValue('');
-  await expect(page.getByTestId('task-name-input')).toBeFocused();
+  // NO accommodating waits, deliberately. The chain is synchronous from
+  // keystroke to mounted editor now, so typing the instant Enter lands must be
+  // safe — that is the entire product guarantee this test pins. (Before the
+  // fix, this exact shape failed on CI: the probe caught "first renamedsecond"
+  // in the OLD editor, because the new one was still an await away.)
   await page.keyboard.type('second');
-  await page.waitForTimeout(600); // let the debounced tail of the name flush
+  await page.waitForTimeout(600); // only the debounced tail of the save
   await page.getByTestId('task-collapse').click();
   await expect(page.getByTestId('task-name-input')).toHaveCount(0);
   await expect(page.getByText('second', { exact: true })).toBeVisible();

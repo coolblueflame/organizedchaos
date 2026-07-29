@@ -93,11 +93,15 @@
     ontoggle();
   }
 
-  async function onNameKey(e: KeyboardEvent) {
+  function onNameKey(e: KeyboardEvent) {
     // Escape is handled globally (closeOnOutsideOrEscape), which blurs this
     // field first so the name flushes — handling it here too would double-close.
     if (e.key !== 'Enter') return;
-    await flushName();
+    // NOT awaited: patchTask commits the mirror synchronously inside this
+    // call, and awaiting the disk write would reopen the exact keystroke
+    // window the eager chain exists to close. The write itself is serialized
+    // behind any in-flight insert by the repo.
+    void flushName();
     if (onenter) onenter(nameDraft);
     else ontoggle();
   }

@@ -91,6 +91,34 @@ function nextStamp(current: number): number {
 export class Repo {
   constructor(private db: AppDb) {}
 
+  /**
+   * Writes still in flight for eagerly-created tasks, by id.
+   *
+   * createTaskEager returns the row BEFORE its put settles, which is what lets
+   * the Enter-chain mount the next editor in the same tick as the keystroke.
+   * The hazard is any follow-up write racing the insert: patchRow reads first,
+   * finds nothing, and silently drops the patch — a typed name that vanishes
+   * on reload. So every task write waits for that task's pending insert, and
+   * the eager path stays invisible to everything downstream of it.
+   */
+  private pendingTaskPuts = new Map<string, Promise<unknown>>();
+
+  /** Build + mirror-return a task NOW; persist in the background, serialized. */
+  createTaskEager(draft: TaskDraft): Task {
+    const row: Task = { ...stamp(), ...draft };
+    const put = this.db.tasks.put(row).finally(() => {
+      if (this.pendingTaskPuts.get(row.id) === put) this.pendingTaskPuts.delete(row.id);
+    });
+    this.pendingTaskPuts.set(row.id, put);
+    return row;
+  }
+
+  /** Resolves once the task's eager insert (if any) has reached the database. */
+  async taskPersisted(id: string): Promise<void> {
+    const pending = this.pendingTaskPuts.get(id);
+    if (pending) await pending.catch(() => {});
+  }
+
   async loadState(): Promise<AppState> {
     const [lists, tasks, tags, templates, currentRow, settingsRow] = await Promise.all([
       this.db.lists.toArray(), this.db.tasks.toArray(), this.db.tags.toArray(),
@@ -151,7 +179,10 @@ export class Repo {
     await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt) });
   }
 
-  updateTask(id: string, patch: Partial<Task>) { return this.patchRow(this.db.tasks, id, patch); }
+  async updateTask(id: string, patch: Partial<Task>): Promise<void> {
+    await this.taskPersisted(id); // never read-modify-write past an in-flight insert
+    return this.patchRow(this.db.tasks, id, patch);
+  }
   updateList(id: string, patch: Partial<List>) { return this.patchRow(this.db.lists, id, patch); }
   updateTag(id: string, patch: Partial<Tag>) { return this.patchRow(this.db.tags, id, patch); }
   updateTemplate(id: string, patch: Partial<RecurrenceTemplate>) { return this.patchRow(this.db.templates, id, patch); }
@@ -160,7 +191,9 @@ export class Repo {
     // Switch narrows the table union — a computed this.db[table] can't type-check.
     switch (table) {
       case 'lists': return this.patchRow(this.db.lists, id, { deleted: true });
-      case 'tasks': return this.patchRow(this.db.tasks, id, { deleted: true });
+      case 'tasks':
+        await this.taskPersisted(id); // a discard can chase an eager insert
+        return this.patchRow(this.db.tasks, id, { deleted: true });
       case 'tags': return this.patchRow(this.db.tags, id, { deleted: true });
       case 'templates': return this.patchRow(this.db.templates, id, { deleted: true });
     }

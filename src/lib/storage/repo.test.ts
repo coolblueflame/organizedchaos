@@ -261,3 +261,55 @@ describe('a change must always beat what it changed', () => {
       .toBe(new Date('2026-07-15T12:00:05').getTime());
   });
 });
+
+describe('eager task creation', () => {
+  it('returns the row synchronously and persists it', async () => {
+    const row = repo.createTaskEager({
+      listId: 'L1', name: '', notes: '', priority: 'medium',
+      tagIds: [], inProgress: false, needsReview: true,
+    });
+    expect(row.id).toBeTruthy(); // usable before any await
+    await repo.taskPersisted(row.id);
+    expect((await repo.loadSnapshot()).tasks.map((t) => t.id)).toEqual([row.id]);
+  });
+
+  it('a patch fired straight after creation cannot outrun the insert', async () => {
+    // The hazard: patchRow reads first, and a read racing an in-flight insert
+    // finds nothing and silently drops the patch — a typed name lost on
+    // reload. Slow the insert to force the race the wrong way round.
+    const realPut = db.tasks.put.bind(db.tasks);
+    let slowedOnce = false;
+    vi.spyOn(db.tasks, 'put').mockImplementation((row: never) => {
+      if (!slowedOnce) {
+        slowedOnce = true;
+        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row)) as never;
+      }
+      return realPut(row);
+    });
+
+    const row = repo.createTaskEager({
+      listId: 'L1', name: '', notes: '', priority: 'medium',
+      tagIds: [], inProgress: false, needsReview: true,
+    });
+    await repo.updateTask(row.id, { name: 'typed immediately' });
+    expect((await repo.loadSnapshot()).tasks[0]!.name).toBe('typed immediately');
+  });
+
+  it('a discard fired straight after creation still lands', async () => {
+    const realPut = db.tasks.put.bind(db.tasks);
+    let slowedOnce = false;
+    vi.spyOn(db.tasks, 'put').mockImplementation((row: never) => {
+      if (!slowedOnce) {
+        slowedOnce = true;
+        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row)) as never;
+      }
+      return realPut(row);
+    });
+    const row = repo.createTaskEager({
+      listId: 'L1', name: '', notes: '', priority: 'medium',
+      tagIds: [], inProgress: false, needsReview: true,
+    });
+    await repo.softDelete('tasks', row.id);
+    expect((await repo.loadSnapshot()).tasks[0]!.deleted).toBe(true);
+  });
+});

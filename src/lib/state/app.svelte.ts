@@ -385,14 +385,30 @@ export class AppStore {
 
   // ── tasks ────────────────────────────────────────────────────────────────
 
-  /** Blank medium-priority task; the UI opens its editor with the name focused. */
-  async addTask(listId: string): Promise<Task> {
-    const task = await this.repo.createTask({
+  /**
+   * Blank medium-priority task, available THIS TICK.
+   *
+   * Synchronous on purpose: the Enter-chain must mount the next editor in the
+   * same event turn as the keystroke, or fast typing lands in the editor of
+   * the task just committed (found via an instrumented e2e — the probe caught
+   * "first renamedsecond" sitting in the old input). The insert persists in
+   * the background, serialized by the repo so no later write can outrun it.
+   */
+  addTaskEager(listId: string): Task {
+    const task = this.repo.createTaskEager({
       listId, name: '', notes: '', priority: 'medium', tagIds: [],
       inProgress: false, needsReview: true,
     });
     this.state.tasks.push(task);
     this.requestSync();
+    return task;
+  }
+
+  /** As addTaskEager, but resolves only once the row is on disk — quick-add's
+   *  await-the-creation discipline depends on that contract. */
+  async addTask(listId: string): Promise<Task> {
+    const task = this.addTaskEager(listId);
+    await this.repo.taskPersisted(task.id);
     return task;
   }
 
