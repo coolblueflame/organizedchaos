@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS } from '../domain/types';
+import { DEFAULT_SETTINGS, type Task } from '../domain/types';
 import { openDb, type AppDb } from './db';
 import { Repo } from './repo';
 
@@ -279,13 +279,13 @@ describe('eager task creation', () => {
     // reload. Slow the insert to force the race the wrong way round.
     const realPut = db.tasks.put.bind(db.tasks);
     let slowedOnce = false;
-    vi.spyOn(db.tasks, 'put').mockImplementation((row: never) => {
+    vi.spyOn(db.tasks, 'put').mockImplementation(((row: Task) => {
       if (!slowedOnce) {
         slowedOnce = true;
-        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row)) as never;
+        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row));
       }
       return realPut(row);
-    });
+    }) as typeof db.tasks.put);
 
     const row = repo.createTaskEager({
       listId: 'L1', name: '', notes: '', priority: 'medium',
@@ -298,13 +298,13 @@ describe('eager task creation', () => {
   it('a discard fired straight after creation still lands', async () => {
     const realPut = db.tasks.put.bind(db.tasks);
     let slowedOnce = false;
-    vi.spyOn(db.tasks, 'put').mockImplementation((row: never) => {
+    vi.spyOn(db.tasks, 'put').mockImplementation(((row: Task) => {
       if (!slowedOnce) {
         slowedOnce = true;
-        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row)) as never;
+        return new Promise((resolve) => setTimeout(resolve, 40)).then(() => realPut(row));
       }
       return realPut(row);
-    });
+    }) as typeof db.tasks.put);
     const row = repo.createTaskEager({
       listId: 'L1', name: '', notes: '', priority: 'medium',
       tagIds: [], inProgress: false, needsReview: true,
