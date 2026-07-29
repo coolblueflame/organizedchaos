@@ -37,6 +37,9 @@
       .filter((t) => !t.deleted && t.listId === id && t.completedAt !== undefined)
       .sort((a, b) => b.completedAt! - a.completedAt!),
   );
+  const openCount = $derived(
+    app.state.tasks.filter((t) => !t.deleted && t.listId === id && t.completedAt === undefined).length,
+  );
   const DONE_PAGE = 60;
   let doneBudget = $state(DONE_PAGE);
   let doneOpenId = $state<string | null>(null);
@@ -149,7 +152,9 @@
 
   {#if completedHere.length > 0}
     <details class="done-shelf" data-testid="list-completed" bind:open={doneOpen}>
-      <summary>completed here · {completedHere.length}</summary>
+      <!-- done/lifetime, e.g. 40/120: the fraction is the point — "a third of
+           this list is behind me" reads instantly where a bare count doesn't. -->
+      <summary>completed here · {completedHere.length}/{completedHere.length + openCount}</summary>
       <!-- Rendered only while open: a closed shelf must cost nothing and must
            not leave finished rows attached where tests and tooling would find
            them "still on the list". -->

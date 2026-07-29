@@ -690,7 +690,7 @@ test('finished work can be read, re-filed into a goals list, and counted there',
   // The goals list now carries it on its history shelf, count first.
   await page.getByTestId(/^list-row-/).filter({ hasText: '2026 Goals' }).first().click();
   const shelf = page.getByTestId('list-completed');
-  await expect(shelf).toContainText('completed here · 1');
+  await expect(shelf, 'done/lifetime fraction').toContainText('completed here · 1/1');
   await shelf.locator('summary').click();
   await expect(page.getByText('learn the accordion', { exact: true })).toBeVisible();
 });
