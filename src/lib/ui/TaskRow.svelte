@@ -253,6 +253,11 @@
               title="waiting on {blockerCount} unfinished task{blockerCount === 1 ? '' : 's'} — the randomizer will skip it" />
           </span>
         {/if}
+        {#if task.inProgress && !completedMode}
+          <span class="mark started" data-testid="inprogress-mark-{task.id}">
+            <Glyph name="play" size={11} title="in progress — the clock may be running" />
+          </span>
+        {/if}
         {#if task.ritual && !completedMode}
           <span class="mark" class:ritual-due={ritual === 'due'} class:ritual-done={ritual === 'done'}
             data-testid="ritual-mark-{task.id}">
@@ -378,6 +383,7 @@
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 6px 8px; font-size: 0.8rem; outline: none;
   }
+  .mark.started { color: var(--acc-green); }
   .mark.snoozed { color: var(--acc-purple); }
   .mark.ritual-due { color: var(--acc-magenta); }
   .mark.ritual-done { color: var(--acc-green); }

@@ -839,3 +839,56 @@ test('custom sort: starts oldest-first, drags into a hand-built order, and stick
   await expect.poll(titles)
     .toEqual(['third added', 'first added', 'second added', 'newcomer']);
 });
+
+test('the floating + adds a todo without leaving your scroll position', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Fab');
+  await page.getByTestId('list-fab').click();
+  await expect(page.getByTestId('task-name-input')).toBeFocused();
+  await page.keyboard.type('added from the corner');
+  await page.getByTestId('task-collapse').click();
+  await expect(page.getByText('added from the corner', { exact: true })).toBeVisible();
+});
+
+test('a task in progress wears its marker in the list', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Marks');
+  await addTask(page, 'being worked');
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await expect(page.getByTestId(`inprogress-mark-${id}`)).toHaveCount(0);
+  await page.getByText('being worked', { exact: true }).click();
+  await page.getByTestId('task-make-current').click(); // lands on home, in progress
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(`inprogress-mark-${id}`)).toBeVisible();
+});
+
+test('"now" filters the priority screen to what is actually available', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Anytime');
+  await addTask(page, 'doable now');
+  await page.getByTestId('back').click();
+  await makeList(page, 'NightOnly');
+  await addTask(page, 'after hours only');
+  await page.getByTestId('back').click();
+  // Put NightOnly far off the clock: a one-minute window at 03:00.
+  const night = page.getByTestId(/^list-row-/).filter({ hasText: 'NightOnly' }).first();
+  const nid = (await night.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${nid}`).click();
+  await page.getByTestId('hours-add').click();
+  await page.getByTestId('hours-rule-0-from').fill('03:00');
+  await page.getByTestId('hours-rule-0-to').fill('03:01');
+  await page.getByTestId('list-settings-save').click();
+
+  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
+  await page.getByTestId('sort-priority').click();
+  await expect(page.getByText('after hours only', { exact: true })).toBeVisible();
+  await page.getByTestId('sort-available-now').click();
+  await expect(page.getByText('after hours only', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('doable now', { exact: true })).toBeVisible();
+
+  // Sticky: still on after leaving and returning.
+  await page.getByTestId('back').click();
+  await page.getByTestId('sort-priority').click();
+  await expect(page.getByTestId('sort-available-now')).toContainText('● now');
+});

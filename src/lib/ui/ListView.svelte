@@ -156,6 +156,11 @@
 
   <button class="new-task" data-testid="new-task" onclick={newTask}>+ new todo</button>
 
+  <!-- Also floating (2026-07-29 ask): a long list should never make you scroll
+       to the bottom just to add to it. Same synchronous newTask, so the
+       keyboard comes up in the same tap. -->
+  <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>+</button>
+
   {#if completedHere.length > 0}
     <details class="done-shelf" data-testid="list-completed" bind:open={doneOpen}>
       <!-- done/lifetime, e.g. 40/120: the fraction is the point — "a third of
@@ -218,4 +223,15 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
     text-align: center; padding: 12px 0 4px;
   }
+  .fab {
+    position: fixed; z-index: 120;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    width: 52px; height: 52px; border-radius: 50%;
+    background: var(--bg1); border: 1px solid var(--acc-green);
+    color: var(--acc-green); font-size: 1.7rem; line-height: 1; cursor: pointer;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  }
+  @media (hover: hover) { .fab:hover { background: var(--acc-green); color: var(--bg0); } }
 </style>
