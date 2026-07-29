@@ -57,7 +57,8 @@ test('a full sweep session: every verdict does what it says', async ({ page }) =
   // Oldest first: 'ancient one', with its notes and age on show.
   await expect(page.getByTestId('sweep-card')).toContainText('ancient one');
   await expect(page.getByTestId('sweep-card')).toContainText('years old');
-  await expect(page.getByTestId('sweep-card')).toContainText('some imported detail');
+  await expect(page.getByTestId('sweep-notes'), 'notes are editable now — a VALUE, not text')
+    .toHaveValue('some imported detail');
   await page.getByTestId('sweep-delete').click();
 
   await expect(page.getByTestId('sweep-card')).toContainText('still relevant');
@@ -148,4 +149,27 @@ test('re-filing mid-sweep: pick a list once, then one tap per card', async ({ pa
   await page.getByTestId('back').click();
   await page.getByTestId(/^list-row-/).filter({ hasText: 'Imported' }).first().click();
   await expect(page.getByText('call the dentist', { exact: true })).toBeVisible();
+});
+
+test('the card is an editor: describe, estimate, and tag before the verdict', async ({ page }) => {
+  await reset(page);
+  await seedBacklog(page, ['bare imported task']);
+  await page.goto('./#/sweep');
+
+  await page.getByTestId('sweep-notes').fill('call ahead, they close at 5');
+  await page.getByTestId('sweep-estimate').fill('2');
+  await page.getByTestId('new-tag').click();
+  await page.getByTestId('new-tag-input').fill('errands');
+  await page.getByTestId('new-tag-input').press('Enter');
+  await page.getByTestId('new-tag-done').click();
+  await page.getByTestId('sweep-keep').click();
+  await expect(page.getByTestId('sweep-clear')).toBeVisible();
+
+  // Everything typed on the card lives on the task.
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().click();
+  await page.getByText('bare imported task', { exact: true }).click();
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('call ahead, they close at 5');
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('2');
+  await expect(page.getByRole('button', { name: /errands/ })).toBeVisible();
 });

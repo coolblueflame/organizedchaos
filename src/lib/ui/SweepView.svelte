@@ -14,6 +14,7 @@
   import type { Task } from '../domain/types';
   import { PRIORITIES, type Priority } from '../domain/types';
   import Glyph from './Glyph.svelte';
+  import TagPicker from './TagPicker.svelte';
 
   const queue = $derived(sweepQueue(app.state.tasks, app.state.lists));
   const current = $derived(queue[0]);
@@ -103,6 +104,15 @@
     decided += 1;
   }
 
+  /** Same rule the editor uses: toggling a tag adds or removes it. */
+  function toggleTag(tagId: string) {
+    if (!current) return;
+    const tagIds = current.tagIds.includes(tagId)
+      ? current.tagIds.filter((id) => id !== tagId)
+      : [...current.tagIds, tagId];
+    void app.patchTask(current.id, { tagIds });
+  }
+
   async function putBack() {
     if (!lastPatch) return;
     await app.revertSweepVerdict(lastPatch.id, lastPatch.before);
@@ -128,9 +138,24 @@
           <span class="age">· {age(current)}</span>
         </p>
         <h2 class="name">{current.name || 'untitled'}</h2>
-        {#if current.notes.trim()}
-          <p class="notes">{current.notes}</p>
-        {/if}
+
+        <!-- The card is an editor, not just a verdict form (2026-07-29 ask):
+             describing, estimating and tagging ARE triage, and edits persist
+             whatever verdict follows. -->
+        <label class="field"><span>description</span>
+          <textarea data-testid="sweep-notes" rows="2"
+            placeholder="what does this actually involve?"
+            value={current.notes}
+            oninput={(e) => void app.patchTask(current!.id, { notes: e.currentTarget.value })}></textarea>
+        </label>
+        <label class="field est"><span>estimate (h)</span>
+          <input type="number" min="0.5" step="0.5" placeholder="none" data-testid="sweep-estimate"
+            value={current.estimateHours ?? ''}
+            oninput={(e) => void app.patchTask(current!.id, {
+              estimateHours: parseFloat(e.currentTarget.value) > 0 ? parseFloat(e.currentTarget.value) : undefined,
+            })} />
+        </label>
+        <TagPicker selected={current.tagIds} ontoggle={toggleTag} />
 
         <!-- Keep-with-priority: one tap reviews AND files it where it belongs. -->
         <div class="priorities">
@@ -242,6 +267,16 @@
     margin: 0; color: var(--dim); font-size: 0.85rem; line-height: 1.5;
     display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .field textarea, .field input {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
+    width: 100%; min-width: 0;
+  }
+  .field textarea { font-family: inherit; resize: vertical; line-height: 1.45; }
+  .field textarea:focus, .field input:focus { border-color: var(--acc-blue); }
+  .field.est input { max-width: 130px; }
   .priorities { display: flex; gap: 6px; margin-top: 4px; }
   .tier {
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
