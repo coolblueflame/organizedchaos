@@ -625,6 +625,7 @@ export class AppStore {
     const wasInProgress = task.inProgress;
     const priorStartedAt = task.startedAt;
     const priorAccumulated = task.activeAccumulatedMs;
+    const priorTimebox = task.timeboxEndsAt;
 
     const record = await this.repo.createTask({
       listId: task.listId,
@@ -661,6 +662,9 @@ export class AppStore {
       inProgress: false,
       startedAt: undefined,
       activeAccumulatedMs: undefined,
+      // The countdown dies with the completion — a done ritual whose timebox
+      // kept ticking would fire its alarm over a finished job.
+      timeboxEndsAt: undefined,
     });
 
     const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
@@ -673,6 +677,7 @@ export class AppStore {
         inProgress: wasInProgress,
         startedAt: priorStartedAt,
         activeAccumulatedMs: priorAccumulated,
+        timeboxEndsAt: priorTimebox,
       });
     });
 
@@ -708,12 +713,19 @@ export class AppStore {
       ? {
           name: task.name, inProgress: task.inProgress, recurrenceId: task.recurrenceId,
           startedAt: task.startedAt, activeMs: task.activeMs,
+          timeboxEndsAt: task.timeboxEndsAt,
         }
       : null;
     const priorCurrent = this.state.currentTask;
-    const priorSpawnAt = before?.recurrenceId
-      ? this.state.templates.find((t) => t.id === before.recurrenceId)?.nextSpawnAt
+    // Everything the completion teaches its template, captured so the undo can
+    // unteach it — otherwise an undone completion leaves a phantom sample in
+    // the rolling average and a spawn armed for a task that never finished.
+    const priorTpl = before?.recurrenceId
+      ? this.state.templates.find((t) => t.id === before.recurrenceId)
       : undefined;
+    const priorSpawnAt = priorTpl?.nextSpawnAt;
+    const priorAvg = priorTpl?.avgActiveMs;
+    const priorInstances = priorTpl?.completedInstances;
 
     const finishedAt = Date.now();
     // Time counts ONLY when finishing something you were actively working on.
@@ -754,10 +766,18 @@ export class AppStore {
         inProgress: before?.inProgress ?? false,
         startedAt: before?.startedAt,
         activeMs: before?.activeMs,
+        // A countdown that was running comes back exactly as it was — if it
+        // expired during the undo gap, the alert firing now is the truth.
+        timeboxEndsAt: before?.timeboxEndsAt,
       });
-      // Un-arm any recurrence this completion scheduled, so it can't respawn.
+      // Un-arm any recurrence this completion scheduled, and unteach the
+      // template what the completion taught it (average + instance count).
       if (before?.recurrenceId) {
-        await this.updateRecurring(before.recurrenceId, { nextSpawnAt: priorSpawnAt });
+        await this.updateRecurring(before.recurrenceId, {
+          nextSpawnAt: priorSpawnAt,
+          avgActiveMs: priorAvg,
+          completedInstances: priorInstances,
+        });
       }
       if (wasCurrent) {
         await this.repo.setCurrentTask(priorCurrent);

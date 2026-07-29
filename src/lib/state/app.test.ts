@@ -159,6 +159,50 @@ describe('per-window rituals', () => {
   });
 });
 
+describe('completion undo restores everything it destroyed', () => {
+  it('a running timebox comes back on undo', async () => {
+    const list = await store.addList('A');
+    const t = await store.addTask(list.id);
+    await store.startTimebox(t.id, 25);
+    const endsAt = store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt!;
+    await store.completeTask(t.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt).toBeUndefined();
+    await store.undoLast();
+    expect(store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt).toBe(endsAt);
+  });
+
+  it("undo unteaches the template the completion's timing sample", async () => {
+    vi.setSystemTime(new Date('2026-07-29T09:00:00'));
+    const list = await store.addList('A');
+    const t = await store.addTask(list.id);
+    const tpl = await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.acceptTask(t.id); // starts the clock
+    vi.setSystemTime(new Date('2026-07-29T09:30:00'));
+    await store.completeTask(t.id);
+    let saved = store.state.templates.find((x) => x.id === tpl.id)!;
+    expect(saved.completedInstances).toBe(1);
+    await store.undoLast();
+    saved = store.state.templates.find((x) => x.id === tpl.id)!;
+    expect(saved.completedInstances).toBeUndefined();
+    expect(saved.avgActiveMs).toBeUndefined();
+    expect(saved.nextSpawnAt).toBeUndefined(); // un-armed too
+  });
+
+  it("a ritual's completion kills its countdown (and undo revives it)", async () => {
+    const list = await store.addList('A');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, {
+      ritual: { days: [0, 1, 2, 3, 4, 5, 6], from: '00:00', to: '23:59' },
+    });
+    await store.startTimebox(t.id, 25);
+    const endsAt = store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt!;
+    await store.completeTask(t.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt).toBeUndefined();
+    await store.undoLast();
+    expect(store.state.tasks.find((x) => x.id === t.id)!.timeboxEndsAt).toBe(endsAt);
+  });
+});
+
 describe('moveRecurringToList', () => {
   it('re-homes the template and its open spawned copy together', async () => {
     const a = await store.addList('A');
