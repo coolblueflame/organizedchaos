@@ -10,7 +10,7 @@
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
-  import { moveAcross, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
+  import { moveAcross, moveWithin, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import { isRitualDue } from '../domain/ritual';
   import { createDragScroller } from './dragScroll';
   import { primeKeyboard } from './keyboardBridge';
@@ -18,7 +18,7 @@
   import ListSettings from './ListSettings.svelte';
   import { flip } from 'svelte/animate';
   import { motionOk } from './fx/particles';
-  import type { List } from '../domain/types';
+  import type { List, Task } from '../domain/types';
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
   import StatsStrip from './StatsStrip.svelte';
@@ -202,6 +202,77 @@
     return order.map((id) => byId.get(id)).filter((l): l is List => l !== undefined);
   };
 
+  // ── the day queue (2026-07-29 request) ─────────────────────────────────
+  const queueTasks = $derived(app.queuedTasks());
+  const listTitle = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '';
+
+  /** Same grip-drag contract as the list rows, over a single flat order. */
+  let queueDragId = $state<string | null>(null);
+  let queueOrder = $state<string[] | null>(null);
+  let queuePointerY = 0;
+
+  function startQueueDrag(e: PointerEvent, id: string) {
+    e.preventDefault();
+    queueDragId = id;
+    queueOrder = queueTasks.map((t) => t.id);
+  }
+
+  function queueHitTest() {
+    if (!queueDragId || !queueOrder) return;
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-queue-row]')]
+      .filter((el) => el.dataset.queueRow !== queueDragId);
+    let index = rows.length;
+    for (let i = 0; i < rows.length; i += 1) {
+      const box = rows[i]!.getBoundingClientRect();
+      if (queuePointerY < box.top + box.height / 2) { index = i; break; }
+    }
+    const next = moveWithin(queueOrder, queueDragId, index);
+    if (next.join('\n') !== queueOrder.join('\n')) {
+      queueOrder = next;
+      haptic('tick');
+    }
+  }
+
+  const queueScroller = createDragScroller(queueHitTest);
+
+  function onQueueDragMove(e: PointerEvent) {
+    if (!queueDragId || !queueOrder) return;
+    queuePointerY = e.clientY;
+    queueHitTest();
+    queueScroller.update(e.clientY);
+  }
+
+  async function endQueueDrag() {
+    if (!queueDragId) return;
+    queueScroller.stop();
+    // Commit what the finger last saw — rects can shift under a flip mid-drag.
+    queueHitTest();
+    const order = queueOrder;
+    queueDragId = null;
+    queueOrder = null;
+    if (order) await app.reorderQueue(order);
+  }
+
+  /** The rows to render: the live drag order while a drag is in flight. */
+  const shownQueue = $derived.by(() => {
+    if (!queueOrder) return queueTasks;
+    const byId = new Map(queueTasks.map((t) => [t.id, t]));
+    return queueOrder.map((id) => byId.get(id)).filter((t): t is Task => t !== undefined);
+  });
+
+  let clearArmed = $state(false);
+  let clearTimer: ReturnType<typeof setTimeout> | undefined;
+  function clearQueueTap() {
+    if (!clearArmed) {
+      clearArmed = true;
+      clearTimer = setTimeout(() => (clearArmed = false), 3000);
+      return;
+    }
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    void app.clearQueue();
+  }
+
   async function createList() {
     const title = newListTitle.trim();
     if (!title) { newListOpen = false; return; }
@@ -220,7 +291,9 @@
   });
 </script>
 
-<svelte:window onpointermove={onListDragMove} onpointerup={() => void endListDrag()} />
+<svelte:window
+  onpointermove={(e) => { onListDragMove(e); onQueueDragMove(e); }}
+  onpointerup={() => { void endListDrag(); void endQueueDrag(); }} />
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
@@ -342,6 +415,36 @@
         </div>
       {/each}
     </details>
+  {/if}
+
+  {#if shownQueue.length > 0}
+    <section class="queue" data-testid="queue-section">
+      <div class="q-head">
+        <h2 class="group-header q-title">≡ today's queue · {shownQueue.length}</h2>
+        <button class="q-clear" class:armed={clearArmed} data-testid="queue-clear" onclick={clearQueueTap}>
+          {clearArmed ? 'tap again to clear' : 'clear'}
+        </button>
+      </div>
+      {#each shownQueue as t, i (t.id)}
+        <div class="q-row" class:lifted={queueDragId === t.id}
+          data-queue-row={t.id} data-testid="queue-row-{t.id}"
+          animate:flip={{ duration: queueDragId ? rowFlipMs : 0 }}>
+          <button class="list-grip" data-testid="queue-drag-{t.id}" aria-label="drag to reorder"
+            onpointerdown={(e) => startQueueDrag(e, t.id)}>
+            <Glyph name="grip" size={12} />
+          </button>
+          <span class="q-pos">{i + 1}</span>
+          <button class="q-check" data-testid="queue-check-{t.id}" aria-label="mark done"
+            onclick={() => void app.completeTask(t.id)}><Glyph name="box" size={15} /></button>
+          <button class="q-main" onclick={() => navigate({ name: 'list', id: t.listId })}>
+            <span class="q-name">{t.name || 'untitled'}</span>
+            <span class="q-list">{listTitle(t.listId)}</span>
+          </button>
+          <button class="q-remove" data-testid="queue-remove-{t.id}" aria-label="remove from queue"
+            onclick={() => void app.removeFromQueue(t.id)}><span aria-hidden="true">✕</span></button>
+        </div>
+      {/each}
+    </section>
   {/if}
 
   <div class="footer-links">
@@ -558,4 +661,47 @@
      its viewBox — same nominal size reads smaller. Compensate. */
   .ico-text { font-size: 1.2rem; }
   .sync-warn { color: var(--acc-orange); }
+  /* ── the day queue ── */
+  .queue { margin-top: 18px; }
+  .q-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .group-header.q-title { color: var(--acc-cyan); }
+  .q-clear {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 4px;
+  }
+  @media (hover: hover) { .q-clear:hover { color: var(--text); } }
+  .q-clear.armed { color: var(--acc-magenta); }
+  .q-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    background: var(--bg1); border: 1px solid color-mix(in srgb, var(--acc-cyan) 25%, var(--line));
+    border-radius: 8px; padding: 6px 8px 6px 2px;
+  }
+  .q-row.lifted {
+    border-color: var(--acc-cyan);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+  }
+  .q-pos {
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
+    min-width: 16px; text-align: right; flex: none;
+  }
+  .q-check {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    display: flex; align-items: center; padding: 4px; flex: none;
+  }
+  @media (hover: hover) { .q-check:hover { color: var(--acc-green); } }
+  .q-main {
+    flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px;
+    background: none; border: none; color: var(--text); cursor: pointer;
+    text-align: left; padding: 4px 0; font-size: 0.9rem;
+  }
+  .q-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-list {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.65rem;
+    flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw;
+  }
+  .q-remove {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    padding: 4px 6px; flex: none; font-size: 0.8rem;
+  }
+  @media (hover: hover) { .q-remove:hover { color: var(--acc-magenta); } }
 </style>

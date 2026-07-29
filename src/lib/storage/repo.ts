@@ -52,6 +52,10 @@ export interface AppState {
   settings: Settings;
   /** When settings last changed — sync merge key. 0 = never/legacy. */
   settingsUpdatedAt: number;
+  /** The hand-ordered day queue (task ids, top first) — see domain/dayQueue. */
+  queueIds: string[];
+  /** When the queue last changed — sync merge key. 0 = never/legacy. */
+  queueUpdatedAt: number;
 }
 
 /** kv rows wrap their payload with a stamp since Phase 6; legacy rows are bare payloads. */
@@ -67,9 +71,9 @@ function readStamped<T>(raw: unknown, isLegacy: (v: unknown) => boolean): { data
 }
 
 /** Base fields for a new row. Date.now() (not an injected clock) so vi.setSystemTime works. */
-function stamp(): { id: string; createdAt: number; updatedAt: number; deleted: false } {
+function stamp(): { id: string; createdAt: number; updatedAt: number; editedAt: number; deleted: false } {
   const now = Date.now();
-  return { id: nanoid(), createdAt: now, updatedAt: now, deleted: false };
+  return { id: nanoid(), createdAt: now, updatedAt: now, editedAt: now, deleted: false };
 }
 
 /**
@@ -120,21 +124,25 @@ export class Repo {
   }
 
   async loadState(): Promise<AppState> {
-    const [lists, tasks, tags, templates, currentRow, settingsRow] = await Promise.all([
+    const [lists, tasks, tags, templates, currentRow, settingsRow, queueRow] = await Promise.all([
       this.db.lists.toArray(), this.db.tasks.toArray(), this.db.tags.toArray(),
       this.db.templates.toArray(), this.db.kv.get('currentTask'), this.db.kv.get('settings'),
+      this.db.kv.get('dayQueue'),
     ]);
     const live = <T extends { deleted: boolean }>(rows: T[]) => rows.filter((r) => !r.deleted);
     const current = readStamped<CurrentTaskRef | null>(currentRow?.value, (v) =>
       v === null || (typeof v === 'object' && 'taskId' in (v as object)));
     const settings = readStamped<Partial<Settings>>(settingsRow?.value, (v) =>
       typeof v === 'object' && !('data' in (v as object)));
+    const queue = readStamped<string[]>(queueRow?.value, Array.isArray);
     return {
       lists: live(lists), tasks: live(tasks), tags: live(tags), templates: live(templates),
       currentTask: current.data ?? null,
       currentTaskUpdatedAt: current.updatedAt,
       settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) },
       settingsUpdatedAt: settings.updatedAt,
+      queueIds: queue.data ?? [],
+      queueUpdatedAt: queue.updatedAt,
     };
   }
 
@@ -176,7 +184,9 @@ export class Repo {
   ): Promise<void> {
     const row = await table.get(id);
     if (!row) return;
-    await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt) });
+    // editedAt: the honest clock riding along with the clamped merge key —
+    // it is what breaks the tie when two devices' nextStamp()s collide.
+    await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt), editedAt: Date.now() });
   }
 
   async updateTask(id: string, patch: Partial<Task>): Promise<void> {
@@ -208,6 +218,18 @@ export class Repo {
     const parsed = readStamped<Partial<Settings>>(row?.value, (v) =>
       typeof v === 'object' && v !== null && !('data' in (v as object)));
     return { ...DEFAULT_SETTINGS, ...(parsed.data ?? {}) };
+  }
+
+  /**
+   * Replace the day queue, returning the stamp written so the caller's mirror
+   * can hold the same merge key the database does.
+   */
+  async updateQueue(ids: string[]): Promise<number> {
+    const row = await this.db.kv.get('dayQueue');
+    const prior = readStamped<string[]>(row?.value, Array.isArray).updatedAt;
+    const updatedAt = nextStamp(prior);
+    await this.db.kv.put({ key: 'dayQueue', value: { data: [...ids], updatedAt } });
+    return updatedAt;
   }
 
   async updateSettings(patch: Partial<Settings>): Promise<void> {
@@ -261,6 +283,7 @@ export class Repo {
         this.applyRows(this.db.templates, snap.templates),
         this.applyStamped('currentTask', snap.currentTask, snap.currentTaskUpdatedAt),
         this.applyStamped('settings', snap.settings, snap.settingsUpdatedAt),
+        this.applyStamped('dayQueue', snap.queueIds, snap.queueUpdatedAt),
       ]);
       // Merge the achievement half back in WITHOUT touching this device's
       // pacing fields (seen / lastPresentedAt / presentedToday). Read-modify-
@@ -304,7 +327,7 @@ export class Repo {
    * simply agrees with what is stored still rewrites it — only a strictly newer
    * local change wins.
    */
-  private async applyStamped(key: 'currentTask' | 'settings', data: unknown, updatedAt: number): Promise<void> {
+  private async applyStamped(key: 'currentTask' | 'settings' | 'dayQueue', data: unknown, updatedAt: number): Promise<void> {
     const row = await this.db.kv.get(key);
     const value = row?.value;
     const stored = typeof value === 'object' && value !== null && 'updatedAt' in value

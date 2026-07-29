@@ -30,6 +30,15 @@ export interface DrawScope {
    * waiting on something else" — never to actually draw one.
    */
   includeBlocked?: boolean;
+  /**
+   * The hand-ordered day queue: the FIRST of these ids still in the pool is
+   * served instead of a random pick. A deliberately planned order outranks any
+   * priority tier — but only the ORDER is privileged: snoozes, blockers, list
+   * hours, filters and the work-period fit all still gate the pool, so a
+   * queued task the rules would hide falls through to the next one (and then
+   * to the normal draw).
+   */
+  queueFirst?: string[];
 }
 
 /**
@@ -84,6 +93,15 @@ export function drawTask(
     );
   }
   if (pool.length === 0) return null;
+
+  // The day queue pre-empts the tiered draw entirely (see DrawScope.queueFirst).
+  if (scope?.queueFirst?.length) {
+    const byId = new Map(pool.map((t) => [t.id, t]));
+    for (const id of scope.queueFirst) {
+      const queued = byId.get(id);
+      if (queued) return queued;
+    }
+  }
 
   const tierOf = (t: Task) =>
     priorityRank(drawPriority(t, settings, now, projectTiers?.get(t.listId), lifts?.get(t.id)));

@@ -35,6 +35,7 @@ class Device {
     lists: [], tasks: [], tags: [], templates: [],
     currentTask: null, currentTaskUpdatedAt: 0,
     settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
   };
   engine: SyncEngine;
   constructor(client: FakeClient, private clock: () => number) {

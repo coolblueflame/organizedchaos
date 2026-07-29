@@ -14,6 +14,7 @@ const snap = (over: Partial<RemoteSnapshot> = {}): RemoteSnapshot => ({
   lists: [], tasks: [], tags: [], templates: [],
   currentTask: null, currentTaskUpdatedAt: 0,
   settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
   ...over,
 });
 
@@ -106,6 +107,7 @@ describe('SyncEngine', () => {
       schema: 1, lists: [], tasks: [t], tags: [], templates: [],
       currentTask: null, currentTaskUpdatedAt: 0,
       settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
     });
     client.externallyWrite('meta.json', { schema: 1 });
     const engine = makeEngine();
@@ -230,6 +232,7 @@ describe('download caching', () => {
       schema: 1, lists: [], tasks: [], tags: [], templates: [],
       currentTask: null, currentTaskUpdatedAt: 0,
       settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
     });
 
     const next = countingEngine(cache);

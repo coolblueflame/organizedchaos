@@ -16,6 +16,7 @@
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import { describeRecurrence } from './recurrenceText';
   import { activeMs, formatElapsed } from '../domain/stats';
+  import { liveQueueIds } from '../domain/dayQueue';
   import type { RecurrenceMode } from '../domain/types';
   import Glyph from './Glyph.svelte';
 
@@ -75,6 +76,13 @@
   // Same two-stage arming as the row's delete — a mis-tap in here was deleting
   // immediately, which is exactly the friction this was supposed to add.
   let deleteArmed = $state(false);
+
+  /** Position in the day queue (0-based), or null when not queued. */
+  const queuePos = $derived.by(() => {
+    const live = liveQueueIds(app.state.queueIds, app.state.tasks);
+    const at = live.indexOf(task.id);
+    return at === -1 ? null : at;
+  });
   let armTimer: ReturnType<typeof setTimeout> | undefined;
 
   function remove() {
@@ -271,6 +279,11 @@
       onclick={() => void app.setInProgress(task.id, !task.inProgress)}>
       {#if task.inProgress}<Glyph name="pause" size={10} />{:else}<span class="dot">·</span>{/if}
       {task.inProgress ? 'in progress' : 'not started'}
+    </button>
+    <button class="flow" class:active={queuePos !== null} data-testid="task-queue-toggle"
+      onclick={() => void (queuePos === null ? app.addToQueue(task.id) : app.removeFromQueue(task.id))}>
+      <span class="dot">≡</span>
+      {queuePos === null ? 'add to queue' : `in queue · #${queuePos + 1}`}
     </button>
   </div>
   {/if}

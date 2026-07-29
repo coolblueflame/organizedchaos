@@ -14,6 +14,7 @@ const snap = (over: Partial<RemoteSnapshot> = {}): RemoteSnapshot => ({
   lists: [], tasks: [], tags: [], templates: [],
   currentTask: null, currentTaskUpdatedAt: 0,
   settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
   ...over,
 });
 

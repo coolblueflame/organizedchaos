@@ -76,6 +76,52 @@ describe('work-period fit', () => {
   });
 });
 
+describe('drawTask — the day queue', () => {
+  it('serves the first queued task in the pool, outranking every tier', () => {
+    const big = task({ priority: 'max' });
+    const planned = task({ priority: 'low' });
+    const tasks = [big, planned];
+    const got = drawTask(tasks, DEFAULT_SETTINGS, now, firstRng, { queueFirst: [planned.id] });
+    expect(got?.id).toBe(planned.id);
+  });
+
+  it('queue order is what counts, not priority within the queue', () => {
+    const second = task({ priority: 'max' });
+    const first = task({ priority: 'someday' });
+    const got = drawTask([second, first], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [first.id, second.id],
+    });
+    expect(got?.id).toBe(first.id);
+  });
+
+  it('a snoozed or excluded queue top falls through to the next queued task', () => {
+    const snoozed = task({ priority: 'high', notTodayUntil: now.getTime() + 60_000 });
+    const nextUp = task({ priority: 'low' });
+    const got = drawTask([snoozed, nextUp], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [snoozed.id, nextUp.id],
+    });
+    expect(got?.id).toBe(nextUp.id);
+  });
+
+  it('work-period fit still gates the queue', () => {
+    const tooBig = task({ priority: 'high', estimateHours: 3 });
+    const fits = task({ priority: 'low', estimateHours: 0.5 });
+    const got = drawTask([tooBig, fits], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [tooBig.id, fits.id], maxEstimateHours: 1,
+    });
+    expect(got?.id).toBe(fits.id);
+  });
+
+  it('an empty or fully-ineligible queue falls back to the normal tiered draw', () => {
+    const normal = task({ priority: 'max' });
+    const gone = task({ priority: 'high', completedAt: 5 });
+    const got = drawTask([normal, gone], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [gone.id],
+    });
+    expect(got?.id).toBe(normal.id);
+  });
+});
+
 describe('drawTask — tier selection', () => {
   it('only draws from the highest non-empty effective tier', () => {
     const med = task({ priority: 'medium' });

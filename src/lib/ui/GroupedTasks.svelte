@@ -106,7 +106,7 @@
     await runBulk('delete');
   }
 
-  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag', value?: string) {
+  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue', value?: string) {
     const ids = [...selected];
     selected = [];
     // Reset the pickers, or re-choosing the same value next time is a no-op.
@@ -343,6 +343,7 @@
       <option value="">+ tag…</option>
       {#each app.state.tags as t (t.id)}<option value={t.id}>+ {t.name}</option>{/each}
     </select>
+    <button data-testid="bulk-queue" onclick={() => void runBulk('queue')}>≡ queue</button>
     <select data-testid="bulk-move" bind:value={bulkList}
       onchange={() => bulkList && void runBulk('move', bulkList)}>
       <option value="">→ move to…</option>

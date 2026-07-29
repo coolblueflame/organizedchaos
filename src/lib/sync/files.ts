@@ -53,6 +53,9 @@ export interface RemoteSnapshot {
   currentTaskUpdatedAt: number;
   settings: Settings;
   settingsUpdatedAt: number;
+  /** The day queue (ordered task ids) — a stamped singleton like settings. */
+  queueIds: string[];
+  queueUpdatedAt: number;
   delight?: DelightProgress;
 }
 
@@ -70,6 +73,9 @@ interface ActiveFile {
   currentTaskUpdatedAt: number;
   settings: Settings;
   settingsUpdatedAt: number;
+  /** Optional on the wire: remotes written before the queue existed lack them. */
+  queueIds?: string[];
+  queueUpdatedAt?: number;
   delight?: DelightProgress;
 }
 
@@ -98,6 +104,8 @@ export function toFiles(snap: RemoteSnapshot, now: Date): SyncFilePayloads {
     currentTaskUpdatedAt: snap.currentTaskUpdatedAt,
     settings: snap.settings,
     settingsUpdatedAt: snap.settingsUpdatedAt,
+    queueIds: snap.queueIds,
+    queueUpdatedAt: snap.queueUpdatedAt,
     ...(snap.delight ? { delight: snap.delight } : {}),
   };
   files['active.json'] = active;
@@ -141,6 +149,9 @@ export function fromFiles(files: SyncFilePayloads): RemoteSnapshot {
     currentTaskUpdatedAt: active.currentTaskUpdatedAt ?? 0,
     settings: { ...DEFAULT_SETTINGS, ...(active.settings ?? {}) },
     settingsUpdatedAt: active.settingsUpdatedAt ?? 0,
+    // Pre-queue remotes report an empty queue at stamp 0, which always loses.
+    queueIds: active.queueIds ?? [],
+    queueUpdatedAt: active.queueUpdatedAt ?? 0,
     // Absent on remotes written before delight synced — merge treats it as none.
     ...(active.delight ? { delight: active.delight } : {}),
   };

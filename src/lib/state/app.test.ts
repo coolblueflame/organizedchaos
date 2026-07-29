@@ -24,6 +24,63 @@ async function persisted() {
   return new Repo(openDb(dbName)).loadState();
 }
 
+describe('the day queue', () => {
+  it('add / remove / reorder round-trip mirror and disk', async () => {
+    const list = await store.addList('Plan');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    await store.addToQueue(a.id);
+    await store.addToQueue(b.id);
+    expect(store.state.queueIds).toEqual([a.id, b.id]);
+    await store.reorderQueue([b.id, a.id]);
+    expect(store.state.queueIds).toEqual([b.id, a.id]);
+    const disk = await persisted();
+    expect(disk.queueIds).toEqual([b.id, a.id]);
+    expect(disk.queueUpdatedAt).toBeGreaterThan(0);
+    await store.removeFromQueue(b.id);
+    expect(store.state.queueIds).toEqual([a.id]);
+  });
+
+  it('completing a queued task drains it from the live queue', async () => {
+    const list = await store.addList('Plan');
+    const a = await store.addTask(list.id);
+    await store.addToQueue(a.id);
+    await store.completeTask(a.id);
+    expect(store.queuedTasks()).toEqual([]);
+  });
+
+  it('the undo entry is armed before the write settles (Cmd+Z mid-flight)', async () => {
+    const list = await store.addList('Plan');
+    const a = await store.addTask(list.id);
+    await store.addToQueue(a.id);
+    // Widen the window: the disk write dawdles while the mirror already shows
+    // an empty queue — an immediate undo must still find the clear on the stack.
+    const repo = (store as unknown as { repo: Repo }).repo;
+    const slow = vi.spyOn(repo, 'updateQueue').mockImplementation(async (ids: string[]) => {
+      await new Promise((r) => setTimeout(r, 40));
+      slow.mockRestore();
+      return repo.updateQueue(ids);
+    });
+    const clearing = store.clearQueue();
+    const undone = await store.undoLast(); // fired before `clearing` resolves
+    await clearing;
+    expect(undone).toBe('Cleared the queue');
+    expect(store.state.queueIds).toEqual([a.id]);
+  });
+
+  it('clearQueue is undoable', async () => {
+    const list = await store.addList('Plan');
+    const a = await store.addTask(list.id);
+    await store.addToQueue(a.id);
+    await store.clearQueue();
+    expect(store.state.queueIds).toEqual([]);
+    await store.undoLast();
+    expect(store.state.queueIds).toEqual([a.id]);
+    const disk = await persisted();
+    expect(disk.queueIds).toEqual([a.id]);
+  });
+});
+
 describe('AppStore', () => {
   it('starts ready with empty state on a fresh db', () => {
     expect(store.ready).toBe(true);

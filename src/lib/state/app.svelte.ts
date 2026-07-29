@@ -14,6 +14,7 @@ import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import { ritualExclusions, withRitualLifts } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
+import { liveQueueIds } from '../domain/dayQueue';
 import { reorderPatches } from '../domain/listOrder';
 import { customOrderPatches } from '../domain/views';
 import { SyncEngine, type FileCache, type SyncStatus } from '../sync/engine';
@@ -42,6 +43,7 @@ export class AppStore {
     lists: [], tasks: [], tags: [], templates: [],
     currentTask: null, currentTaskUpdatedAt: 0,
     settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+    queueIds: [], queueUpdatedAt: 0,
   });
   ready = $state(false);
   /** navigator.storage.persist() outcome — surfaced in Settings (spec §2 hardening). */
@@ -75,6 +77,8 @@ export class AppStore {
     this.state.currentTaskUpdatedAt = loaded.currentTaskUpdatedAt;
     this.state.settings = loaded.settings;
     this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
+    this.state.queueIds = loaded.queueIds;
+    this.state.queueUpdatedAt = loaded.queueUpdatedAt;
     // Materialize any recurrences that came due while the app was closed.
     await this.runSpawnSweep();
     this.ready = true;
@@ -244,6 +248,8 @@ export class AppStore {
     this.state.currentTaskUpdatedAt = loaded.currentTaskUpdatedAt;
     this.state.settings = loaded.settings;
     this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
+    this.state.queueIds = loaded.queueIds;
+    this.state.queueUpdatedAt = loaded.queueUpdatedAt;
   }
 
   async configureSync(owner: string, repo: string, token: string): Promise<{ ok: boolean; error?: string }> {
@@ -282,6 +288,62 @@ export class AppStore {
   /** Full local backup for the Settings export button. */
   exportSnapshot(): Promise<import('../sync/files').RemoteSnapshot> {
     return this.repo.loadSnapshot();
+  }
+
+  // ── the day queue (2026-07-29 request) ───────────────────────────────────
+
+  /**
+   * Every queue mutation funnels through here: prune dead ids while we're
+   * writing anyway, spread into a PLAIN array ($state proxies cannot be
+   * structured-cloned into IndexedDB), mirror synchronously, and hold the
+   * same stamp the database wrote so sync merges agree with what we show.
+   */
+  private async writeQueue(ids: string[]): Promise<void> {
+    const plain = liveQueueIds([...ids], this.state.tasks);
+    this.state.queueIds = plain;
+    this.state.queueUpdatedAt = await this.repo.updateQueue(plain);
+    this.requestSync();
+  }
+
+  /** The queue as the UI should render it — live, open tasks only. */
+  queuedTasks(): Task[] {
+    const byId = new Map(this.state.tasks.map((t) => [t.id, t]));
+    return liveQueueIds(this.state.queueIds, this.state.tasks)
+      .map((id) => byId.get(id))
+      .filter((t): t is Task => t !== undefined);
+  }
+
+  async addToQueue(id: string): Promise<void> {
+    if (this.state.queueIds.includes(id)) return;
+    await this.writeQueue([...this.state.queueIds, id]);
+  }
+
+  /** Bulk add from multi-select; already-queued tasks keep their position. */
+  async addManyToQueue(ids: string[]): Promise<void> {
+    const have = new Set(this.state.queueIds);
+    const fresh = ids.filter((id) => !have.has(id));
+    if (fresh.length === 0) return;
+    await this.writeQueue([...this.state.queueIds, ...fresh]);
+  }
+
+  async removeFromQueue(id: string): Promise<void> {
+    if (!this.state.queueIds.includes(id)) return;
+    await this.writeQueue(this.state.queueIds.filter((x) => x !== id));
+  }
+
+  async reorderQueue(ids: string[]): Promise<void> {
+    await this.writeQueue(ids);
+  }
+
+  /** The "clear queue" button is confirmed in the UI AND undoable — belt & braces. */
+  async clearQueue(): Promise<void> {
+    const prior = [...this.state.queueIds];
+    if (prior.length === 0) return;
+    // Undo armed BEFORE the mutation (the mirror clears synchronously inside
+    // writeQueue, so a Cmd+Z can land while the disk write is still in flight —
+    // the same ordering completeTask had to learn three times).
+    this.pushUndo('Cleared the queue', () => this.writeQueue(prior));
+    await this.writeQueue([]);
   }
 
   // ── lists ────────────────────────────────────────────────────────────────
@@ -431,9 +493,20 @@ export class AppStore {
    */
   async bulkApply(
     taskIds: string[],
-    action: 'complete' | 'delete' | 'move' | 'priority' | 'tag',
+    action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue',
     value?: string,
   ): Promise<void> {
+    // Queueing is one singleton write, not a per-task loop — handle it whole.
+    if (action === 'queue') {
+      const prior = [...this.state.queueIds];
+      const have = new Set(prior);
+      const added = taskIds.filter((id) => !have.has(id)).length;
+      if (added === 0) return;
+      // Armed before the write — see clearQueue.
+      this.pushUndo(`Queued ${added} task${added === 1 ? '' : 's'}`, () => this.writeQueue(prior));
+      await this.addManyToQueue(taskIds);
+      return;
+    }
     const before = taskIds
       .map((id) => this.state.tasks.find((t) => t.id === id))
       .filter((t): t is Task => t !== undefined)
@@ -722,6 +795,7 @@ export class AppStore {
           ...ritualExclusions(this.state.tasks, this.state.settings, now),
           ...archivedTaskIds(this.state.tasks, this.state.lists),
         ],
+        queueFirst: liveQueueIds(this.state.queueIds, this.state.tasks),
       },
       undefined,
       withRitualLifts(

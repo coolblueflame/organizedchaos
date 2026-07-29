@@ -1,0 +1,139 @@
+import { expect, test, type Page } from '@playwright/test';
+
+test.skip(({ browserName }) => browserName !== 'chromium', 'queue flows on chromium');
+
+async function reset(page: Page) {
+  await page.goto('./');
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase('organizedchaos');
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+      }),
+  );
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+}
+
+async function makeList(page: Page, title: string) {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill(title);
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').waitFor();
+}
+
+async function addTask(page: Page, name: string) {
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill(name);
+  await page.waitForTimeout(250); // let any re-sort settle before collapsing
+  await page.getByTestId('task-collapse').last().click();
+}
+
+/** Expand a row by name, hit its editor's queue toggle, collapse again. */
+async function queueByEditor(page: Page, name: string) {
+  await page.getByTestId(/^task-row-/).filter({ hasText: name }).first().click();
+  await page.getByTestId('task-queue-toggle').last().click();
+  await expect(page.getByTestId('task-queue-toggle').last()).toContainText('in queue');
+  // .last(): a re-grouped row leaves a ~220ms ghost editor in the DOM.
+  await page.getByTestId('task-collapse').last().click();
+}
+
+const queueNames = (page: Page) => page.locator('[data-queue-row] .q-name').allTextContents();
+
+test('queued tasks pre-empt the tiers in the draw and show their provenance', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Plan');
+  await addTask(page, 'shiny max thing');
+  await addTask(page, 'planned first');
+  await addTask(page, 'planned second');
+
+  // Give the unqueued task MAX priority — the queue must still outrank it.
+  await page.getByTestId(/^task-row-/).filter({ hasText: 'shiny max thing' }).first().click();
+  await page.getByTestId('priority-max').last().click();
+  await page.getByTestId('task-collapse').last().click();
+
+  await queueByEditor(page, 'planned first');
+  await queueByEditor(page, 'planned second');
+  await page.getByTestId('back').click();
+
+  // The home section lists them in queue order.
+  await expect(page.getByTestId('queue-section')).toBeVisible();
+  await expect.poll(() => queueNames(page)).toEqual(['planned first', 'planned second']);
+
+  // The draw serves the queue top — deterministically, despite the max task.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-from-queue')).toBeVisible();
+  await expect(page.getByTestId('draw-card')).toContainText('planned first');
+});
+
+test('the queue reorders by grip-drag and the order is data', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Plan');
+  await addTask(page, 'alpha');
+  await addTask(page, 'beta');
+  await queueByEditor(page, 'alpha');
+  await queueByEditor(page, 'beta');
+  await page.getByTestId('back').click();
+  await expect.poll(() => queueNames(page)).toEqual(['alpha', 'beta']);
+
+  // Synthetic pointer events, same rationale as the custom-sort drag: real
+  // mouse frames starve on CI runners while the flip reflow is mid-flight.
+  const row = page.locator('[data-queue-row]').filter({ hasText: 'beta' });
+  const id = (await row.getAttribute('data-queue-row'))!;
+  await page.evaluate((taskId) => {
+    const grip = document.querySelector(`[data-testid="queue-drag-${taskId}"]`)!;
+    const g = grip.getBoundingClientRect();
+    const first = document.querySelector('[data-queue-row]')!.getBoundingClientRect();
+    const fire = (type: string, target: EventTarget, x: number, y: number) =>
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: 'mouse',
+      }));
+    fire('pointerdown', grip, g.x + 4, g.y + 4);
+    fire('pointermove', window, g.x + 4, g.y - 20);
+    fire('pointermove', window, first.x + 40, first.y + 2);
+    fire('pointermove', window, first.x + 40, first.y + 3);
+    fire('pointerup', window, first.x + 40, first.y + 3);
+  }, id);
+
+  await expect.poll(() => queueNames(page)).toEqual(['beta', 'alpha']);
+  await page.reload();
+  await expect.poll(() => queueNames(page), { timeout: 4000 }).toEqual(['beta', 'alpha']);
+});
+
+test('check-off drains the queue; clear is two-tap and undoable', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Plan');
+  await addTask(page, 'one');
+  await addTask(page, 'two');
+  await queueByEditor(page, 'one');
+  await queueByEditor(page, 'two');
+  await page.getByTestId('back').click();
+
+  // Completing from the queue removes the row (completion, not un-queueing).
+  const oneRow = page.locator('[data-queue-row]').filter({ hasText: 'one' });
+  const oneId = (await oneRow.getAttribute('data-queue-row'))!;
+  await page.getByTestId(`queue-check-${oneId}`).click();
+  await expect.poll(() => queueNames(page)).toEqual(['two']);
+
+  // The ✕ un-queues without completing — the task is still in its list.
+  const twoRow = page.locator('[data-queue-row]').filter({ hasText: 'two' });
+  const twoId = (await twoRow.getAttribute('data-queue-row'))!;
+  await page.getByTestId(`queue-remove-${twoId}`).click();
+  await expect(page.getByTestId('queue-section')).toHaveCount(0);
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'two' })).toHaveCount(1);
+  await page.getByTestId('back').click();
+
+  // Clear: first tap arms, second clears, Cmd+Z brings the plan back.
+  await page.getByTestId(/^list-row-/).first().click();
+  await queueByEditor(page, 'two');
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('queue-section')).toBeVisible();
+  await page.getByTestId('queue-clear').click();
+  await expect(page.getByTestId('queue-clear')).toContainText('tap again');
+  await page.getByTestId('queue-clear').click();
+  await expect(page.getByTestId('queue-section')).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId('queue-section')).toBeVisible();
+  await expect.poll(() => queueNames(page)).toEqual(['two']);
+});

@@ -22,6 +22,7 @@
   import { blockLifts } from '../domain/blocking';
   import { ritualExclusions, withRitualLifts } from '../domain/ritual';
   import { archivedTaskIds } from '../domain/archive';
+  import { liveQueueIds } from '../domain/dayQueue';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
@@ -95,6 +96,8 @@
     excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue, ...onShelf],
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
+    // The hand-planned order outranks the tiers (2026-07-29 request).
+    queueFirst: liveQueueIds(app.state.queueIds, app.state.tasks),
   });
 
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
@@ -345,7 +348,9 @@
   {:else if drawn}
     {#key drawSeq}
     <section class="card sheen-once" data-testid="draw-card">
-      {#if drawnTier}
+      {#if drawn && app.state.queueIds.includes(drawn.id)}
+        <p class="tier queue" data-testid="draw-from-queue">≡ next in your queue</p>
+      {:else if drawnTier}
         <p class="tier {drawnTier}">
           drawn from: {drawnTier.toUpperCase()}{#if drawnEscalated}&nbsp;▲ deadline-escalated{/if}
         </p>
@@ -531,6 +536,7 @@
   .tier.medium { color: var(--acc-green); }
   .tier.high { color: var(--acc-orange); }
   .tier.max { color: var(--acc-magenta); }
+  .tier.queue { color: var(--acc-cyan); }
   .tier.bonus { color: var(--acc-yellow); }
   .selfcare { border-color: var(--acc-yellow); }
   .tier.fillin { color: var(--acc-yellow); font-size: 0.95rem; }
