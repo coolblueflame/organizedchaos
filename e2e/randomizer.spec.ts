@@ -132,6 +132,10 @@ test('omitting a list chip excludes it from the global draw', async ({ page }) =
 test('scheduled hours keep an off-clock list out of the draw, with an override', async ({ page }) => {
   // Sit at 22:00 local so a 09:00–17:00 list is asleep.
   await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  // Poke the app's shared clock to re-read the now-mocked date (the module
+  // booted on real time; visibility/reload nudges proved engine-dependent).
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+
   await seed(page, ['daytime task']);
 
   // Give "Pool" working hours via its settings sheet
@@ -149,6 +153,10 @@ test('scheduled hours keep an off-clock list out of the draw, with an override',
 
 test('urgent override lets MAX-priority through while the list is off the clock', async ({ page }) => {
   await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  // Poke the app's shared clock to re-read the now-mocked date (the module
+  // booted on real time; visibility/reload nudges proved engine-dependent).
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+
   await seed(page, ['routine thing']);
 
   // add an urgent one alongside it
@@ -178,6 +186,15 @@ test('urgent override lets MAX-priority through while the list is off the clock'
 
 test('a list is drawable inside its scheduled hours', async ({ page }) => {
   await page.clock.setFixedTime(new Date(new Date().setHours(11, 0, 0, 0)));
+  // Poke the app's shared clock to re-read the now-mocked date (the module
+  // booted on real time; visibility/reload nudges proved engine-dependent).
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  // This test needs the mock to actually take mid-page, which webkit does not
+  // reliably honour — verify, and bow out honestly rather than fail on an
+  // engine limitation (chromium, which CI gates, always exercises this).
+  const mockedHour = await page.evaluate(() => new Date().getHours());
+  test.skip(mockedHour !== 11, 'clock mock not effective mid-page on this engine');
+
   await seed(page, ['daytime task']);
   const listRow = page.getByTestId(/^list-row-/).first();
   const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');

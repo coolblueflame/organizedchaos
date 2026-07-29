@@ -27,6 +27,11 @@ class Clock {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) this.now = new Date();
     });
+    // Deterministic hook for tests: Playwright's mocked clocks land AFTER this
+    // module booted, and nudging via synthetic visibility events proved
+    // engine-dependent. The harness pokes the clock directly instead.
+    (window as unknown as { __ocTickClock?: () => void }).__ocTickClock = () =>
+      (this.now = new Date());
   }
 }
 

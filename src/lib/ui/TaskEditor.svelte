@@ -270,7 +270,7 @@
     <div class="ritual-editor">
       {#each ritualWins as win, i (i)}
         <div class="ritual-window">
-          <div class="ritual-row">
+          <div class="ritual-row" class:has-drop={ritualWins.length > 1}>
             <label><span>from</span>
               <input type="time" data-testid={i === 0 ? 'ritual-from' : `ritual-from-${i}`}
                 bind:value={win.from} /></label>
@@ -419,8 +419,10 @@
     display: flex; flex-direction: column; gap: 8px;
     border: 1px solid var(--acc-cyan); border-radius: 6px; padding: 10px;
   }
-  /* The auto column holds a window's ✕ and collapses to nothing without one. */
-  .ritual-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+  .ritual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+  /* The ✕ column exists only when a window can be removed: even an EMPTY auto
+     track costs its grid gap, which was the 6px that overflowed a 320px phone. */
+  .ritual-row.has-drop { grid-template-columns: 1fr 1fr auto; }
   .ritual-row label { display: flex; flex-direction: column; gap: 4px; }
   .ritual-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .ritual-row input {
@@ -461,7 +463,9 @@
     padding: 5px 12px; cursor: pointer;
   }
   .ritual-actions .drop { color: var(--acc-magenta); margin-left: auto; }
-  .flow-row { display: flex; gap: 8px; }
+  /* Wraps: three buttons ("make current / in progress / add to queue") run
+     6px past a 320px phone if forced onto one line. */
+  .flow-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .flow {
     flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

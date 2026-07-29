@@ -905,6 +905,11 @@ test('a task in progress wears its marker in the list', async ({ page }) => {
 
 test('"now" filters the priority screen to what is actually available', async ({ page }) => {
   await reset(page);
+  // Fix the clock BEFORE building anything: the shared ticking clock captures
+  // its first value at boot, and a reload later would race the just-saved
+  // hours write (mirror-first put still in flight when the page dies).
+  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
   await makeList(page, 'Anytime');
   await addTask(page, 'doable now');
   await page.getByTestId('back').click();
@@ -920,7 +925,6 @@ test('"now" filters the priority screen to what is actually available', async ({
   await page.getByTestId('hours-rule-0-to').fill('03:01');
   await page.getByTestId('list-settings-save').click();
 
-  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
   await page.getByTestId('sort-priority').click();
   await expect(page.getByText('after hours only', { exact: true })).toBeVisible();
   await page.getByTestId('sort-available-now').click();
