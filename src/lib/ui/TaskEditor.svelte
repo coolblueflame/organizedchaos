@@ -345,7 +345,7 @@
     border: 1px dashed var(--line); border-radius: 6px; padding: 8px;
     background: none; cursor: pointer; text-align: left;
   }
-  .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  @media (hover: hover) { .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
   .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
   .repeat-row.snoozed { color: var(--acc-purple); border-color: var(--acc-purple); }
   .ritual-editor {
@@ -382,7 +382,7 @@
     padding: 8px; cursor: pointer;
   }
   .flow .dot { line-height: 1; }
-  .flow:hover { color: var(--text); }
+  @media (hover: hover) { .flow:hover { color: var(--text); } }
   .flow.active { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .meta { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .actions { display: flex; justify-content: space-between; }
@@ -391,7 +391,7 @@
     color: var(--text); font-family: var(--font-mono); font-size: 0.8rem;
     padding: 6px 16px; cursor: pointer;
   }
-  .actions button:hover { background: var(--bg2); }
+  @media (hover: hover) { .actions button:hover { background: var(--bg2); } }
   .danger { color: var(--acc-magenta); }
   .danger.armed { background: var(--acc-magenta); color: var(--bg0); font-weight: 700; }
 </style>

@@ -108,7 +108,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
     padding: 7px 10px; cursor: pointer; text-align: left;
   }
-  .head:hover { border-color: var(--acc-magenta); color: var(--acc-magenta); }
+  @media (hover: hover) { .head:hover { border-color: var(--acc-magenta); color: var(--acc-magenta); } }
   .label { flex: 1; display: inline-flex; align-items: center; gap: 6px; }
   .tally {
     background: var(--acc-magenta); border-radius: 999px; color: var(--bg0);
@@ -131,7 +131,7 @@
     background: none; border: none; color: var(--dim);
     cursor: pointer; font-size: 0.7rem; padding: 0 4px;
   }
-  .x:hover { color: var(--acc-magenta); }
+  @media (hover: hover) { .x:hover { color: var(--acc-magenta); } }
   .picker { display: flex; flex-direction: column; gap: 4px; }
   .picker input {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
@@ -144,7 +144,7 @@
     color: var(--text); font-family: var(--font-mono); font-size: 0.72rem;
     padding: 6px 9px; cursor: pointer; text-align: left;
   }
-  .suggestion:hover { border-color: var(--acc-magenta); }
+  @media (hover: hover) { .suggestion:hover { border-color: var(--acc-magenta); } }
   .s-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .s-list { color: var(--dim); font-size: 0.62rem; }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.66rem; margin: 2px 0 0; }

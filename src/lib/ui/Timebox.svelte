@@ -140,7 +140,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
     padding: 6px 10px; cursor: pointer;
   }
-  .start:hover { color: var(--acc-yellow); border-color: var(--acc-yellow); }
+  @media (hover: hover) { .start:hover { color: var(--acc-yellow); border-color: var(--acc-yellow); } }
   .picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .picker button {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

@@ -388,13 +388,13 @@
     color: var(--acc-green); font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700;
     padding: 0 14px; cursor: pointer; white-space: nowrap;
   }
-  .quick-add:hover { background: var(--acc-green); color: var(--bg0); }
+  @media (hover: hover) { .quick-add:hover { background: var(--acc-green); color: var(--bg0); } }
   .search-bar {
     flex: 1; display: flex; align-items: center; gap: 8px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
     color: var(--dim); font-size: 0.85rem; padding: 10px 12px; cursor: text; text-align: left;
   }
-  .search-bar:hover { border-color: var(--acc-blue); color: var(--text); }
+  @media (hover: hover) { .search-bar:hover { border-color: var(--acc-blue); color: var(--text); } }
   .mag { font-size: 1.45rem; color: var(--acc-blue); line-height: 1; }
   .sort-row { display: flex; gap: 8px; margin-bottom: 20px; }
   .sort-row button {
@@ -402,7 +402,7 @@
     color: var(--acc-blue); font-family: var(--font-mono); font-size: 0.8rem;
     padding: 8px 0; cursor: pointer;
   }
-  .sort-row button:hover { background: var(--bg2); }
+  @media (hover: hover) { .sort-row button:hover { background: var(--bg2); } }
 
   .lists { display: flex; flex-direction: column; gap: 6px; }
   .group-header {
@@ -415,7 +415,7 @@
     /* The drag must never turn into a page scroll — same as the task rows. */
     touch-action: none;
   }
-  .list-grip:hover { color: var(--dim); }
+  @media (hover: hover) { .list-grip:hover { color: var(--dim); } }
   .list-grip:active { cursor: grabbing; }
   /*
     The dragged row stays fully visible and looks lifted; the gap it leaves is
@@ -438,13 +438,13 @@
     background: var(--bg1); border: 1px solid var(--line); border-radius: 8px;
     color: var(--text); padding: 14px; font-size: 0.95rem; cursor: pointer; text-align: left;
   }
-  .list-main:hover { background: var(--bg2); }
+  @media (hover: hover) { .list-main:hover { background: var(--bg2); } }
   .list-title { font-weight: 500; }
   .prompt {
     color: var(--acc-green); font-family: var(--font-mono); font-weight: 700;
     margin-right: 6px; opacity: 0.75; flex: none;
   }
-  .list-row:hover .prompt { opacity: 1; }
+  @media (hover: hover) { .list-row:hover .prompt { opacity: 1; } }
   /* Sits right of the title, left of the count: a glance tells you which lists
      are carrying the weight without reading a single number. */
   .load {
@@ -469,7 +469,7 @@
     background: none; border: none; color: var(--dim); font-size: 1.1rem;
     cursor: pointer; padding: 0 10px;
   }
-  .menu-btn:hover { color: var(--text); }
+  @media (hover: hover) { .menu-btn:hover { color: var(--text); } }
   .inline-edit {
     flex: 1; background: var(--bg2); border: 1px solid var(--acc-blue); border-radius: 8px;
     color: var(--text); padding: 14px; font-size: 0.95rem; outline: none;
@@ -480,7 +480,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
     padding: 12px; cursor: pointer; text-align: left;
   }
-  .new-list:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  @media (hover: hover) { .new-list:hover { color: var(--acc-green); border-color: var(--acc-green); } }
 
   .big-button {
     width: 100%; margin-bottom: 20px; padding: 22px 12px;
@@ -490,7 +490,7 @@
     font-size: 1.15rem; font-weight: 700; cursor: pointer;
     transition: transform 0.1s ease, box-shadow 0.15s ease;
   }
-  .big-button:hover { transform: scale(1.015); box-shadow: 0 0 24px rgba(210, 168, 255, 0.25); }
+  @media (hover: hover) { .big-button:hover { transform: scale(1.015); box-shadow: 0 0 24px rgba(210, 168, 255, 0.25); } }
   .big-button:active { transform: scale(0.985); }
   @media (prefers-reduced-motion: no-preference) {
     .big-button { position: relative; overflow: hidden; }
@@ -515,7 +515,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.95rem;
     padding: 12px 10px; cursor: pointer; text-align: left;
   }
-  .footer-links button:hover { color: var(--acc-green); }
+  @media (hover: hover) { .footer-links button:hover { color: var(--acc-green); } }
   .due-count { color: var(--acc-magenta); }
   .shelf { margin-top: 18px; }
   .shelf summary {
@@ -524,14 +524,14 @@
   }
   .shelf summary::before { content: '▸ '; }
   .shelf[open] summary::before { content: '▾ '; }
-  .shelf summary:hover { color: var(--text); }
+  @media (hover: hover) { .shelf summary:hover { color: var(--text); } }
   .shelf-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px 5px 14px; }
   .shelf-title {
     flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 0;
     color: var(--dim); font-size: 0.85rem; cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .shelf-title:hover { color: var(--text); }
+  @media (hover: hover) { .shelf-title:hover { color: var(--text); } }
   .shelf-revive {
     background: none; border: none; color: var(--acc-blue); cursor: pointer;
     font-family: var(--font-mono); font-size: 0.7rem; text-decoration: underline; padding: 2px;
@@ -543,10 +543,10 @@
     color: var(--text); font-family: var(--font-mono); font-size: 0.78rem;
     padding: 11px 14px; cursor: pointer;
   }
-  .sweep-banner:hover { border-style: solid; }
+  @media (hover: hover) { .sweep-banner:hover { border-style: solid; } }
   .sweep-lead { color: var(--acc-yellow); }
   .sweep-cta { color: var(--dim); }
-  .sweep-banner:hover .sweep-cta { color: var(--acc-yellow); }
+  @media (hover: hover) { .sweep-banner:hover .sweep-cta { color: var(--acc-yellow); } }
   /* One column for the icon whatever it is — drawn glyph or typographic mark —
      so the four labels start on the same pixel. */
   .ico {

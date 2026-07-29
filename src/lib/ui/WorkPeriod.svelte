@@ -86,7 +86,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
     padding: 8px; cursor: pointer; margin-bottom: 10px;
   }
-  .open:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  @media (hover: hover) { .open:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
   .picker {
     display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px;
     background: var(--bg1); border: 1px solid var(--acc-cyan); border-radius: 8px; padding: 8px;

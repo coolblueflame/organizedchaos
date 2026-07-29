@@ -248,11 +248,11 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 8px 0; cursor: pointer;
   }
   .tier.current { border-color: var(--dim); color: var(--text); }
-  .tier.someday:hover { color: var(--acc-purple); border-color: var(--acc-purple); }
-  .tier.low:hover { color: var(--acc-blue); border-color: var(--acc-blue); }
-  .tier.medium:hover { color: var(--acc-green); border-color: var(--acc-green); }
-  .tier.high:hover { color: var(--acc-orange); border-color: var(--acc-orange); }
-  .tier.max:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
+  @media (hover: hover) { .tier.someday:hover { color: var(--acc-purple); border-color: var(--acc-purple); } }
+  @media (hover: hover) { .tier.low:hover { color: var(--acc-blue); border-color: var(--acc-blue); } }
+  @media (hover: hover) { .tier.medium:hover { color: var(--acc-green); border-color: var(--acc-green); } }
+  @media (hover: hover) { .tier.high:hover { color: var(--acc-orange); border-color: var(--acc-orange); } }
+  @media (hover: hover) { .tier.max:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); } }
 
   .verdicts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .keep {
@@ -260,7 +260,7 @@
     color: var(--acc-green); font-family: var(--font-mono); font-size: 1rem; font-weight: 700;
     padding: 14px; cursor: pointer;
   }
-  .keep:hover { background: var(--acc-green); color: var(--bg0); }
+  @media (hover: hover) { .keep:hover { background: var(--acc-green); color: var(--bg0); } }
   .row { display: flex; gap: 8px; }
   .row button {
     flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -268,15 +268,15 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem;
     padding: 11px 6px; cursor: pointer;
   }
-  .row button:hover { color: var(--text); }
+  @media (hover: hover) { .row button:hover { color: var(--text); } }
   .row button.armed { color: var(--acc-cyan); border-color: var(--acc-cyan); }
-  .row .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
+  @media (hover: hover) { .row .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); } }
   .snooze button { color: var(--acc-cyan); }
   .move-row .again {
     flex: 2; color: var(--acc-cyan); border-color: var(--acc-cyan);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
   }
-  .move-row .again:hover { background: var(--acc-cyan); color: var(--bg0); }
+  @media (hover: hover) { .move-row .again:hover { background: var(--acc-cyan); color: var(--bg0); } }
   .move {
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem;
@@ -293,7 +293,7 @@
     border-radius: 8px; color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
     padding: 9px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .putback:hover { color: var(--acc-blue); border-color: var(--acc-blue); }
+  @media (hover: hover) { .putback:hover { color: var(--acc-blue); border-color: var(--acc-blue); } }
 
   .clear { text-align: center; margin-top: 40px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
   .big { color: var(--acc-green); font-family: var(--font-mono); margin: 0; }

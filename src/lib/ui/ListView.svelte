@@ -186,7 +186,7 @@
     background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 4px 6px;
     filter: grayscale(0.3);
   }
-  .dice:hover { filter: none; transform: scale(1.1); }
+  @media (hover: hover) { .dice:hover { filter: none; transform: scale(1.1); } }
   .sort {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
@@ -198,7 +198,7 @@
     border-radius: 8px; color: var(--dim); font-family: var(--font-mono);
     font-size: 0.85rem; padding: 12px; cursor: pointer; text-align: left;
   }
-  .new-task:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  @media (hover: hover) { .new-task:hover { color: var(--acc-green); border-color: var(--acc-green); } }
   .done-shelf { margin-top: 18px; }
   .done-shelf summary {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
@@ -206,7 +206,7 @@
   }
   .done-shelf summary::before { content: '▸ '; }
   .done-shelf[open] summary::before { content: '▾ '; }
-  .done-shelf summary:hover { color: var(--text); }
+  @media (hover: hover) { .done-shelf summary:hover { color: var(--text); } }
   .done-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; opacity: 0.85; }
   .done-more {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;

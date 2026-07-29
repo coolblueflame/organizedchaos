@@ -111,7 +111,7 @@
     text-transform: uppercase; letter-spacing: 0.1em;
   }
   .clear { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 0.8rem; padding: 2px 6px; }
-  .clear:hover { color: var(--text); }
+  @media (hover: hover) { .clear:hover { color: var(--text); } }
   .body {
     display: block; width: 100%; background: none; border: none; text-align: left;
     color: var(--text); cursor: pointer; padding: 6px 0 10px;
@@ -126,12 +126,12 @@
     color: var(--acc-green); font-family: var(--font-mono); font-weight: 700;
     padding: 9px; cursor: pointer;
   }
-  .done:hover { background: var(--acc-green); color: var(--bg0); }
+  @media (hover: hover) { .done:hover { background: var(--acc-green); color: var(--bg0); } }
   .later {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 8px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; padding: 9px; cursor: pointer;
   }
-  .later:hover { color: var(--text); }
+  @media (hover: hover) { .later:hover { color: var(--text); } }
   .card.idle {
     border-color: var(--line); opacity: 0.55;
     display: flex; align-items: baseline; gap: 10px; padding: 10px 14px;

@@ -170,9 +170,9 @@
   .chip.on { color: var(--text); border-color: var(--c); }
   .chip.on .dot { opacity: 1; }
   .chip .x { color: var(--dim); font-size: 0.7rem; margin-left: 2px; }
-  .chip.on:hover .x { color: var(--acc-magenta); }
+  @media (hover: hover) { .chip.on:hover .x { color: var(--acc-magenta); } }
   .chip.new { color: var(--dim); border-style: dashed; }
-  .chip.new:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  @media (hover: hover) { .chip.new:hover { color: var(--acc-green); border-color: var(--acc-green); } }
   .add { display: flex; flex-direction: column; gap: 6px; }
   .add input {
     background: var(--bg2); border: 1px solid var(--acc-blue); border-radius: 6px;

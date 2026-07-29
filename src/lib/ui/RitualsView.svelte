@@ -139,14 +139,14 @@
     color: inherit; font: inherit; cursor: pointer;
   }
   .name { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .info:hover .name { color: var(--acc-cyan); }
+  @media (hover: hover) { .info:hover .name { color: var(--acc-cyan); } }
   .meta { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .go-list {
     flex: none; background: none; border: none; cursor: pointer; padding: 2px 4px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem;
     max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .go-list:hover { color: var(--acc-blue); }
+  @media (hover: hover) { .go-list:hover { color: var(--acc-blue); } }
   .backdrop { position: fixed; inset: 0; background: rgba(4, 6, 10, 0.6); z-index: 190; }
   .sheet {
     position: fixed; z-index: 200; left: 50%; transform: translateX(-50%);
@@ -163,6 +163,6 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .x { background: none; border: none; color: var(--dim); font-size: 1rem; cursor: pointer; padding: 4px 8px; }
-  .x:hover { color: var(--text); }
+  @media (hover: hover) { .x:hover { color: var(--text); } }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.7; margin-top: 20px; }
 </style>

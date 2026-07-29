@@ -339,14 +339,14 @@
     /* The whole point: a drag starting here can never become a page scroll. */
     touch-action: none;
   }
-  .grip:hover { color: var(--dim); }
+  @media (hover: hover) { .grip:hover { color: var(--dim); } }
   .grip:active { cursor: grabbing; }
   .draggable.picked :global(.row) { border-color: var(--acc-cyan); }
   .pick-group {
     margin-left: auto; background: none; border: none; color: var(--dim);
     font-size: 0.8rem; cursor: pointer; padding: 0 4px;
   }
-  .pick-group:hover { color: var(--acc-cyan); }
+  @media (hover: hover) { .pick-group:hover { color: var(--acc-cyan); } }
   .bulk {
     position: fixed; z-index: 120;
     left: 50%; transform: translateX(-50%);

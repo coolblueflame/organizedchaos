@@ -233,7 +233,7 @@
   }
   .added { color: var(--dim); }
   .x { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 0.9rem; padding: 2px 6px; }
-  .x:hover { color: var(--text); }
+  @media (hover: hover) { .x:hover { color: var(--text); } }
   .target { display: flex; align-items: center; gap: 8px; }
   .target-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   select {

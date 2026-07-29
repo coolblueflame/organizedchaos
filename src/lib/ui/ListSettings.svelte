@@ -234,13 +234,13 @@
   }
   .dash { color: var(--dim); }
   .drop { margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; padding: 4px 6px; }
-  .drop:hover { color: var(--acc-magenta); }
+  @media (hover: hover) { .drop:hover { color: var(--acc-magenta); } }
   .rule-adds { display: flex; gap: 6px; flex-wrap: wrap; }
   .rule-adds button {
     background: none; border: 1px dashed var(--line); border-radius: 6px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 5px 10px; cursor: pointer;
   }
-  .rule-adds button:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  @media (hover: hover) { .rule-adds button:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
   .opt { display: flex; gap: 8px; align-items: center; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
   .opt input { width: 15px; height: 15px; accent-color: var(--acc-yellow); }
   .actions { display: flex; gap: 8px; }

@@ -72,7 +72,7 @@
     padding: 10px 12px; cursor: pointer;
   }
   .tile .label { text-align: center; }
-  .strip:hover { background: var(--bg2); }
+  @media (hover: hover) { .strip:hover { background: var(--bg2); } }
   .tile { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
   .num { color: var(--acc-green); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
   .label { color: var(--dim); font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -82,6 +82,6 @@
     background: var(--bg1); border: 1px solid var(--line); border-radius: 10px;
     color: var(--acc-cyan); cursor: pointer;
   }
-  .streak:hover { background: var(--bg2); }
+  @media (hover: hover) { .streak:hover { background: var(--bg2); } }
   .streak-n { color: var(--acc-orange); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
 </style>

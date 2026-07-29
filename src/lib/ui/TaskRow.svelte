@@ -347,7 +347,7 @@
     border: 1.5px solid var(--dim); background: none; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; padding: 0;
   }
-  .check:hover { border-color: var(--acc-green); box-shadow: 0 0 6px var(--acc-green); }
+  @media (hover: hover) { .check:hover { border-color: var(--acc-green); box-shadow: 0 0 6px var(--acc-green); } }
   .check.completing {
     border-color: var(--acc-green); background: var(--acc-green);
     box-shadow: 0 0 10px var(--acc-green);
@@ -362,7 +362,7 @@
     color: var(--acc-green); cursor: pointer; padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
   }
-  .restore:hover { color: var(--acc-cyan); }
+  @media (hover: hover) { .restore:hover { color: var(--acc-cyan); } }
   .done-detail {
     display: flex; flex-direction: column; gap: 8px;
     border-top: 1px dashed var(--line); margin-top: 6px; padding: 10px 2px 4px;
@@ -420,13 +420,14 @@
     background: none; border: none; color: var(--dim); cursor: pointer;
     font-size: 0.8rem; padding: 4px; flex: none;
   }
-  .delete:hover { color: var(--acc-magenta); }
+  @media (hover: hover) { .delete:hover { color: var(--acc-magenta); } }
   .delete.armed {
     color: var(--acc-magenta); font-family: var(--font-mono); font-size: 0.7rem;
     border: 1px solid var(--acc-magenta); border-radius: 6px; padding: 3px 7px;
   }
   @media (hover: hover) {
     .delete { opacity: 0; }
-    .row:hover .delete, .delete.armed { opacity: 1; }
+    @media (hover: hover) { .row:hover .delete { opacity: 1; } }
+    .delete.armed { opacity: 1; }
   }
 </style>

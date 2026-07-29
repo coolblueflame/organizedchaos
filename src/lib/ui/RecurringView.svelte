@@ -99,7 +99,7 @@
     background: none; border: none; padding: 2px 0; text-align: left;
     color: inherit; font: inherit; cursor: pointer;
   }
-  .info:hover .name { color: var(--acc-cyan); }
+  @media (hover: hover) { .info:hover .name { color: var(--acc-cyan); } }
   .name { font-size: 0.9rem; font-weight: 500; }
   .name.dim { color: var(--dim); }
   .cadence { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem; }
@@ -109,7 +109,7 @@
     background: none; border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-size: 0.8rem; padding: 5px 8px; cursor: pointer;
   }
-  .btns button:hover { color: var(--text); }
-  .btns .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); }
+  @media (hover: hover) { .btns button:hover { color: var(--text); } }
+  @media (hover: hover) { .btns .danger:hover { color: var(--acc-magenta); border-color: var(--acc-magenta); } }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; }
 </style>

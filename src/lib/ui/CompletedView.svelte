@@ -144,7 +144,7 @@
     color: var(--acc-green); font-family: var(--font-mono); font-size: 0.78rem;
     font-weight: 700; padding: 9px 14px; cursor: pointer;
   }
-  .copy:hover { background: var(--acc-green); color: var(--bg0); }
+  @media (hover: hover) { .copy:hover { background: var(--acc-green); color: var(--bg0); } }
   .wins-hint { color: var(--dim); font-family: var(--font-mono); font-size: 0.64rem; }
   .fallback {
     width: 100%; min-height: 90px; resize: vertical;

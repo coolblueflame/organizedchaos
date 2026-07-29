@@ -475,7 +475,7 @@
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--dim); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
-  .back:hover { color: var(--text); }
+  @media (hover: hover) { .back:hover { color: var(--text); } }
   h1 { font-family: var(--font-mono); font-size: 1.1rem; margin: 0; color: var(--acc-purple); }
 
   .filters {
@@ -487,7 +487,7 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.78rem;
     display: flex; align-items: center; gap: 6px;
   }
-  .filter-toggle:hover { color: var(--text); }
+  @media (hover: hover) { .filter-toggle:hover { color: var(--text); } }
   .caret { color: var(--acc-purple); }
   .filter-summary { color: var(--acc-cyan); }
   .filter-search {
@@ -568,7 +568,7 @@
     color: inherit; cursor: pointer; display: block;
   }
   .edit-hint { color: var(--dim); font-family: var(--font-mono); font-size: 0.65rem; }
-  .task-name-btn:hover .edit-hint { color: var(--acc-cyan); }
+  @media (hover: hover) { .task-name-btn:hover .edit-hint { color: var(--acc-cyan); } }
   .draw-editor { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
   .list-name { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0 0 10px; }
   .notes { color: var(--dim); font-size: 0.85rem; margin: 0 0 10px; white-space: pre-line; }
@@ -585,14 +585,14 @@
     color: var(--acc-green); font-family: var(--font-mono); font-size: 1rem; font-weight: 700;
     padding: 14px; cursor: pointer;
   }
-  .accept:hover { background: var(--acc-green); color: var(--bg0); }
+  @media (hover: hover) { .accept:hover { background: var(--acc-green); color: var(--bg0); } }
   .secondary { display: flex; gap: 10px; }
   .secondary button {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 10px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
     padding: 10px; cursor: pointer;
   }
-  .secondary button:hover { color: var(--text); border-color: var(--dim); }
+  @media (hover: hover) { .secondary button:hover { color: var(--text); border-color: var(--dim); } }
 
   .empty { text-align: center; padding: 40px 0; }
   .empty p { color: var(--dim); font-family: var(--font-mono); font-size: 0.9rem; }

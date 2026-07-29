@@ -115,7 +115,7 @@
   .rows { display: flex; flex-direction: column; gap: 6px; }
   /* Finished work stays readable but visibly secondary. */
   .rows.done { opacity: 0.55; }
-  .rows.done:hover { opacity: 0.8; }
+  @media (hover: hover) { .rows.done:hover { opacity: 0.8; } }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 20px; }
   .more {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;

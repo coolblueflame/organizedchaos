@@ -204,13 +204,13 @@
     color: var(--text); font: inherit; max-width: 100%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
   }
-  .h-link:hover { color: var(--acc-cyan); }
+  @media (hover: hover) { .h-link:hover { color: var(--acc-cyan); } }
   .h-sweep {
     margin-top: 10px; background: none; border: 1px dashed var(--acc-yellow); border-radius: 8px;
     color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.75rem;
     padding: 8px 12px; cursor: pointer;
   }
-  .h-sweep:hover { border-style: solid; }
+  @media (hover: hover) { .h-sweep:hover { border-style: solid; } }
   .streak-panel { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
   .streak-now {
     display: inline-flex; align-items: center; gap: 8px;
