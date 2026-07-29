@@ -532,3 +532,58 @@ test('archiving a list shelves it everywhere the app proposes work', async ({ pa
   await page.getByTestId(`unarchive-${id}`).click();
   await expect(page.getByTestId(`list-row-${id}`)).toBeVisible();
 });
+
+test('dragging to a screen edge scrolls the page, faster the closer you get', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Long');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+  // A page tall enough to need scrolling, seeded directly.
+  await page.evaluate(async () => {
+    const listId = (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow!;
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        for (let i = 0; i < 40; i += 1) {
+          store.put({
+            id: `d${i}`, listId, name: `drag target ${i}`, notes: '', tagIds: [],
+            priority: 'medium', inProgress: false, createdAt: 0, updatedAt: 1, deleted: false,
+          });
+        }
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.goto('./#/sort/priority');
+  await page.reload();
+  await page.getByTestId(/^task-row-/).first().waitFor();
+
+  const grip = page.getByTestId(/^drag-/).first();
+  const box = (await grip.boundingBox())!;
+  const h = await page.evaluate(() => window.innerHeight);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+
+  // Shallow in the band: a creep.
+  await page.mouse.move(box.x + 40, h - 80, { steps: 6 });
+  const y0 = await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(400);
+  const shallow = (await page.evaluate(() => window.scrollY)) - y0;
+  expect(shallow, 'parked in the band must scroll').toBeGreaterThan(0);
+
+  // Hard against the edge: a sprint — measurably faster than the creep.
+  await page.mouse.move(box.x + 40, h - 6, { steps: 4 });
+  const y1 = await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(400);
+  const deep = (await page.evaluate(() => window.scrollY)) - y1;
+  expect(deep, 'the ramp: edge beats band').toBeGreaterThan(shallow * 1.5);
+
+  // Releasing stops it dead.
+  await page.mouse.up();
+  const y2 = await page.evaluate(() => window.scrollY);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY), 'no scrolling after release').toBe(y2);
+});

@@ -12,6 +12,7 @@
   import { projectPriorities } from '../domain/project';
   import { moveAcross, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import { isRitualDue } from '../domain/ritual';
+  import { createDragScroller } from './dragScroll';
   import ListSettings from './ListSettings.svelte';
   import { flip } from 'svelte/animate';
   import { motionOk } from './fx/particles';
@@ -134,14 +135,17 @@
     dragGroups = new Map(grouped.map(([g, lists]) => [g, lists.map((l) => l.id)]));
   }
 
-  function onListDragMove(e: PointerEvent) {
+  let listPointerY = 0;
+
+  /** Shared by pointermove and the auto-scroller's frames. */
+  function listHitTest() {
     if (!dragId || !dragGroups) return;
 
     // Which group is the finger in? The heading directly above it wins, so
     // dragging past a heading moves the list into that section.
     let group = grouped[0]?.[0] ?? '';
     for (const el of document.querySelectorAll<HTMLElement>('[data-group-start]')) {
-      if (e.clientY >= el.getBoundingClientRect().top) group = el.dataset.groupStart!;
+      if (listPointerY >= el.getBoundingClientRect().top) group = el.dataset.groupStart!;
     }
 
     // And where among that group's rows? Compare against each row's midpoint so
@@ -152,7 +156,7 @@
     let index = rows.length;
     for (let i = 0; i < rows.length; i += 1) {
       const box = rows[i]!.getBoundingClientRect();
-      if (e.clientY < box.top + box.height / 2) { index = i; break; }
+      if (listPointerY < box.top + box.height / 2) { index = i; break; }
     }
 
     const next = moveAcross(dragGroups, dragId, group, index);
@@ -163,7 +167,17 @@
     }
   }
 
+  const listScroller = createDragScroller(listHitTest);
+
+  function onListDragMove(e: PointerEvent) {
+    if (!dragId || !dragGroups) return;
+    listPointerY = e.clientY;
+    listHitTest();
+    listScroller.update(e.clientY);
+  }
+
   async function endListDrag() {
+    listScroller.stop();
     const groups = dragGroups;
     const id = dragId;
     const from = dragStartGroup;

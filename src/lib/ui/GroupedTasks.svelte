@@ -16,6 +16,7 @@
   import { burstAt, motionOk } from './fx/particles';
   import Glyph from './Glyph.svelte';
   import { revealOnApproach } from './lazyReveal';
+  import { createDragScroller } from './dragScroll';
 
   let {
     groups,
@@ -152,6 +153,15 @@
     origin = { x: e.clientX, y: e.clientY };
   }
 
+  /** Re-runs on every pointermove AND every auto-scrolled frame: the page
+   *  moves under a parked finger, so position alone goes stale. */
+  function hitTest() {
+    const el = document.elementFromPoint(pointerX, pointerY);
+    hoverKey = el?.closest<HTMLElement>('[data-group-key]')?.dataset.groupKey ?? null;
+  }
+
+  const scroller = createDragScroller(hitTest);
+
   function onPointerMove(e: PointerEvent) {
     if (!candidate || !origin) return;
     if (!dragging) {
@@ -162,8 +172,8 @@
     }
     pointerX = e.clientX;
     pointerY = e.clientY;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    hoverKey = el?.closest<HTMLElement>('[data-group-key]')?.dataset.groupKey ?? null;
+    hitTest();
+    scroller.update(e.clientY);
   }
 
   /**
@@ -181,6 +191,7 @@
   });
 
   async function onPointerUp() {
+    scroller.stop();
     const carried = dragPayload;
     const key = hoverKey;
     candidate = null;
