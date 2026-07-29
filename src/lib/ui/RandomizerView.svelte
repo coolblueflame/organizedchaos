@@ -506,6 +506,7 @@
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 999px;
     color: var(--dim); font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
+      max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); opacity: 0.5; }
   .chip.on { color: var(--text); border-color: var(--c); }

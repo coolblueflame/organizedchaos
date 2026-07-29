@@ -207,6 +207,7 @@
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--bg2); border: 1px solid var(--line); border-radius: 999px;
     color: var(--text); font-size: 0.75rem; padding: 3px 10px;
+      max-width: 100%; min-width: 0;
   }
   .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
   .chip em { color: var(--dim); font-family: var(--font-mono); font-size: 0.62rem; font-style: normal; }

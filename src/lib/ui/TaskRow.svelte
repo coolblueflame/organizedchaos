@@ -193,7 +193,9 @@
       </button>
     {:else}
       <button class="check" class:completing bind:this={checkEl}
-        data-testid="task-check-{task.id}" onclick={complete} aria-label="complete"></button>
+        data-testid="task-check-{task.id}" onclick={complete} aria-label="complete">
+        {#if completing}<Glyph name="check" size={13} />{/if}
+      </button>
     {/if}
 
     {#if expanded && !completedMode}
@@ -293,6 +295,7 @@
   .check {
     width: 20px; height: 20px; flex: none; border-radius: 6px;
     border: 1.5px solid var(--dim); background: none; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0;
   }
   .check:hover { border-color: var(--acc-green); box-shadow: 0 0 6px var(--acc-green); }
   .check.completing {
@@ -300,10 +303,10 @@
     box-shadow: 0 0 10px var(--acc-green);
     transition: background 0.15s ease, box-shadow 0.15s ease;
   }
-  .check.completing::after {
-    content: '✓'; display: block; color: var(--bg0);
-    font-size: 0.8rem; font-weight: 900; line-height: 17px; text-align: center;
-  }
+  /* The tick is DRAWN, not typed: a text ✓'s ink sits left of its em box, so
+     it never centred no matter what the alignment said. The glyph's path is
+     symmetric about the viewBox middle, and flex does the rest. */
+  .check.completing { color: var(--bg0); }
   .restore {
     width: 24px; height: 24px; flex: none; background: none; border: none;
     color: var(--acc-green); cursor: pointer; padding: 0;

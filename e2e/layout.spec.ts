@@ -112,3 +112,26 @@ test('the task editor survives the narrowest phone anyone still uses', async ({ 
     }
   }
 });
+
+test('a tag with a very long name stays inside the editor card', async ({ page }) => {
+  // With an imported library, tag names are arbitrary — one wide chip used to
+  // poke past the editor's border. The chip must clamp, not the card stretch.
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('L');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('a task');
+  await page.getByTestId('new-tag').click();
+  await page.getByTestId('new-tag-input').fill('waiting for the replacement part from the manufacturer to finally arrive');
+  await page.getByTestId('new-tag-input').press('Enter');
+  await page.getByTestId('new-tag-done').click();
+
+  const overflow = await page.evaluate(() => {
+    const chip = document.querySelector('[data-testid^="tag-chip-"]');
+    const row = chip?.closest('[data-testid^="task-row-"]');
+    if (!chip || !row) return 'missing';
+    return chip.getBoundingClientRect().right - row.getBoundingClientRect().right;
+  });
+  expect(overflow, 'chip right edge must not pass the card').toBeLessThanOrEqual(0);
+});

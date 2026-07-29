@@ -101,7 +101,7 @@
         data-testid="tag-chip-{tag.id}"
         title="remove {tag.name}"
         onclick={() => ontoggle(tag.id)}>
-        <span class="dot"></span>{tag.name}<span class="x" aria-hidden="true">✕</span>
+        <span class="dot"></span><span class="chip-name">{tag.name}</span><span class="x" aria-hidden="true">✕</span>
       </button>
     {/each}
 
@@ -130,7 +130,7 @@
                  makes every query about tags ambiguous. -->
             <button class="chip" style="--c: {tagColor(tag.colorIndex)}"
               data-testid="tag-suggest-{tag.id}" onclick={() => pick(tag.id)}>
-              <span class="dot"></span>{tag.name}
+              <span class="dot"></span><span class="chip-name">{tag.name}</span>
             </button>
           {/each}
         </div>
@@ -160,7 +160,12 @@
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--bg1); border: 1px solid var(--line); border-radius: 999px;
     color: var(--dim); font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
+    /* A chip must never outgrow the card: an imported library has tag names of
+       arbitrary length, and one wide chip pokes past the editor's border. The
+       name ellipsizes; the dot and ✕ stay. */
+    max-width: 100%; min-width: 0;
   }
+  .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); opacity: 0.5; }
   .chip.on { color: var(--text); border-color: var(--c); }
   .chip.on .dot { opacity: 1; }
@@ -171,7 +176,8 @@
   .add { display: flex; flex-direction: column; gap: 6px; }
   .add input {
     background: var(--bg2); border: 1px solid var(--acc-blue); border-radius: 6px;
-    color: var(--text); padding: 6px 10px; font-size: 0.8rem; outline: none; width: 100%;
+    color: var(--text); padding: 6px 10px; font-size: 0.8rem; outline: none;
+    width: 100%; min-width: 0; max-width: 100%;
   }
   /* Suggestions scroll rather than growing the card without limit. */
   .suggestions { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; }

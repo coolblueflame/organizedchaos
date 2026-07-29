@@ -231,7 +231,7 @@
         onpointerdown={(e) => onPointerDown(e, task)}>
         <button class="pick" class:on={selected.includes(task.id)}
           data-testid="select-{task.id}" onclick={() => toggleSelect(task.id)}
-          aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-checked' : 'box'} size={15} /></button>
+          aria-label="select task"><Glyph name={selected.includes(task.id) ? 'box-all' : 'box'} size={15} /></button>
         {#if mode}
           <button class="grip" data-testid="drag-{task.id}" aria-label="drag to regroup"
             onpointerdown={(e) => onPointerDown(e, task, true)}>
