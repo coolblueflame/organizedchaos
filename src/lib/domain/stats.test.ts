@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type Priority, type Task } from './types';
 import {
   burdenSeries, completionCounts, completionSeries, formatDuration, totalEstimateHours,
-  winsList,
+  winsList, estimateOutcome,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -155,3 +155,26 @@ describe('shareable wins list', () => {
 function wins(over: Partial<Task>): Task {
   return task({ priority: 'medium', ...over });
 }
+
+describe('estimateOutcome', () => {
+  const t = (estimateHours?: number, activeMs?: number) => ({ estimateHours, activeMs });
+
+  it('exists only when BOTH an estimate and tracked time exist', () => {
+    expect(estimateOutcome(t())).toBeNull();
+    expect(estimateOutcome(t(2))).toBeNull();
+    expect(estimateOutcome(t(undefined, 3_600_000))).toBeNull();
+  });
+
+  it('reports under, over, and right-on', () => {
+    expect(estimateOutcome(t(2, 90 * 60_000))!.verdict).toBe('30m under the estimate');
+    expect(estimateOutcome(t(1, 95 * 60_000))!.verdict).toBe('35m over the estimate');
+    expect(estimateOutcome(t(1, 3_600_000 + 20_000))!.verdict).toBe('right on the estimate');
+  });
+
+  it('formats both sides for reading', () => {
+    const o = estimateOutcome(t(2.5, 100 * 60_000))!;
+    expect(o.estimate).toBe('2h 30m');
+    expect(o.actual).toBe('1h 40m');
+    expect(o.verdict).toBe('50m under the estimate');
+  });
+});

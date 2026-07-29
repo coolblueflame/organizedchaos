@@ -23,7 +23,7 @@ import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
-import { completionCounts } from '../domain/stats';
+import { completionCounts, estimateOutcome } from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
@@ -558,7 +558,9 @@ export class AppStore {
       activeAccumulatedMs: undefined,
     });
 
-    this.pushUndo(`Completed "${task.name || 'task'}"`, async () => {
+    const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
+    const ritualTiming = ritualOutcome ? ` · ${ritualOutcome.actual} — ${ritualOutcome.verdict}` : '';
+    this.pushUndo(`Completed "${task.name || 'task'}"${ritualTiming}`, async () => {
       await this.removeTask(record.id, { silent: true });
       await this.patchTask(task.id, {
         ritualDoneDay: task.ritualDoneDay,
@@ -632,7 +634,10 @@ export class AppStore {
     const freedNote = freed.length === 0 ? ''
       : freed.length === 1 ? ` — unblocked "${freed[0]!.name || 'a task'}"`
       : ` — unblocked ${freed.length} tasks`;
-    this.pushUndo(`Completed "${before?.name || 'task'}"${freedNote}`, async () => {
+    // Estimate vs. reality, splashed at the moment it can teach something.
+    const outcome = task ? estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked }) : null;
+    const timingNote = outcome ? ` · ${outcome.actual} — ${outcome.verdict}` : '';
+    this.pushUndo(`Completed "${before?.name || 'task'}"${freedNote}${timingNote}`, async () => {
       // Put the clock back too, or an undone completion silently forgets how
       // long the task had already been running.
       await this.patchTask(id, {

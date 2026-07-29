@@ -761,3 +761,31 @@ test('expanding a task near the bottom scrolls its editor into view', async ({ p
     return box !== null && box.y + box.height <= h;
   }, { timeout: 4000 }).toBe(true);
 });
+
+test('finishing tracked work with an estimate splashes the comparison', async ({ page }) => {
+  await page.clock.install();
+  await reset(page);
+  await makeList(page, 'Timed');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('write the report');
+  await page.getByTestId('task-estimate-input').fill('1');
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
+
+  // Work on it for a tracked half hour, then finish.
+  await page.getByText('write the report', { exact: true }).click();
+  await page.getByTestId('task-make-current').click();
+  await page.clock.fastForward('30:00');
+  await page.getByTestId('current-complete').click();
+
+  // The splash teaches: actual vs estimate, at the moment of completion.
+  await expect(page.getByTestId('undo-toast')).toContainText('30m under the estimate');
+
+  // And the completed view remembers the lesson.
+  await page.getByTestId('completed-link').click();
+  await page.getByText('write the report', { exact: true }).click();
+  const row = page.getByTestId(/^task-row-/).filter({ hasText: 'write the report' }).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await expect(page.getByTestId(`done-estimate-${id}`))
+    .toContainText('estimated 1h · took 30m — 30m under the estimate');
+});

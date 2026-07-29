@@ -171,6 +171,30 @@ export function formatElapsed(ms: number): string {
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
+/**
+ * Estimate vs. reality, for tasks where both halves exist: an estimate the
+ * user actually typed and time the tracker actually recorded. Most tasks have
+ * neither, and that is fine — the readout only appears when it can teach
+ * something. Feeding it back at the moment of completion is how estimating
+ * becomes a skill instead of a guess.
+ */
+export function estimateOutcome(
+  task: Pick<Task, 'estimateHours' | 'activeMs'>,
+): { estimate: string; actual: string; verdict: string } | null {
+  if (task.estimateHours === undefined || task.activeMs === undefined) return null;
+  const estMs = task.estimateHours * 3_600_000;
+  const deltaMs = task.activeMs - estMs;
+  const verdict =
+    Math.abs(deltaMs) < 60_000
+      ? 'right on the estimate'
+      : deltaMs < 0
+        ? `${formatElapsed(-deltaMs)} under the estimate`
+        : `${formatElapsed(deltaMs)} over the estimate`;
+  // formatElapsed for BOTH sides: formatDuration rounds to whole hours,
+  // which would turn a 2.5h estimate into '3h' and make the math look wrong.
+  return { estimate: formatElapsed(estMs), actual: formatElapsed(task.activeMs), verdict };
+}
+
 export interface BurdenPoint { key: string; hours: number }
 
 /**

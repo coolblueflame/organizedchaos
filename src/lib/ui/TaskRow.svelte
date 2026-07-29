@@ -15,6 +15,7 @@
   import Glyph from './Glyph.svelte';
   import { describeRitual, ritualState } from '../domain/ritual';
   import { isLongSnooze } from '../domain/sweep';
+  import { estimateOutcome } from '../domain/stats';
 
   /** Svelte action: scroll the freshly opened editor into view. */
   function revealEditor(node: HTMLElement) {
@@ -313,6 +314,12 @@
       {#if task.completedAt}
         <p class="done-meta">completed {new Date(task.completedAt).toLocaleString()}</p>
       {/if}
+      {#if estimateOutcome(task)}
+        {@const outcome = estimateOutcome(task)!}
+        <p class="done-meta est" data-testid="done-estimate-{task.id}">
+          estimated {outcome.estimate} · took {outcome.actual} — {outcome.verdict}
+        </p>
+      {/if}
       <label class="done-move">
         <span>list</span>
         <select data-testid="done-move-{task.id}" value={task.listId}
@@ -363,6 +370,7 @@
   .done-notes { margin: 0; color: var(--text); font-size: 0.85rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
   .done-notes.dim { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
   .done-meta { margin: 0; color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
+  .done-meta.est { color: var(--acc-cyan); }
   .done-move { display: flex; align-items: center; gap: 8px; }
   .done-move span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .done-move select {
