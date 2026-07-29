@@ -122,6 +122,31 @@ describe('when merge keys tie, the honest clock decides', () => {
   });
 });
 
+describe('singleton stamp ties converge on the same winner from both sides', () => {
+  it('two devices that collided on a queue stamp both pick one order', () => {
+    const a = snap({ queueIds: ['x', 'y'], queueUpdatedAt: 500 });
+    const b = snap({ queueIds: ['y', 'x'], queueUpdatedAt: 500 });
+    const fromA = mergeSnapshots(a, b).merged.queueIds;
+    const fromB = mergeSnapshots(b, a).merged.queueIds;
+    expect(fromA).toEqual(fromB); // whichever wins, they AGREE — no A/B/A flip-flop
+  });
+
+  it('same convergence for settings and currentTask', () => {
+    const a = snap({
+      settings: { ...DEFAULT_SETTINGS, hoursPerDay: 2 }, settingsUpdatedAt: 700,
+      currentTask: { taskId: 't1', acceptedAt: 1 }, currentTaskUpdatedAt: 300,
+    });
+    const b = snap({
+      settings: { ...DEFAULT_SETTINGS, hoursPerDay: 5 }, settingsUpdatedAt: 700,
+      currentTask: { taskId: 't2', acceptedAt: 2 }, currentTaskUpdatedAt: 300,
+    });
+    const fromA = mergeSnapshots(a, b).merged;
+    const fromB = mergeSnapshots(b, a).merged;
+    expect(fromA.settings).toEqual(fromB.settings);
+    expect(fromA.currentTask).toEqual(fromB.currentTask);
+  });
+});
+
 describe('mergeSnapshots — the day queue singleton', () => {
   it('follows the newer stamp, both directions', () => {
     const mine = snap({ queueIds: ['a', 'b'], queueUpdatedAt: 200 });

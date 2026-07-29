@@ -283,9 +283,9 @@ export class AppStore {
   }
 
   async updateSettings(patch: Partial<import('../domain/types').Settings>): Promise<void> {
-    await this.repo.updateSettings(patch);
+    const settingsStamp = await this.repo.updateSettings(patch);
     this.state.settings = { ...this.state.settings, ...patch };
-    this.state.settingsUpdatedAt = Date.now();
+    this.state.settingsUpdatedAt = settingsStamp;
     this.requestSync();
   }
 
@@ -780,9 +780,8 @@ export class AppStore {
         });
       }
       if (wasCurrent) {
-        await this.repo.setCurrentTask(priorCurrent);
+        this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
         this.state.currentTask = priorCurrent;
-        this.state.currentTaskUpdatedAt = Date.now();
       }
     });
 
@@ -989,9 +988,9 @@ export class AppStore {
       ...(minutes ? { timeboxEndsAt: Date.now() + minutes * 60_000 } : {}),
     });
     const ref = { taskId, acceptedAt: Date.now() };
-    await this.repo.setCurrentTask(ref);
+    const currentStamp = await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
-    this.state.currentTaskUpdatedAt = Date.now();
+    this.state.currentTaskUpdatedAt = currentStamp;
     this.requestSync();
     this.fireEgg('drawAccepted');
   }
@@ -1015,17 +1014,16 @@ export class AppStore {
     this.pushUndo(`Snoozed "${task?.name || 'task'}"`, async () => {
       await this.patchTask(taskId, { notTodayUntil: priorSnooze });
       if (wasCurrent) {
-        await this.repo.setCurrentTask(priorCurrent);
+        this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
         this.state.currentTask = priorCurrent;
-        this.state.currentTaskUpdatedAt = Date.now();
       }
     });
   }
 
   async clearCurrent(): Promise<void> {
-    await this.repo.setCurrentTask(null);
+    const clearedStamp = await this.repo.setCurrentTask(null);
     this.state.currentTask = null;
-    this.state.currentTaskUpdatedAt = Date.now();
+    this.state.currentTaskUpdatedAt = clearedStamp;
     this.requestSync();
   }
 
@@ -1180,6 +1178,31 @@ export class AppStore {
 
   /** Materialize due templates. Called from init, window focus, and the rollover timer. */
   async runSpawnSweep(now: Date = new Date()): Promise<number> {
+    /*
+      Self-heal dormant templates before sweeping. The Things import shipped
+      templates with no `nextSpawnAt`, and sweepSpawns skips unarmed rows — so
+      an imported weekly rule could never spawn, ever. Arming here (rather
+      than only at import) also heals every library imported before the fix.
+      - Scheduled modes arm to their next cadence moment.
+      - afterCompletion arms to NOW only when no open copy exists: its normal
+        resting state is unarmed-with-an-open-copy, but unarmed with NOTHING
+        open is a rule waiting for a completion that cannot come. This also
+        means deleting a rule's copy regrows one — the RULE is the commitment;
+        pause or delete the rule itself to stop it.
+    */
+    const openByRecurrence = new Set(
+      this.state.tasks
+        .filter((t) => !t.deleted && t.completedAt === undefined && t.recurrenceId)
+        .map((t) => t.recurrenceId!),
+    );
+    for (const tpl of this.state.templates) {
+      if (tpl.deleted || tpl.paused || tpl.nextSpawnAt !== undefined) continue;
+      const armed = tpl.mode.kind === 'afterCompletion'
+        ? (openByRecurrence.has(tpl.id) ? null : now.getTime())
+        : nextScheduledSpawn(tpl.mode, now, this.state.settings.rolloverHour);
+      if (armed !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: armed });
+    }
+
     const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings);
     for (const draft of res.drafts) {
       const task = await this.repo.createTask(draft);
@@ -1223,6 +1246,14 @@ export class AppStore {
       existing: T[],
       incoming: T[],
       remap?: (row: T) => T,
+      /**
+       * Applied when a newer Things-side row replaces a matched local one:
+       * carries forward everything the app knows that Things CANNOT express.
+       * "Newest wins" is only honest for fields both sides can hold — wiping
+       * a ritual config or tracked time because someone renamed the task on
+       * their phone is destruction, not merging.
+       */
+      preserve?: (prior: T, next: T) => T,
     ): T[] => {
       const byThings = new Map(existing.filter((e) => e.thingsUuid).map((e) => [e.thingsUuid!, e]));
       const out = [...existing];
@@ -1232,27 +1263,72 @@ export class AppStore {
         idMap.set(raw.thingsUuid!, appId);
         const finalize = () => ({ ...(remap ? remap(raw) : raw), id: appId });
         if (!prior) out.push(finalize());
-        else if (raw.updatedAt > prior.updatedAt) out[out.indexOf(prior)] = finalize();
+        else if (raw.updatedAt > prior.updatedAt) {
+          const next = finalize();
+          out[out.indexOf(prior)] = preserve ? preserve(prior, next) : next;
+        }
       }
       return out;
     };
 
+    // App-native tags (no thingsUuid) added to a task locally must survive a
+    // Things-side edit — the incoming tag list only knows Things tags.
+    const appNativeTags = new Set(snap.tags.filter((t) => !t.thingsUuid).map((t) => t.id));
+
     const ref = (thingsUuid: string) => idMap.get(thingsUuid) ?? thingsUuid;
     // Order matters: lists/tags first so tasks/templates can resolve refs.
-    snap.lists = upsert(snap.lists, mapped.lists);
-    snap.tags = upsert(snap.tags, mapped.tags);
+    snap.lists = upsert(snap.lists, mapped.lists, undefined, (prior, next) => ({
+      ...next,
+      // Everything a list learns in-app: layout, schedule, curation.
+      sortMode: prior.sortMode, order: prior.order, archived: prior.archived,
+      generated: prior.generated, activeFrom: prior.activeFrom, activeTo: prior.activeTo,
+      hours: prior.hours, deadline: prior.deadline,
+      urgentOverridesHours: prior.urgentOverridesHours, editedAt: prior.editedAt,
+    }));
+    snap.tags = upsert(snap.tags, mapped.tags, undefined, (prior, next) => ({
+      ...next, colorIndex: prior.colorIndex, editedAt: prior.editedAt,
+    }));
     snap.templates = upsert(snap.templates, mapped.templates, (t) => ({
       ...t, listId: ref(t.listId), tagIds: t.tagIds.map(ref),
+    }), (prior, next) => ({
+      ...next,
+      nextSpawnAt: prior.nextSpawnAt, avgActiveMs: prior.avgActiveMs,
+      completedInstances: prior.completedInstances,
+      deadlineOffsetDays: prior.deadlineOffsetDays, timeboxMinutes: prior.timeboxMinutes,
+      estimateHours: prior.estimateHours, editedAt: prior.editedAt,
     }));
     snap.tasks = upsert(snap.tasks, mapped.tasks, (t) => ({
       ...t,
       listId: ref(t.listId),
       tagIds: t.tagIds.map(ref),
       recurrenceId: t.recurrenceId ? ref(t.recurrenceId) : undefined,
+    }), (prior, next) => ({
+      ...next,
+      // Rituals, planning, and time-tracking exist only in this app.
+      ritual: prior.ritual, rituals: prior.rituals, ritualPerWindow: prior.ritualPerWindow,
+      ritualDoneDay: prior.ritualDoneDay, ritualDoneSlots: prior.ritualDoneSlots,
+      order: prior.order, estimateHours: prior.estimateHours,
+      timeboxMinutes: prior.timeboxMinutes, timeboxEndsAt: prior.timeboxEndsAt,
+      activeMs: prior.activeMs, activeAccumulatedMs: prior.activeAccumulatedMs,
+      startedAt: prior.startedAt, inProgress: prior.inProgress,
+      blockedBy: prior.blockedBy, notTodayUntil: prior.notTodayUntil,
+      editedAt: prior.editedAt,
+      // Once reviewed, always reviewed — a rename in Things is not new triage.
+      needsReview: prior.needsReview === false ? false : next.needsReview,
+      // A completion made HERE outranks an open copy from Things, which simply
+      // never learned about it. Things-side completions still land normally.
+      completedAt: next.completedAt ?? prior.completedAt,
+      tagIds: [...new Set([
+        ...next.tagIds,
+        ...prior.tagIds.filter((tagId) => appNativeTags.has(tagId)),
+      ])],
     }));
 
     await this.repo.replaceAll(snap);
     await this.refreshFromDisk();
+    // Arm what just arrived (the sweep's self-heal) and materialize anything
+    // already due — the import should hand over a LIVING library.
+    await this.runSpawnSweep();
     this.requestSync();
     return mapped.counts;
   }

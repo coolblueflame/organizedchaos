@@ -46,7 +46,9 @@
   let countHistory = $state(false);
 
   async function runImport() {
-    if (!mapped) return;
+    // The step guard also blocks same-turn double-dispatch: two imports racing
+    // would mint different app ids for every new row and duplicate the library.
+    if (!mapped || step === 'importing') return;
     step = 'importing';
     try {
       const review = mapped.review;

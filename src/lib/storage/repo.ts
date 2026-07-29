@@ -15,6 +15,7 @@ import {
 import type { DelightProgress, RemoteSnapshot } from '../sync/files';
 import type { SyncConfig } from '../sync/githubClient';
 import { mergeDelight, supersedes } from '../sync/merge';
+import type { Table } from 'dexie';
 import type { AppDb } from './db';
 
 /** The parts of the stored delight blob the repo needs to see. */
@@ -110,7 +111,12 @@ export class Repo {
   /** Build + mirror-return a task NOW; persist in the background, serialized. */
   createTaskEager(draft: TaskDraft): Task {
     const row: Task = { ...stamp(), ...draft };
-    const put = this.db.tasks.put(row).finally(() => {
+    const put = this.db.tasks.put(row)
+      // Surfaced, not swallowed: a failed eager insert makes the task a ghost
+      // (visible in the mirror, absent from disk, every follow-up patch a
+      // silent no-op). Rare — quota pressure — but it must at least say so.
+      .catch((err) => console.error('eager task insert failed — task will not persist', err))
+      .finally(() => {
       if (this.pendingTaskPuts.get(row.id) === put) this.pendingTaskPuts.delete(row.id);
     });
     this.pendingTaskPuts.set(row.id, put);
@@ -178,15 +184,21 @@ export class Repo {
    * undefined) — update() semantics around undefined vary.
    */
   private async patchRow<T extends { id: string; updatedAt: number }>(
-    table: { get: (id: string) => Promise<T | undefined>; put: (row: T) => Promise<string> },
+    table: Table<T, string>,
     id: string,
     patch: Partial<T>,
   ): Promise<void> {
-    const row = await table.get(id);
-    if (!row) return;
-    // editedAt: the honest clock riding along with the clamped merge key —
-    // it is what breaks the tie when two devices' nextStamp()s collide.
-    await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt), editedAt: Date.now() });
+    // One rw transaction, not a bare get-then-put: a sync's replaceAll can
+    // commit a newer merged row in the gap, and a patch built on the stale
+    // read would erase that merge — with a stamp high enough to propagate the
+    // erasure everywhere. Serializing against the same tables closes the gap.
+    await this.db.transaction('rw', table, async () => {
+      const row = await table.get(id);
+      if (!row) return;
+      // editedAt: the honest clock riding along with the clamped merge key —
+      // it is what breaks the tie when two devices' nextStamp()s collide.
+      await table.put({ ...row, ...patch, updatedAt: nextStamp(row.updatedAt), editedAt: Date.now() });
+    });
   }
 
   async updateTask(id: string, patch: Partial<Task>): Promise<void> {
@@ -209,8 +221,28 @@ export class Repo {
     }
   }
 
-  async setCurrentTask(ref: CurrentTaskRef | null): Promise<void> {
-    await this.db.kv.put({ key: 'currentTask', value: { data: ref, updatedAt: Date.now() } });
+  /**
+   * Returns the stamp written so the caller's mirror can match. Two hardenings
+   * at this choke point:
+   * - `{...ref}`: undo paths hand back a ref read from the $state mirror — a
+   *   deep proxy IndexedDB cannot structured-clone (the DataCloneError family,
+   *   4th sighting). updateQueue below already copies for the same reason.
+   * - nextStamp, not Date.now(): a future-stamped ref synced in from a device
+   *   with a fast clock would otherwise beat every later change here and keep
+   *   resurrecting itself ("changing something must always supersede it").
+   */
+  async setCurrentTask(ref: CurrentTaskRef | null): Promise<number> {
+    return this.db.transaction('rw', this.db.kv, async () => {
+      const row = await this.db.kv.get('currentTask');
+      const prior = readStamped<CurrentTaskRef | null>(row?.value, (v) =>
+        v === null || (typeof v === 'object' && 'taskId' in (v as object))).updatedAt;
+      const updatedAt = nextStamp(prior);
+      await this.db.kv.put({
+        key: 'currentTask',
+        value: { data: ref === null ? null : { ...ref }, updatedAt },
+      });
+      return updatedAt;
+    });
   }
 
   async getSettings(): Promise<Settings> {
@@ -225,18 +257,27 @@ export class Repo {
    * can hold the same merge key the database does.
    */
   async updateQueue(ids: string[]): Promise<number> {
-    const row = await this.db.kv.get('dayQueue');
-    const prior = readStamped<string[]>(row?.value, Array.isArray).updatedAt;
-    const updatedAt = nextStamp(prior);
-    await this.db.kv.put({ key: 'dayQueue', value: { data: [...ids], updatedAt } });
-    return updatedAt;
+    return this.db.transaction('rw', this.db.kv, async () => {
+      const row = await this.db.kv.get('dayQueue');
+      const prior = readStamped<string[]>(row?.value, Array.isArray).updatedAt;
+      const updatedAt = nextStamp(prior);
+      await this.db.kv.put({ key: 'dayQueue', value: { data: [...ids], updatedAt } });
+      return updatedAt;
+    });
   }
 
-  async updateSettings(patch: Partial<Settings>): Promise<void> {
-    const current = await this.getSettings();
-    await this.db.kv.put({
-      key: 'settings',
-      value: { data: { ...current, ...patch }, updatedAt: Date.now() },
+  /** nextStamp for the same reason as setCurrentTask; returns the stamp written. */
+  async updateSettings(patch: Partial<Settings>): Promise<number> {
+    return this.db.transaction('rw', this.db.kv, async () => {
+      const row = await this.db.kv.get('settings');
+      const parsed = readStamped<Partial<Settings>>(row?.value, (v) =>
+        typeof v === 'object' && v !== null && !('data' in (v as object)));
+      const updatedAt = nextStamp(parsed.updatedAt);
+      await this.db.kv.put({
+        key: 'settings',
+        value: { data: { ...DEFAULT_SETTINGS, ...(parsed.data ?? {}), ...patch }, updatedAt },
+      });
+      return updatedAt;
     });
   }
 

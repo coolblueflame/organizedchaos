@@ -21,6 +21,7 @@
   import { projectPriorities } from '../domain/project';
   import { blockLifts } from '../domain/blocking';
   import { dueRitualIds, isRitualDue, ritualExclusions, withRitualLifts } from '../domain/ritual';
+  import { clock } from './clock.svelte';
   import { archivedTaskIds } from '../domain/archive';
   import { liveQueueIds } from '../domain/dayQueue';
   import { SELF_CARE } from '../eggs/content/extras';
@@ -36,8 +37,10 @@
   let ignoringHours = $state(Boolean(listId));
 
   // Which lists are off the clock right now (for the 🌙 chip hints).
+  // clock.now, not new Date(): a $derived's date freezes at its last dep
+  // change, so a window opening while this screen sat idle went unnoticed.
   const asleepLists = $derived(
-    app.state.lists.filter((l) => !isListActiveAt(l, new Date())).map((l) => l.id),
+    app.state.lists.filter((l) => !isListActiveAt(l, clock.now)).map((l) => l.id),
   );
 
   /**
@@ -47,7 +50,7 @@
   const blockedByHours = $derived(
     ignoringHours
       ? []
-      : tasksBlockedByHours(app.state.tasks, app.state.lists, app.state.settings, new Date()),
+      : tasksBlockedByHours(app.state.tasks, app.state.lists, app.state.settings, clock.now),
   );
 
   // List filter is an OMIT set: empty = all lists in (Ben's "all minus a few").
@@ -99,7 +102,9 @@
     // The hand-planned order outranks the tiers (2026-07-29 request).
     queueFirst: liveQueueIds(app.state.queueIds, app.state.tasks),
     // And a ritual whose window is open outranks even that: windows close.
-    dueFirst: dueRitualIds(app.state.tasks, app.state.settings, new Date()),
+    // Same clock as the deriveds above, or the two halves of the draw can
+    // disagree about whether a window is open.
+    dueFirst: dueRitualIds(app.state.tasks, app.state.settings, clock.now),
   });
 
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
@@ -140,7 +145,7 @@
     if (selfCareOffered || Math.random() > 0.12) return;
     const counts = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
     const calmPool = drawn === null ||
-      priorityRank(effectivePriority(drawn, app.state.settings, new Date())) <= priorityRank('medium');
+      priorityRank(effectivePriority(drawn, app.state.settings, clock.now)) <= priorityRank('medium');
     if (counts.today >= 6 || calmPool) {
       selfCareOffered = true;
       selfCare = SELF_CARE[Math.floor(Math.random() * SELF_CARE.length)]!;
@@ -148,7 +153,7 @@
   }
 
   const projectTiers = $derived(
-    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
+    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, clock.now),
   );
   /**
    * Daily rituals that are not due right now — done today, or outside their
@@ -159,14 +164,14 @@
   const onShelf = $derived(archivedTaskIds(app.state.tasks, app.state.lists));
 
   const ritualsNotDue = $derived(
-    ritualExclusions(app.state.tasks, app.state.settings, new Date()),
+    ritualExclusions(app.state.tasks, app.state.settings, clock.now),
   );
 
   /** Blockers inherit the urgency of whatever is waiting on them (§blocking). */
   const lifts = $derived(
     withRitualLifts(
-      blockLifts(app.state.tasks, app.state.settings, new Date()),
-      app.state.tasks, app.state.settings, new Date(),
+      blockLifts(app.state.tasks, app.state.settings, clock.now),
+      app.state.tasks, app.state.settings, clock.now,
     ),
   );
 
@@ -192,12 +197,36 @@
     navigate({ name: 'home' });
   }
 
-  /** Would anything be drawable if we forgot the session skips? */
-  const skipsAreTheProblem = $derived.by(() => {
-    if (drawn !== null) return false;
-    const without = { ...scope(), excludeIds: [...blockedByHours] };
-    return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
-  });
+  /**
+   * Empty-state probes: would anything draw if exactly ONE gate were lifted?
+   *
+   * Built on drawTask (not eligibleForDraw) so the work-period estimate
+   * filter is modelled — it lives inside drawTask, and the old probes missed
+   * it, blaming "you've skipped everything" for a pool the period had
+   * emptied. And built on the REAL exclusion set minus the one factor under
+   * test: rebuilding it from scratch silently dropped the ritual and archive
+   * gates, misattributing those too.
+   */
+  const wouldDrawWithout = (omit: 'skips' | 'hours' | 'period'): boolean => {
+    const base = scope();
+    const probe = {
+      ...base,
+      excludeIds: [
+        ...(omit === 'skips' ? [] : notNow),
+        ...(omit === 'hours' ? [] : blockedByHours),
+        ...ritualsNotDue, ...onShelf,
+      ],
+      maxEstimateHours: omit === 'period' ? undefined : base.maxEstimateHours,
+    };
+    return drawTask(app.state.tasks, app.state.settings, clock.now, () => 0, probe, projectTiers, lifts) !== null;
+  };
+
+  const skipsAreTheProblem = $derived(
+    drawn === null && notNow.length > 0 && wouldDrawWithout('skips'));
+  const hoursAreTheProblem = $derived(
+    drawn === null && blockedByHours.length > 0 && wouldDrawWithout('hours'));
+  const periodIsTheProblem = $derived(
+    drawn === null && app.workPeriodHoursLeft() !== null && wouldDrawWithout('period'));
 
   /**
    * Empty only because everything left is waiting on something else? Worth
@@ -206,17 +235,8 @@
    */
   const blockersAreTheProblem = $derived.by(() => {
     if (drawn !== null) return false;
-    // Only `includeBlocked` changes, so a true result isolates blocking as
-    // the cause — the skip and hours cases are already ruled out above.
     const relaxed = { ...scope(), includeBlocked: true };
-    return eligibleForDraw(app.state.tasks, new Date(), relaxed).length > 0;
-  });
-
-  /** Empty only because the clock is holding things back? */
-  const hoursAreTheProblem = $derived.by(() => {
-    if (drawn !== null || blockedByHours.length === 0) return false;
-    const without = { ...scope(), excludeIds: [...notNow] };
-    return eligibleForDraw(app.state.tasks, new Date(), without).length > 0;
+    return eligibleForDraw(app.state.tasks, clock.now, relaxed).length > 0;
   });
 
   function ignoreHours() {
@@ -273,7 +293,7 @@
   }
 
   const drawnList = $derived(drawn ? app.state.lists.find((l) => l.id === drawn!.listId) : undefined);
-  const drawnTier = $derived(drawn ? effectivePriority(drawn, app.state.settings, new Date()) : null);
+  const drawnTier = $derived(drawn ? effectivePriority(drawn, app.state.settings, clock.now) : null);
   const drawnEscalated = $derived(drawn ? isEscalated(drawn, app.state.settings, new Date()) : false);
   const drawnTags = $derived(drawn
     ? drawn.tagIds.map((id) => app.state.tags.find((t) => t.id === id)).filter((t) => t !== undefined)
@@ -350,7 +370,7 @@
   {:else if drawn}
     {#key drawSeq}
     <section class="card sheen-once" data-testid="draw-card">
-      {#if drawn && isRitualDue(drawn, new Date(), app.state.settings.rolloverHour)}
+      {#if drawn && isRitualDue(drawn, clock.now, app.state.settings.rolloverHour)}
         <p class="tier ritual" data-testid="draw-ritual">⧗ daily ritual — its window is open</p>
       {:else if drawn && app.state.queueIds.includes(drawn.id)}
         <p class="tier queue" data-testid="draw-from-queue">≡ next in your queue</p>
@@ -398,7 +418,7 @@
       {:else if hoursAreTheProblem}
         <p class="with-glyph">// everything left is on a list that's off the clock right now <Glyph name="moon" size={11} /></p>
         <button class="reset" data-testid="draw-ignore-hours" onclick={ignoreHours}>roll anyway</button>
-      {:else if app.workPeriodHoursLeft() !== null}
+      {:else if periodIsTheProblem}
         <p class="with-glyph">// nothing fits the time left in your work period <Glyph name="period" size={11} /></p>
         <button class="reset" data-testid="draw-end-period"
           onclick={() => void app.endWorkPeriod().then(redraw)}>end the period and roll anyway</button>

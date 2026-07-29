@@ -5,7 +5,7 @@
  * just parks the engine in 'offline'/'error' until the next trigger.
  */
 import { AuthError, ConflictError, type RemoteFileEntry, type RemoteFile } from './githubClient';
-import { fromFiles, toFiles, type RemoteSnapshot, type SyncFilePayloads } from './files';
+import { fromFiles, SCHEMA_VERSION, toFiles, type RemoteSnapshot, type SyncFilePayloads } from './files';
 import { mergeSnapshots } from './merge';
 
 export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'error' | 'offline';
@@ -76,7 +76,13 @@ export class SyncEngine {
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
+  private disposed = false;
+
   private setStatus(status: SyncStatus, detail = ''): void {
+    // A disposed engine has no business talking to the UI: a cycle that was
+    // mid-flight when the user disconnected used to finish later and overwrite
+    // the store's 'disabled' with its own 'idle'.
+    if (this.disposed) return;
     this.status = status;
     this.statusDetail = detail;
     this.onStatus?.(status, detail);
@@ -84,16 +90,19 @@ export class SyncEngine {
 
   /** Debounced trigger — call after every mutation. */
   requestSync(): void {
+    if (this.disposed) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.syncNow(), this.debounceMs);
   }
 
   dispose(): void {
+    this.disposed = true;
     clearTimeout(this.timer);
   }
 
   /** One full cycle; if one is mid-flight, queues a trailing run instead. */
   async syncNow(): Promise<void> {
+    if (this.disposed) return;
     if (this.running) {
       this.pending = true;
       return;
@@ -103,6 +112,7 @@ export class SyncEngine {
     this.setStatus('syncing');
     try {
       for (let attempt = 1; ; attempt++) {
+        if (this.disposed) return; // severed mid-flight: stop pushing, quietly
         const conflicted = await this.cycleOnce();
         if (!conflicted) break;
         if (attempt >= MAX_CONFLICT_RETRIES) {
@@ -115,11 +125,17 @@ export class SyncEngine {
     } catch (e) {
       if (e instanceof AuthError) this.setStatus('error', e.message);
       else if (e instanceof ConflictError) this.setStatus('error', 'sync conflict would not settle');
-      else if (e instanceof TypeError) this.setStatus('offline', 'network unreachable');
+      // Only a NETWORK TypeError means offline. fetch() rejects with a
+      // browser-specific message ("Failed to fetch" / "Load failed" /
+      // "NetworkError when attempting…"); any other TypeError is a bug in our
+      // own cycle and blaming the network would bury it.
+      else if (e instanceof TypeError && /fetch|network|load failed|connection/i.test(e.message)) {
+        this.setStatus('offline', 'network unreachable');
+      }
       else this.setStatus('error', e instanceof Error ? e.message : String(e));
     } finally {
       this.running = false;
-      if (this.pending) {
+      if (this.pending && !this.disposed) {
         this.pending = false;
         void this.syncNow();
       }
@@ -163,6 +179,20 @@ export class SyncEngine {
     if (!remoteChanged) return false;
 
     const desired = toFiles(merged, (this.deps.now ?? (() => new Date()))());
+    /*
+      A logbook year whose last task left it (uncompleted, re-dated, or
+      tombstone-compacted away) simply drops out of `desired` — but the remote
+      file still holds its final contents, and fromFiles faithfully re-unions
+      them every cycle: a permanent phantom `remoteChanged`, and a resurrection
+      trap for any device bootstrapping after the tombstones compact. There is
+      no delete in the Contents flow, so an orphaned year is rewritten EMPTY —
+      same convergence, one extra tiny file.
+    */
+    for (const path of remoteFiles.keys()) {
+      if (path.startsWith('logbook-') && !(path in desired)) {
+        desired[path] = { schema: SCHEMA_VERSION, tasks: [] };
+      }
+    }
     try {
       for (const [path, payload] of Object.entries(desired)) {
         const existing = remoteFiles.get(path);

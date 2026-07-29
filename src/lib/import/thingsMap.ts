@@ -246,17 +246,25 @@ export function mapThings(rows: ThingsRows): MappedImport {
     areaGroup: p.area ? areaTitle.get(p.area) : undefined,
     ...stamp(p.creationDate, p.userModificationDate),
   }));
+  /*
+    Areas, the Inbox, and real Things tags carry NO modification date in the
+    Things schema, so there is nothing honest to stamp them with. They used to
+    get Date.now() — which made every RE-import "newer" than any local edit:
+    recolored tags reshuffled, archived area lists came back, tombstones
+    resurrected. A floor stamp of 1 means they exist on first import and then
+    NEVER win against anything local (upsert only replaces on strictly-newer).
+  */
+  const FLOOR_STAMP = { createdAt: 1, updatedAt: 1, deleted: false } as const;
   const usedAreas = new Set([...homes.values()].filter((h) => areaTitle.has(h)));
   for (const areaUuid of usedAreas) {
     lists.push({
       id: areaUuid, thingsUuid: areaUuid, title: areaTitle.get(areaUuid)!,
-      sortMode: 'priority', createdAt: Date.now(), updatedAt: Date.now(), deleted: false,
+      sortMode: 'priority', ...FLOOR_STAMP,
     });
   }
   if ([...homes.values()].includes(INBOX_UUID)) {
     lists.push({
-      id: INBOX_UUID, thingsUuid: INBOX_UUID, title: 'Inbox', sortMode: 'priority',
-      createdAt: Date.now(), updatedAt: Date.now(), deleted: false,
+      id: INBOX_UUID, thingsUuid: INBOX_UUID, title: 'Inbox', sortMode: 'priority', ...FLOOR_STAMP,
     });
   }
 
@@ -265,7 +273,7 @@ export function mapThings(rows: ThingsRows): MappedImport {
   const tags: Tag[] = [
     ...rows.tags.map((t) => ({
       id: t.uuid, thingsUuid: t.uuid, name: t.title, colorIndex: color++ % 16,
-      createdAt: Date.now(), updatedAt: Date.now(), deleted: false,
+      ...FLOOR_STAMP,
     })),
     ...headings.map((h) => ({
       id: h.uuid, thingsUuid: h.uuid, name: h.title, colorIndex: color++ % 16,

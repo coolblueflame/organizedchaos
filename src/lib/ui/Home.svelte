@@ -12,6 +12,7 @@
   import { projectPriorities } from '../domain/project';
   import { moveAcross, moveWithin, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import { isRitualDue, isRitualTask } from '../domain/ritual';
+  import { clock } from './clock.svelte';
   import { createDragScroller } from './dragScroll';
   import { primeKeyboard } from './keyboardBridge';
   import { searchQuery } from './searchState.svelte';
@@ -94,7 +95,7 @@
   );
   const ritualsDue = $derived(
     app.state.tasks.filter((t) =>
-      !t.deleted && isRitualDue(t, new Date(), app.state.settings.rolloverHour)).length,
+      !t.deleted && isRitualDue(t, clock.now, app.state.settings.rolloverHour)).length,
   );
 
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
@@ -129,8 +130,16 @@
   let dragOverGroup = $state<string | null>(null);
   let dragStartGroup: string | null = null;
 
+  /**
+   * The finger that owns the current drag. svelte:window handlers hear EVERY
+   * pointer, so without this a second finger resting on the screen would both
+   * yank the hit-test to its own Y and commit the drag on ITS pointerup.
+   */
+  let dragPointerId: number | null = null;
+
   function startListDrag(e: PointerEvent, group: string, id: string) {
     e.preventDefault();
+    dragPointerId = e.pointerId;
     dragId = id;
     dragStartGroup = group;
     dragOverGroup = group;
@@ -172,7 +181,7 @@
   const listScroller = createDragScroller(listHitTest);
 
   function onListDragMove(e: PointerEvent) {
-    if (!dragId || !dragGroups) return;
+    if (!dragId || !dragGroups || e.pointerId !== dragPointerId) return;
     listPointerY = e.clientY;
     listHitTest();
     listScroller.update(e.clientY);
@@ -180,6 +189,10 @@
 
   async function endListDrag() {
     listScroller.stop();
+    // Commit what the finger last saw — the flip animation moves rects under
+    // the pointer, so the last MOVE's hit-test can be one slot stale (the
+    // same lesson the queue and custom-sort drags already carry).
+    listHitTest();
     const groups = dragGroups;
     const id = dragId;
     const from = dragStartGroup;
@@ -213,6 +226,7 @@
 
   function startQueueDrag(e: PointerEvent, id: string) {
     e.preventDefault();
+    dragPointerId = e.pointerId;
     queueDragId = id;
     queueOrder = queueTasks.map((t) => t.id);
   }
@@ -236,7 +250,7 @@
   const queueScroller = createDragScroller(queueHitTest);
 
   function onQueueDragMove(e: PointerEvent) {
-    if (!queueDragId || !queueOrder) return;
+    if (!queueDragId || !queueOrder || e.pointerId !== dragPointerId) return;
     queuePointerY = e.clientY;
     queueHitTest();
     queueScroller.update(e.clientY);
@@ -259,6 +273,22 @@
     const byId = new Map(queueTasks.map((t) => [t.id, t]));
     return queueOrder.map((id) => byId.get(id)).filter((t): t is Task => t !== undefined);
   });
+
+  /** Cancelled gestures reset everything without writing anything. */
+  function abortDrags() {
+    listScroller.stop();
+    queueScroller.stop();
+    dragId = null;
+    dragGroups = null;
+    dragOverGroup = null;
+    dragStartGroup = null;
+    queueDragId = null;
+    queueOrder = null;
+  }
+
+  // Leaving the screen mid-drag must stop the auto-scroll rAF loop — it has
+  // no idea the component is gone and would keep scrolling the next screen.
+  $effect(() => () => abortDrags());
 
   let clearArmed = $state(false);
   let clearTimer: ReturnType<typeof setTimeout> | undefined;
@@ -283,7 +313,7 @@
   }
 
   const projectTiers = $derived(
-    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, new Date()),
+    projectPriorities(app.state.lists, app.state.tasks, app.state.settings, clock.now),
   );
 
   $effect(() => {
@@ -293,7 +323,20 @@
 
 <svelte:window
   onpointermove={(e) => { onListDragMove(e); onQueueDragMove(e); }}
-  onpointerup={() => { void endListDrag(); void endQueueDrag(); }} />
+  onpointerup={(e) => {
+    if (e.pointerId !== dragPointerId) return;
+    dragPointerId = null;
+    void endListDrag();
+    void endQueueDrag();
+  }}
+  onpointercancel={(e) => {
+    // The system stole the gesture (edge swipe, notification shade, a call):
+    // ABORT, never commit — a later unrelated tap must not inherit half a
+    // reorder, and the auto-scroller must not keep rolling with no finger.
+    if (e.pointerId !== dragPointerId) return;
+    dragPointerId = null;
+    abortDrags();
+  }} />
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
@@ -362,9 +405,9 @@
               </span>
             {/if}
             {#if describeWindow(l)}
-              <span class="window" class:asleep={!isListActiveAt(l, new Date())}
+              <span class="window" class:asleep={!isListActiveAt(l, clock.now)}
                 title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
-                <Glyph name={isListActiveAt(l, new Date()) ? 'dice' : 'moon'} size={10} /> {describeWindow(l)}{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
+                <Glyph name={isListActiveAt(l, clock.now) ? 'dice' : 'moon'} size={10} /> {describeWindow(l)}{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
               </span>
             {/if}
             <span class="load" aria-hidden="true">
@@ -425,7 +468,9 @@
           {clearArmed ? 'tap again to clear' : 'clear'}
         </button>
       </div>
-      {#each shownQueue as t, i (t.id)}
+      <!-- Budgeted like every per-task surface: a multi-select can queue
+           hundreds in one gesture, and home must not mount them all. -->
+      {#each shownQueue.slice(0, 80) as t, i (t.id)}
         <div class="q-row" class:lifted={queueDragId === t.id}
           data-queue-row={t.id} data-testid="queue-row-{t.id}"
           animate:flip={{ duration: queueDragId ? rowFlipMs : 0 }}>
@@ -444,6 +489,9 @@
             onclick={() => void app.removeFromQueue(t.id)}><span aria-hidden="true">✕</span></button>
         </div>
       {/each}
+      {#if shownQueue.length > 80}
+        <p class="q-more">…and {shownQueue.length - 80} more queued</p>
+      {/if}
     </section>
   {/if}
 
@@ -703,5 +751,6 @@
     background: none; border: none; color: var(--dim); cursor: pointer;
     padding: 4px 6px; flex: none; font-size: 0.8rem;
   }
+  .q-more { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; margin: 2px 0 0 26px; }
   @media (hover: hover) { .q-remove:hover { color: var(--acc-magenta); } }
 </style>

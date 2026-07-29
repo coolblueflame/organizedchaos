@@ -71,7 +71,9 @@ describe('Repo', () => {
     await repo.setCurrentTask(null);
     state = await repo.loadState();
     expect(state.currentTask).toBeNull();
-    expect(state.currentTaskUpdatedAt).toBe(t0);
+    // nextStamp semantics: a change in the same millisecond still SUPERSEDES
+    // what it changed — bare Date.now() here let future-stamped refs win back.
+    expect(state.currentTaskUpdatedAt).toBe(t0 + 1);
   });
 
   it('settings default and merge, with updatedAt stamp', async () => {

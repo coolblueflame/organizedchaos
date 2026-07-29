@@ -133,10 +133,26 @@ export function mergeDelight(
   };
 }
 
+/**
+ * Newest-wins for a stamped singleton, with the same content tiebreak rows
+ * get: an exact stamp tie sent each device to its OWN copy, so two devices
+ * that collided (routine under clamped stamps) pushed A/B/A forever and the
+ * queue order never settled. Both sides now deterministically pick the same
+ * winner. Symmetric by construction — the comparison ignores which side is
+ * "local".
+ */
+function pickSingleton<V>(a: V, aStamp: number, b: V, bStamp: number): [V, number] {
+  if (aStamp !== bStamp) return aStamp > bStamp ? [a, aStamp] : [b, bStamp];
+  return canonical(a) <= canonical(b) ? [a, aStamp] : [b, bStamp];
+}
+
 export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): MergeResult {
-  const currentNewer = remote.currentTaskUpdatedAt > local.currentTaskUpdatedAt ? remote : local;
-  const settingsNewer = remote.settingsUpdatedAt > local.settingsUpdatedAt ? remote : local;
-  const queueNewer = remote.queueUpdatedAt > local.queueUpdatedAt ? remote : local;
+  const [currentTask, currentTaskUpdatedAt] = pickSingleton(
+    local.currentTask, local.currentTaskUpdatedAt, remote.currentTask, remote.currentTaskUpdatedAt);
+  const [settings, settingsUpdatedAt] = pickSingleton(
+    local.settings, local.settingsUpdatedAt, remote.settings, remote.settingsUpdatedAt);
+  const [queueIds, queueUpdatedAt] = pickSingleton(
+    local.queueIds, local.queueUpdatedAt, remote.queueIds, remote.queueUpdatedAt);
 
   const delight = mergeDelight(local.delight, remote.delight);
 
@@ -145,12 +161,12 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     tasks: mergeRows(local.tasks, remote.tasks),
     tags: mergeRows(local.tags, remote.tags),
     templates: mergeRows(local.templates, remote.templates),
-    currentTask: currentNewer.currentTask,
-    currentTaskUpdatedAt: currentNewer.currentTaskUpdatedAt,
-    settings: settingsNewer.settings,
-    settingsUpdatedAt: settingsNewer.settingsUpdatedAt,
-    queueIds: queueNewer.queueIds,
-    queueUpdatedAt: queueNewer.queueUpdatedAt,
+    currentTask,
+    currentTaskUpdatedAt,
+    settings,
+    settingsUpdatedAt,
+    queueIds,
+    queueUpdatedAt,
     ...(delight ? { delight } : {}),
   };
 

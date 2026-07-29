@@ -203,6 +203,40 @@ describe('completion undo restores everything it destroyed', () => {
   });
 });
 
+describe('current-task and settings kv hardening', () => {
+  it('undoing a completion restores the current-task slot (mirror ref round-trips)', async () => {
+    const list = await store.addList('A');
+    const t = await store.addTask(list.id);
+    await store.acceptTask(t.id);
+    await store.completeTask(t.id);
+    expect(store.state.currentTask).toBeNull();
+    await store.undoLast();
+    // The prior ref came out of the $state mirror — a deep proxy. The repo
+    // must copy it before Dexie structured-clones, or this write throws and
+    // the restore is silently half-done.
+    expect(store.state.currentTask?.taskId).toBe(t.id);
+    expect((await persisted()).currentTask?.taskId).toBe(t.id);
+  });
+
+  it('a change always supersedes a future-stamped singleton', async () => {
+    const repo = (store as unknown as { repo: Repo }).repo;
+    const FUTURE = Date.now() + 3_600_000; // a fast-clocked device synced this in
+    const snapNow = await repo.loadSnapshot();
+    await repo.replaceAll({
+      ...snapNow,
+      currentTask: { taskId: 'ghost', acceptedAt: 1 }, currentTaskUpdatedAt: FUTURE,
+      settingsUpdatedAt: FUTURE,
+    });
+    const clearStamp = await repo.setCurrentTask(null);
+    expect(clearStamp).toBeGreaterThan(FUTURE); // else the ghost resurrects on next sync
+    const settingsStamp = await repo.updateSettings({ hoursPerDay: 3 });
+    expect(settingsStamp).toBeGreaterThan(FUTURE);
+    const loaded = await persisted();
+    expect(loaded.currentTask).toBeNull();
+    expect(loaded.settings.hoursPerDay).toBe(3);
+  });
+});
+
 describe('moveRecurringToList', () => {
   it('re-homes the template and its open spawned copy together', async () => {
     const a = await store.addList('A');
@@ -759,6 +793,104 @@ describe('AppStore', () => {
     expect(await store.runSpawnSweep()).toBe(1);
     expect(store.state.templates[0]!.nextSpawnAt).toBeUndefined();
     expect((await persisted()).templates[0]!.nextSpawnAt).toBeUndefined();
+  });
+
+  it('importThings: scheduled templates arrive ARMED and spawn when due', async () => {
+    vi.setSystemTime(new Date('2026-07-15T12:00:00')); // Wednesday
+    await store.importThings({
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], tasks: [],
+      templates: [{
+        id: 'TR1', thingsUuid: 'TR1', listId: 'TP1', name: 'water weekly', notes: '', tagIds: [],
+        priority: 'medium' as const, mode: { kind: 'weekly' as const, weekdays: [1] },
+        paused: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      review: [], counts: { lists: 1, tags: 0, openTasks: 0, completedTasks: 0, templates: 1 },
+    });
+    const tpl = store.state.templates[0]!;
+    expect(tpl.nextSpawnAt).toBe(new Date('2026-07-20T04:00:00').getTime()); // next Monday
+    vi.setSystemTime(new Date('2026-07-20T05:00:00'));
+    expect(await store.runSpawnSweep()).toBe(1);
+    expect(store.state.tasks[0]!.name).toBe('water weekly');
+  });
+
+  it('importThings: an afterCompletion template with no open copy spawns its first one', async () => {
+    await store.importThings({
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], tasks: [],
+      templates: [{
+        id: 'TR1', thingsUuid: 'TR1', listId: 'TP1', name: 'sharpen tools', notes: '', tagIds: [],
+        priority: 'medium' as const, mode: { kind: 'afterCompletion' as const, interval: 30, unit: 'days' as const },
+        paused: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+      review: [], counts: { lists: 1, tags: 0, openTasks: 0, completedTasks: 0, templates: 1 },
+    });
+    // Without a living copy nothing could ever be completed to re-arm it —
+    // the import hands one over immediately.
+    const open = store.state.tasks.filter((t) => t.completedAt === undefined);
+    expect(open).toHaveLength(1);
+    expect(open[0]!.name).toBe('sharpen tools');
+    expect(store.state.templates[0]!.nextSpawnAt).toBeUndefined(); // back to resting
+  });
+
+  it('importThings: a newer Things edit updates shared fields but cannot wipe app-only state', async () => {
+    const base = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], templates: [], review: [],
+      counts: { lists: 1, tags: 0, openTasks: 1, completedTasks: 0, templates: 0 },
+    };
+    await store.importThings({
+      ...base,
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'feed cats', notes: '', priority: 'medium' as const,
+        tagIds: [], inProgress: false, createdAt: 100, updatedAt: 100, deleted: false,
+      }],
+    });
+    const task = store.state.tasks.find((t) => t.thingsUuid === 'TT1')!;
+    // App-side life accumulates: ritual config, an app tag, an estimate, custom order.
+    const appTag = await store.addTag('home', 3);
+    await store.patchTask(task.id, {
+      rituals: [{ days: [0, 1, 2, 3, 4, 5, 6], from: '08:00', to: '09:00' }],
+      estimateHours: 2, order: 5, tagIds: [appTag.id],
+    });
+    // Force the local stamp BELOW the incoming Things edit so the replace path runs.
+    await store.patchTask(task.id, {});
+    const local = store.state.tasks.find((t) => t.id === task.id)!;
+    const newer = local.updatedAt + 10_000;
+
+    await store.importThings({
+      ...base,
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'feed cats RENAMED', notes: 'from phone',
+        priority: 'high' as const, tagIds: [], inProgress: false,
+        createdAt: 100, updatedAt: newer, deleted: false,
+      }],
+    });
+    const after = store.state.tasks.find((t) => t.thingsUuid === 'TT1')!;
+    expect(after.name).toBe('feed cats RENAMED'); // shared field: newest wins
+    expect(after.priority).toBe('high');
+    expect(after.rituals).toHaveLength(1); // app-only state survives
+    expect(after.estimateHours).toBe(2);
+    expect(after.order).toBe(5);
+    expect(after.tagIds).toContain(appTag.id);
+  });
+
+  it('importThings: floor-stamped entities (areas/tags) never beat local edits on re-import', async () => {
+    const mapped = {
+      lists: [{ id: 'TA1', thingsUuid: 'TA1', title: 'Area', sortMode: 'priority' as const, createdAt: 1, updatedAt: 1, deleted: false }],
+      tags: [{ id: 'TG1', thingsUuid: 'TG1', name: 'green', colorIndex: 0, createdAt: 1, updatedAt: 1, deleted: false }],
+      tasks: [], templates: [], review: [],
+      counts: { lists: 1, tags: 1, openTasks: 0, completedTasks: 0, templates: 0 },
+    };
+    await store.importThings(mapped);
+    const tag = store.state.tags.find((t) => t.thingsUuid === 'TG1')!;
+    const list = store.state.lists.find((l) => l.thingsUuid === 'TA1')!;
+    await store.recolorTag(tag.id, 9);
+    await store.setListArchived(list.id, true);
+
+    await store.importThings(mapped); // the exact same file again
+    expect(store.state.tags.find((t) => t.id === tag.id)!.colorIndex).toBe(9);
+    expect(store.state.lists.find((l) => l.id === list.id)!.archived).toBe(true);
   });
 
   it('importThings: fresh import remaps ids, resolves refs, and re-import is idempotent', async () => {

@@ -251,6 +251,64 @@ describe('download caching', () => {
     expect(after.gets, 'our own writes are already known').toEqual([]);
   });
 
+  it('rewrites an orphaned logbook year empty instead of leaving it to haunt', async () => {
+    // A task completed in 2025 pushes a logbook-2025.json…
+    const t = task({ priority: 'high', completedAt: new Date('2025-06-01').getTime() });
+    local = snap({ tasks: [t] });
+    await makeEngine().syncNow();
+    expect(client.files.has('logbook-2025.json')).toBe(true);
+
+    // …then it is uncompleted: the year bucket empties, and the remote file
+    // must follow, or every future cycle re-unions the stale completed copy
+    // (phantom remoteChanged forever) and a fresh device would resurrect it.
+    local = snap({ tasks: [{ ...t, completedAt: undefined, updatedAt: t.updatedAt + 10 }] });
+    await makeEngine().syncNow();
+    const logbook = client.files.get('logbook-2025.json')!.json as { tasks: unknown[] };
+    expect(logbook.tasks).toEqual([]);
+
+    // And the system is at rest: one more cycle pushes nothing.
+    const before = client.putCount;
+    await makeEngine().syncNow();
+    expect(client.putCount).toBe(before);
+  });
+
+  it('a disposed engine stops mid-flight: no pushes, no status overwrites', async () => {
+    local = snap({ tasks: [task({ priority: 'high' })] });
+    // Sleep seam doubles as the dispose window: dispose during the backoff
+    // after a first conflicted attempt.
+    client.conflictNext = 1;
+    const engine = makeEngine();
+    const statuses: string[] = [];
+    engine.onStatus = (s) => statuses.push(s);
+    const disposeDuringSleep = engine.syncNow();
+    engine.dispose();
+    await disposeDuringSleep;
+    expect(client.activeTasks(), 'nothing pushed after the severance').toEqual([]);
+    expect(statuses.filter((s) => s === 'idle'), 'no late idle overwrite').toEqual([]);
+    // And it refuses to start again.
+    await engine.syncNow();
+    expect(client.putCount, 'only the pre-dispose conflicted attempt ever PUT').toBe(1);
+  });
+
+  it('a programming TypeError reports as an error, not as "offline"', async () => {
+    local = snap({ tasks: [task({ priority: 'high' })] });
+    const engine = new SyncEngine({
+      client,
+      loadLocal: async () => { throw new TypeError("undefined is not an object (reading 'sha')"); },
+      saveLocal: async () => {},
+      debounceMs: 0,
+      sleep: async () => {},
+    });
+    await engine.syncNow();
+    expect(engine.status).toBe('error');
+
+    // The real network failure still classifies as offline.
+    client.failNetwork = true;
+    const netEngine = makeEngine();
+    await netEngine.syncNow();
+    expect(netEngine.status).toBe('offline');
+  });
+
   it('drops cache entries for files that disappeared from the repo', async () => {
     local = snap({ tasks: [task({ priority: 'high', completedAt: 1_700_000_000_000 })] });
     await makeEngine().syncNow();
