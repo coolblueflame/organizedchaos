@@ -21,17 +21,26 @@
 
   const BUCKETS = { day: 30, week: 12, month: 12 } as const;
 
+  /*
+    THE stats-screen performance rule: every task in `app.state.tasks` is a
+    deep reactive proxy, and the burden series alone reads ~9 million fields
+    (365 samples × a 25k library). Through proxy traps that is SECONDS on a
+    phone; on plain objects it is tens of milliseconds. Snapshot once, compute
+    on raw data — the derived caches it until the tasks actually change.
+  */
+  const plainTasks = $derived($state.snapshot(app.state.tasks) as typeof app.state.tasks);
+
   const series = $derived(completionSeries(
-    app.state.tasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
+    plainTasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
 
-  const estimateHours = $derived(totalEstimateHours(app.state.tasks));
-  const avgActive = $derived(averageActiveMs(app.state.tasks));
+  const estimateHours = $derived(totalEstimateHours(plainTasks));
+  const avgActive = $derived(averageActiveMs(plainTasks));
 
-  const health = $derived(listHealth(app.state.lists, app.state.tasks, new Date()));
+  const health = $derived(listHealth(app.state.lists, plainTasks, new Date()));
   const totalUntriaged = $derived(health.reduce((n, r) => n + r.untriaged, 0));
 
   const burden = $derived.by(() => {
-    const tasks = app.state.tasks;
+    const tasks = plainTasks;
     const oldest = Math.min(Date.now(), ...tasks.map((t) => t.createdAt || Date.now()));
     const spanDays = Math.max(14, Math.min(365,
       -daysUntilDeadline(appDayKey(new Date(oldest), app.state.settings.rolloverHour), new Date(), app.state.settings.rolloverHour) + 1));
@@ -51,6 +60,10 @@
         onclick={() => (showAssumption = !showAssumption)}>ⓘ</button>
     </span>
     <span class="hero-num">{formatDuration(estimateHours)}</span>
+    <!-- The exact figure, to the minute: a 2,400-hour backlog measured in
+         weeks only moves when 40 hours shift — this line moves with every
+         estimate you finish or add (2026-07-29 ask). -->
+    <span class="hero-exact" data-testid="stats-estimate-exact">exactly {formatElapsed(estimateHours * 3_600_000)}</span>
     {#if showAssumption}
       <p class="assumption">Sum of your open tasks' estimates — any task without an estimate
         is assumed to take 1 hour.</p>
@@ -221,4 +234,5 @@
   table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 0.75rem; }
   th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); color: var(--text); }
   th { color: var(--dim); font-family: var(--font-mono); }
+  .hero-exact { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
 </style>
