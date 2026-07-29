@@ -177,13 +177,11 @@
     if (!triage) maybeOfferSelfCare();
   }
 
-  /** Accepting materializes it as a REAL task — that's the consent (spec §12). */
+  /** Accepting materializes it as a REAL task — that's the consent (spec §12).
+   *  It lands in the dice's own list, not whichever list was touched last. */
   async function acceptSelfCare() {
     if (!selfCare) return;
-    const listId = drawn?.listId ?? app.state.lists[0]?.id;
-    if (!listId) { selfCare = null; return; }
-    const task = await app.addTask(listId);
-    await app.patchTask(task.id, { name: selfCare, priority: 'high' });
+    const task = await app.materializeGeneratedTask(selfCare);
     await app.acceptTask(task.id);
     selfCare = null;
     navigate({ name: 'home' });

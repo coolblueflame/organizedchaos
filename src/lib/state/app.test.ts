@@ -953,3 +953,22 @@ describe('sweep re-filing', () => {
     expect(back.needsReview).toBe(true);
   });
 });
+
+describe('generated tasks', () => {
+  it('materialize into their own vessel, created once and reused', async () => {
+    await store.addList('My Stuff');
+    const first = await store.materializeGeneratedTask('drink some water');
+    const second = await store.materializeGeneratedTask('stretch for a minute');
+
+    const vessels = store.state.lists.filter((l) => l.generated === true);
+    expect(vessels, 'one vessel, not one per task').toHaveLength(1);
+    expect(vessels[0]!.title).toBe('self-care');
+    expect(first.listId).toBe(vessels[0]!.id);
+    expect(second.listId).toBe(vessels[0]!.id);
+
+    const t = store.state.tasks.find((x) => x.id === first.id)!;
+    expect(t.needsReview, 'the dice wrote it; nobody reviews it').toBe(false);
+    expect(t.priority).toBe('high');
+    expect((await persisted()).tasks.map((x) => x.id)).toContain(first.id);
+  });
+});

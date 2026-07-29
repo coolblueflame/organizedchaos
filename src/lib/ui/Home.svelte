@@ -79,6 +79,16 @@
   );
   const reviewCount = $derived(app.tasksNeedingReview().length);
   const archivedLists = $derived(app.state.lists.filter((l) => l.archived === true));
+  /*
+    The dice's own lists: a trailing group that EXISTS only while it holds open
+    work. Completing the last generated task makes the whole section vanish —
+    a vessel, not a commitment, and never something to feel behind on.
+  */
+  const generatedLists = $derived(
+    app.state.lists.filter((l) =>
+      l.generated === true && l.archived !== true &&
+      open.some((t) => t.listId === l.id)),
+  );
   const ritualsDue = $derived(
     app.state.tasks.filter((t) =>
       !t.deleted && isRitualDue(t, new Date(), app.state.settings.rolloverHour)).length,
@@ -87,7 +97,7 @@
   /** Lists bucketed by areaGroup: ungrouped first, then groups alphabetically. */
   const grouped = $derived.by(() => {
     const buckets = new Map<string, List[]>();
-    for (const l of app.state.lists.filter((x) => x.archived !== true)) {
+    for (const l of app.state.lists.filter((x) => x.archived !== true && x.generated !== true)) {
       const key = l.areaGroup?.trim() ?? '';
       const bucket = buckets.get(key) ?? [];
       bucket.push(l);
@@ -278,6 +288,22 @@
       {/each}
     {/each}
 
+    {#if generatedLists.length > 0}
+      <h2 class="group-header gen" data-testid="generated-header">summoned by the dice</h2>
+      {#each generatedLists as l (l.id)}
+        <div class="list-row gen" data-testid="list-row-{l.id}">
+          <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
+            <span class="prompt gen-prompt" aria-hidden="true">✦</span>
+            <span class="list-title">{l.title}</span>
+            <span class="load" aria-hidden="true">
+              <span class="load-fill" style="width: {loadShare(l.id)}%"></span>
+            </span>
+            <span class="count">{countFor(l.id)}</span>
+          </button>
+        </div>
+      {/each}
+    {/if}
+
     {#if newListOpen}
       <input class="inline-edit new-list-input" data-testid="new-list-input"
         bind:this={newListInput} bind:value={newListTitle} placeholder="list name"
@@ -387,6 +413,9 @@
   }
   .group-header.drop-target { color: var(--acc-green); }
   .group-anchor { height: 0; }
+  .group-header.gen { color: var(--acc-purple); font-style: italic; margin-top: 18px; }
+  .list-row.gen { border-style: dashed; border-color: color-mix(in srgb, var(--acc-purple) 45%, var(--line)); }
+  .gen-prompt { color: var(--acc-purple); }
   .list-row { position: relative; display: flex; align-items: stretch; }
   .list-main {
     flex: 1; display: flex; justify-content: space-between; align-items: center;

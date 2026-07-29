@@ -752,6 +752,23 @@ export class AppStore {
     this.requestSync();
   }
 
+  /**
+   * Materialize an accepted bonus draw as a real task — in ITS list, not
+   * whichever list happened to be touched last. The vessel is found or created
+   * per category, flagged `generated`, and needs no triage: nobody should be
+   * asked to review a task the dice wrote.
+   */
+  async materializeGeneratedTask(name: string, category = 'self-care'): Promise<Task> {
+    let list = this.state.lists.find((l) => l.generated === true && l.title === category);
+    if (!list) {
+      list = await this.repo.createList({ title: category, generated: true });
+      this.state.lists.push(list);
+    }
+    const task = this.addTaskEager(list.id);
+    await this.patchTask(task.id, { name, priority: 'high', needsReview: false });
+    return task;
+  }
+
   // ── the triage sweep ─────────────────────────────────────────────────────
 
   /**

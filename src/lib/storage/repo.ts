@@ -138,7 +138,7 @@ export class Repo {
     };
   }
 
-  async createList(fields: { title: string; areaGroup?: string }): Promise<List> {
+  async createList(fields: { title: string; areaGroup?: string; generated?: boolean }): Promise<List> {
     const row: List = { ...stamp(), sortMode: 'priority', ...fields };
     await this.db.lists.put(row);
     return row;

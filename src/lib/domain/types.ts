@@ -40,6 +40,12 @@ export interface List extends Base {
    */
   order?: number;
   /**
+   * Born from an accepted bonus draw rather than typed by a person. Generated
+   * lists live in their own trailing group on home, styled apart, and appear
+   * only while they hold open work — a vessel, not a commitment.
+   */
+  generated?: boolean;
+  /**
    * Archived: off the home screen, out of the randomizer, skipped by the
    * sweep and the sort views — but never deleted. Still searchable, still in
    * completed history, one tap to revive. The shape cruft should take when

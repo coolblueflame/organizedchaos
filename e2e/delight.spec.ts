@@ -90,6 +90,19 @@ test('the bonus draw persists nothing unless accepted', async ({ page }) => {
   await expect(page.getByTestId('draw-selfcare')).toBeVisible();
   await page.getByTestId('selfcare-accept').click();
   await expect(page.getByTestId('current-task-card')).toContainText('water');
+
+  // It lands in the dice's own vessel, not the user's list — a trailing
+  // "summoned" section that exists only while its work is open…
+  await expect(page.getByTestId('generated-header')).toBeVisible();
+  await expect(page.getByText('self-care', { exact: true })).toBeVisible();
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(/^task-row-/), 'the user list is untouched').toHaveCount(1);
+  await page.getByTestId('back').click();
+
+  // …and vanishes the moment the last generated task is done.
+  await page.getByTestId('current-complete').click();
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+  await expect(page.getByTestId('generated-header')).toHaveCount(0);
 });
 
 test('a note waits to be read instead of expiring on a timer', async ({ page }) => {
