@@ -13,6 +13,7 @@
     totalEstimateHours,
   } from '../domain/stats';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
+  import { estimateQueue } from '../domain/sweep';
   import BarChart from './charts/BarChart.svelte';
   import LineChart from './charts/LineChart.svelte';
 
@@ -35,6 +36,8 @@
 
   const estimateHours = $derived(totalEstimateHours(plainTasks));
   const avgActive = $derived(averageActiveMs(plainTasks));
+
+  const unconfirmedEstimates = $derived(estimateQueue(plainTasks, app.state.lists).length);
 
   const health = $derived(listHealth(app.state.lists, plainTasks, new Date()));
   const totalUntriaged = $derived(health.reduce((n, r) => n + r.untriaged, 0));
@@ -64,6 +67,12 @@
          weeks only moves when 40 hours shift — this line moves with every
          estimate you finish or add (2026-07-29 ask). -->
     <span class="hero-exact" data-testid="stats-estimate-exact">exactly {formatElapsed(estimateHours * 3_600_000)}</span>
+    {#if unconfirmedEstimates > 0}
+      <button class="est-check" data-testid="stats-est-check"
+        onclick={() => navigate({ name: 'sweep', mode: 'estimates' })}>
+        {unconfirmedEstimates} of these are the silent 1h assumption → confirm them
+      </button>
+    {/if}
     {#if showAssumption}
       <p class="assumption">Sum of your open tasks' estimates — any task without an estimate
         is assumed to take 1 hour.</p>
@@ -235,4 +244,10 @@
   th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); color: var(--text); }
   th { color: var(--dim); font-family: var(--font-mono); }
   .hero-exact { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
+  .est-check {
+    background: none; border: none; color: var(--acc-yellow); cursor: pointer;
+    font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 0; text-align: left;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  @media (hover: hover) { .est-check:hover { color: var(--text); } }
 </style>

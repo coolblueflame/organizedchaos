@@ -45,6 +45,74 @@ async function seedBacklog(page: Page, names: string[]) {
   await page.reload();
 }
 
+/** Triaged tasks with NO estimate — the estimate check's audience. */
+async function seedUnestimated(page: Page, names: string[]) {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Ready');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+  await page.evaluate(async (taskNames) => {
+    const listId = (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow!;
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        taskNames.forEach((name, i) => {
+          store.put({
+            id: `est${i}`, listId, name, notes: '',
+            tagIds: [], priority: 'medium', inProgress: false, needsReview: false,
+            createdAt: 1_500_000_000_000 + i * 86_400_000, updatedAt: Date.now() - 1000 + i,
+            deleted: false,
+          });
+        });
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  }, names);
+  await page.reload();
+}
+
+test('the estimate check: confirm the hour, type the truth, or skip', async ({ page }) => {
+  await reset(page);
+  await seedUnestimated(page, ['paint the fence', 'clean gutters', 'mystery chore']);
+
+  await page.goto('#/sweep/estimates');
+  await page.reload(); // hash-only goto doesn't remount with fixtures
+  await expect(page.getByTestId('sweep-mode-estimates')).toContainText('estimates · 3');
+
+  // Oldest first: confirming 1h writes an EXPLICIT hour and advances.
+  await expect(page.getByTestId('sweep-est-card')).toContainText('paint the fence');
+  await page.getByTestId('est-confirm-hour').click();
+  await expect(page.getByTestId('sweep-est-card')).toContainText('clean gutters');
+
+  // A typed value saves and advances.
+  await page.getByTestId('est-input').fill('2.5');
+  await page.getByTestId('est-save').click();
+  await expect(page.getByTestId('sweep-est-card')).toContainText('mystery chore');
+
+  // Skip is session-only: the card moves on, the queue count does not shrink
+  // into the "confirmed" tally.
+  await page.getByTestId('est-skip').click();
+  await expect(page.getByTestId('sweep-clear')).toBeVisible();
+  await expect(page.getByTestId('sweep-tally')).toContainText('2 decided');
+
+  // The confirmed values are real task data.
+  await page.goto('#/');
+  await page.getByTestId(/^list-row-/).first().click();
+  await page.getByTestId(/^task-row-/).filter({ hasText: 'clean gutters' }).first().click();
+  await expect(page.getByTestId('task-estimate-input').last()).toHaveValue('2.5');
+
+  // The triage tab still shows its own queue (none here) and switching works.
+  await page.goto('#/sweep');
+  await page.reload(); // hash-only goto doesn't remount
+  await expect(page.getByTestId('sweep-mode-triage')).toContainText('triage · 0');
+  // The skipped task returns on a fresh visit — skips don't persist.
+  await expect(page.getByTestId('sweep-mode-estimates')).toContainText('estimates · 1');
+});
+
 test('a full sweep session: every verdict does what it says', async ({ page }) => {
   await reset(page);
   await seedBacklog(page, ['ancient one', 'still relevant', 'do eventually', 'autumn thing', 'was done ages ago']);

@@ -9,15 +9,47 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { navigate } from './router.svelte';
-  import { SNOOZE_PRESETS, sweepQueue } from '../domain/sweep';
+  import { navigate, router } from './router.svelte';
+  import { estimateQueue, SNOOZE_PRESETS, sweepQueue } from '../domain/sweep';
   import type { Task } from '../domain/types';
   import { PRIORITIES, type Priority } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import TagPicker from './TagPicker.svelte';
 
-  const queue = $derived(sweepQueue(app.state.tasks, app.state.lists));
+  /** Which sweep: 'triage' (the yellow dots) or 'estimates' (2026-07-29 ask). */
+  const mode = $derived(
+    router.current.name === 'sweep' && router.current.mode === 'estimates' ? 'estimates' : 'triage',
+  );
+
+  const triageQueue = $derived(sweepQueue(app.state.tasks, app.state.lists));
+  /** Skips are session-only: "can't answer right now" ≠ a decision worth saving. */
+  let estSkipped = $state<string[]>([]);
+  const estQueue = $derived(
+    estimateQueue(app.state.tasks, app.state.lists).filter((t) => !estSkipped.includes(t.id)),
+  );
+  const queue = $derived(mode === 'estimates' ? estQueue : triageQueue);
   const current = $derived(queue[0]);
+
+  /** The estimate card's number field, reset per card. */
+  let estInput = $state('');
+
+  async function confirmEstimate(hours: number) {
+    if (!current || !(hours > 0)) return;
+    // Clear BEFORE the await: the next card is fillable the instant the mirror
+    // advances, and a reset landing after the await would wipe what the user
+    // (or a fast test) already typed into it. Same lesson as QuickAdd's draft.
+    estInput = '';
+    // An explicit value is what graduates it out of this queue — even when the
+    // value IS the 1h the app was already assuming.
+    await app.patchTask(current.id, { estimateHours: hours });
+    decided += 1;
+  }
+
+  function skipEstimate() {
+    if (!current) return;
+    estSkipped = [...estSkipped, current.id];
+    estInput = '';
+  }
 
   /** Session tally — the number that makes a sweep feel like winning. */
   let decided = $state(0);
@@ -130,7 +162,54 @@
     </span>
   </header>
 
-  {#if current}
+  <nav class="modes">
+    <button class:on={mode === 'triage'} data-testid="sweep-mode-triage"
+      onclick={() => navigate({ name: 'sweep' })}>triage · {triageQueue.length}</button>
+    <button class:on={mode === 'estimates'} data-testid="sweep-mode-estimates"
+      onclick={() => navigate({ name: 'sweep', mode: 'estimates' })}>estimates · {estQueue.length}</button>
+  </nav>
+
+  {#if mode === 'estimates'}
+    {#if current}
+      {#key current.id}
+        <section class="card" data-testid="sweep-est-card">
+          <p class="meta">
+            <span class="list">{listTitle(current.listId)}</span>
+            <span class="age">· {age(current)}</span>
+          </p>
+          <h2 class="name">{current.name || 'untitled'}</h2>
+          {#if current.notes}<p class="est-notes">{current.notes.slice(0, 240)}</p>{/if}
+          <p class="assumed">no estimate — the app has been assuming <strong>1 hour</strong></p>
+        </section>
+
+        <div class="verdicts">
+          <button class="keep" data-testid="est-confirm-hour" onclick={() => void confirmEstimate(1)}>
+            ✓ 1 hour is right
+          </button>
+          <div class="row est-row">
+            <input type="number" min="0.5" step="0.5" placeholder="really it's… (h)"
+              data-testid="est-input" bind:value={estInput}
+              onkeydown={(e) => { if (e.key === 'Enter') void confirmEstimate(parseFloat(estInput)); }} />
+            <button data-testid="est-save" disabled={!(parseFloat(estInput) > 0)}
+              onclick={() => void confirmEstimate(parseFloat(estInput))}>save</button>
+            <button class="skip" data-testid="est-skip" onclick={skipEstimate}>skip</button>
+          </div>
+        </div>
+      {/key}
+    {:else}
+      <section class="clear" data-testid="sweep-clear">
+        <p class="big">// every task has a real estimate</p>
+        <p class="small">
+          {#if decided > 0}
+            {decided} confirmed this session. The deadline math thanks you.
+          {:else}
+            Nothing here is running on the silent 1-hour assumption.
+          {/if}
+        </p>
+        <button class="reset" onclick={() => navigate({ name: 'home' })}>go home</button>
+      </section>
+    {/if}
+  {:else if current}
     {#key current.id}
       <section class="card" data-testid="sweep-card">
         <p class="meta">
@@ -255,6 +334,24 @@
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
   .tally { margin-left: auto; color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; }
+
+  .modes { display: flex; gap: 6px; margin-bottom: 14px; }
+  .modes button {
+    background: none; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    padding: 5px 12px; cursor: pointer;
+  }
+  .modes button.on { color: var(--acc-cyan); border-color: var(--acc-cyan); }
+  @media (hover: hover) { .modes button:hover { color: var(--text); } }
+
+  .est-notes { color: var(--dim); font-size: 0.82rem; white-space: pre-wrap; margin: 6px 0 0; }
+  .assumed { color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.75rem; margin: 10px 0 0; }
+  .est-row input {
+    flex: 1; min-width: 0; max-width: 180px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); font-family: var(--font-mono); padding: 8px 10px;
+  }
+  .est-row .skip { color: var(--dim); }
 
   .card {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 12px;

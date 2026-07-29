@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLongSnooze, snoozeUntilTs, sweepQueue } from './sweep';
+import { estimateQueue, isLongSnooze, snoozeUntilTs, sweepQueue } from './sweep';
 import type { List, Task } from './types';
 
 let n = 0;
@@ -44,6 +44,38 @@ describe('sweepQueue', () => {
     const queue = sweepQueue([task(l.id, 5), orphan], [l]);
     expect(queue.map((t) => t.id)).toContain(orphan.id);
     expect(queue[queue.length - 1]!.id).toBe(orphan.id);
+  });
+});
+
+describe('estimateQueue', () => {
+  it('holds only triaged, open tasks with no explicit estimate', () => {
+    const l = list('A');
+    const wanted = task(l.id, 1, { needsReview: false });
+    const queue = estimateQueue([
+      wanted,
+      task(l.id, 2), // still untriaged — belongs to the OTHER sweep
+      task(l.id, 3, { needsReview: false, estimateHours: 2 }),
+      task(l.id, 4, { needsReview: false, estimateHours: 1 }), // explicit 1h graduates too
+      task(l.id, 5, { needsReview: false, completedAt: 99 }),
+      task(l.id, 6, { needsReview: false, deleted: true }),
+    ], [l]);
+    expect(queue.map((t) => t.id)).toEqual([wanted.id]);
+  });
+
+  it('skips archived lists, like every sweep', () => {
+    const gone = list('Old', { archived: true });
+    const queue = estimateQueue([task(gone.id, 1, { needsReview: false })], [gone]);
+    expect(queue).toHaveLength(0);
+  });
+
+  it('shares the list-by-list, oldest-first order', () => {
+    const a = list('A');
+    const b = list('B', { areaGroup: 'Work' });
+    const late = task(a.id, 100, { needsReview: false });
+    const early = task(a.id, 5, { needsReview: false });
+    const other = task(b.id, 1, { needsReview: false });
+    const queue = estimateQueue([late, early, other], [a, b]);
+    expect(queue.map((t) => t.id)).toEqual([early.id, late.id, other.id]);
   });
 });
 

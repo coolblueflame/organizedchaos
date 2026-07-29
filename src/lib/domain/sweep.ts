@@ -22,6 +22,29 @@ export function sweepQueue(tasks: Task[], lists: List[]): Task[] {
   const pending = tasks.filter(
     (t) => !t.deleted && t.completedAt === undefined && t.needsReview === true,
   );
+  return orderByHomeLists(pending, lists);
+}
+
+/**
+ * The estimate check (2026-07-29 request): already-triaged tasks whose
+ * estimate is still the silent 1-hour assumption. One tap confirms the hour
+ * (writing an EXPLICIT 1, which is what removes it from this queue), or type
+ * what it will really take. Deadline escalation and the burden stats both run
+ * on estimates, so confirmed numbers make the whole app more honest.
+ */
+export function estimateQueue(tasks: Task[], lists: List[]): Task[] {
+  const pending = tasks.filter(
+    (t) =>
+      !t.deleted &&
+      t.completedAt === undefined &&
+      t.needsReview !== true &&
+      t.estimateHours === undefined,
+  );
+  return orderByHomeLists(pending, lists);
+}
+
+/** Shared ordering for every sweep flavour — see sweepQueue's doc comment. */
+function orderByHomeLists(pending: Task[], lists: List[]): Task[] {
   const byList = new Map<string, Task[]>();
   for (const t of pending) {
     const bucket = byList.get(t.listId) ?? [];
