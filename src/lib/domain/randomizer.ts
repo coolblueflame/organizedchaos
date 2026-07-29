@@ -39,6 +39,14 @@ export interface DrawScope {
    * to the normal draw).
    */
   queueFirst?: string[];
+  /**
+   * Owed RIGHT NOW (2026-07-29: due rituals): while any of these ids survive
+   * in the pool, the draw serves only from them — above every tier and above
+   * the day queue, because a window closes and a queue doesn't. Several owed
+   * tasks still draw fairly among themselves (tiering and the in-progress
+   * weighting run within the subset).
+   */
+  dueFirst?: string[];
 }
 
 /**
@@ -93,6 +101,13 @@ export function drawTask(
     );
   }
   if (pool.length === 0) return null;
+
+  // What's owed right now narrows the whole draw to itself (see DrawScope.dueFirst).
+  if (scope?.dueFirst?.length) {
+    const due = new Set(scope.dueFirst);
+    const owed = pool.filter((t) => due.has(t.id));
+    if (owed.length > 0) pool = owed;
+  }
 
   // The day queue pre-empts the tiered draw entirely (see DrawScope.queueFirst).
   if (scope?.queueFirst?.length) {

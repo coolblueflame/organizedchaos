@@ -416,6 +416,12 @@ test('a daily ritual is the top pick inside its window and leaves no backlog', a
   await addTask(page, 'file the accounts'); // ordinary work to compete with
   await addTask(page, 'eat lunch');
 
+  // The competitor gets MAX priority — a due ritual must beat even that
+  // (2026-07-29: rituals outrank everything while their window is open).
+  await page.getByTestId(/^task-row-/).filter({ hasText: 'file the accounts' }).first().click();
+  await page.getByTestId('priority-max').last().click();
+  await page.getByTestId('task-collapse').last().click();
+
   // Make lunch a ritual for a window that is open right now.
   const row = page.getByTestId(/^task-row-/).filter({ hasText: 'eat lunch' }).first();
   const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');

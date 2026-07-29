@@ -114,11 +114,20 @@ export function ritualExclusions(tasks: Task[], settings: Settings, now: Date): 
     .map((t) => t.id);
 }
 
+/** Ids of every ritual owed right now — feeds DrawScope.dueFirst (2026-07-29). */
+export function dueRitualIds(tasks: Task[], settings: Settings, now: Date): string[] {
+  return tasks
+    .filter((t) => isRitualDue(t, now, settings.rolloverHour))
+    .map((t) => t.id);
+}
+
 /**
  * A due ritual outranks everything. Not a nudge: the window is the point, and a
  * reminder that loses to a big pile of ordinary work never arrives at all.
  * Expressed as a priority lift so it travels the same path as the pressure a
- * blocked task already applies to its blockers.
+ * blocked task already applies to its blockers. (Since 2026-07-29 the draw
+ * also narrows itself to due rituals outright via dueFirst — the lift remains
+ * for every other reader of effective urgency, e.g. the hours exemption.)
  */
 export function ritualLifts(tasks: Task[], settings: Settings, now: Date): Map<string, Priority> {
   const lifts = new Map<string, Priority>();

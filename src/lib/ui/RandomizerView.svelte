@@ -20,7 +20,7 @@
   import { describeWindow, isListActiveAt, tasksBlockedByHours } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
   import { blockLifts } from '../domain/blocking';
-  import { ritualExclusions, withRitualLifts } from '../domain/ritual';
+  import { dueRitualIds, isRitualDue, ritualExclusions, withRitualLifts } from '../domain/ritual';
   import { archivedTaskIds } from '../domain/archive';
   import { liveQueueIds } from '../domain/dayQueue';
   import { SELF_CARE } from '../eggs/content/extras';
@@ -98,6 +98,8 @@
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
     // The hand-planned order outranks the tiers (2026-07-29 request).
     queueFirst: liveQueueIds(app.state.queueIds, app.state.tasks),
+    // And a ritual whose window is open outranks even that: windows close.
+    dueFirst: dueRitualIds(app.state.tasks, app.state.settings, new Date()),
   });
 
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
@@ -348,7 +350,9 @@
   {:else if drawn}
     {#key drawSeq}
     <section class="card sheen-once" data-testid="draw-card">
-      {#if drawn && app.state.queueIds.includes(drawn.id)}
+      {#if drawn && isRitualDue(drawn, new Date(), app.state.settings.rolloverHour)}
+        <p class="tier ritual" data-testid="draw-ritual">⧗ daily ritual — its window is open</p>
+      {:else if drawn && app.state.queueIds.includes(drawn.id)}
         <p class="tier queue" data-testid="draw-from-queue">≡ next in your queue</p>
       {:else if drawnTier}
         <p class="tier {drawnTier}">
@@ -537,6 +541,7 @@
   .tier.high { color: var(--acc-orange); }
   .tier.max { color: var(--acc-magenta); }
   .tier.queue { color: var(--acc-cyan); }
+  .tier.ritual { color: var(--acc-magenta); }
   .tier.bonus { color: var(--acc-yellow); }
   .selfcare { border-color: var(--acc-yellow); }
   .tier.fillin { color: var(--acc-yellow); font-size: 0.95rem; }

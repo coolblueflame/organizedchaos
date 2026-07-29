@@ -76,6 +76,44 @@ describe('work-period fit', () => {
   });
 });
 
+describe('drawTask — what is owed right now (due rituals)', () => {
+  it('a due ritual beats even a max-priority task', () => {
+    const urgent = task({ priority: 'max' });
+    const lunch = task({ priority: 'medium' });
+    const got = drawTask([urgent, lunch], DEFAULT_SETTINGS, now, firstRng, {
+      dueFirst: [lunch.id],
+    });
+    expect(got?.id).toBe(lunch.id);
+  });
+
+  it('and beats the day queue — a window closes, a queue does not', () => {
+    const planned = task({ priority: 'low' });
+    const lunch = task({ priority: 'medium' });
+    const got = drawTask([planned, lunch], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [planned.id], dueFirst: [lunch.id],
+    });
+    expect(got?.id).toBe(lunch.id);
+  });
+
+  it('several owed tasks still draw among themselves', () => {
+    const a = task({ priority: 'medium' });
+    const b = task({ priority: 'medium' });
+    const other = task({ priority: 'max' });
+    const got = drawTask([other, a, b], DEFAULT_SETTINGS, now, firstRng, {
+      dueFirst: [a.id, b.id],
+    });
+    expect([a.id, b.id]).toContain(got?.id);
+  });
+
+  it('an owed id absent from the pool changes nothing', () => {
+    const normal = task({ priority: 'max' });
+    const got = drawTask([normal], DEFAULT_SETTINGS, now, firstRng, {
+      dueFirst: ['not-here'],
+    });
+    expect(got?.id).toBe(normal.id);
+  });
+});
+
 describe('drawTask — the day queue', () => {
   it('serves the first queued task in the pool, outranking every tier', () => {
     const big = task({ priority: 'max' });

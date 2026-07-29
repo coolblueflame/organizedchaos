@@ -12,8 +12,8 @@ import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../dom
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import {
-  creditWindowIndex, isPerWindow, isRitualTask, ritualExclusions, ritualSlot, ritualWindows,
-  withRitualLifts,
+  creditWindowIndex, dueRitualIds, isPerWindow, isRitualTask, ritualExclusions, ritualSlot,
+  ritualWindows, withRitualLifts,
 } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
@@ -825,6 +825,7 @@ export class AppStore {
           ...archivedTaskIds(this.state.tasks, this.state.lists),
         ],
         queueFirst: liveQueueIds(this.state.queueIds, this.state.tasks),
+        dueFirst: dueRitualIds(this.state.tasks, this.state.settings, now),
       },
       undefined,
       withRitualLifts(
