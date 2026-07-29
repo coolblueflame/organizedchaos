@@ -15,6 +15,14 @@
   import Glyph from './Glyph.svelte';
   import { describeRitual, ritualState } from '../domain/ritual';
   import { isLongSnooze } from '../domain/sweep';
+
+  /** Svelte action: scroll the freshly opened editor into view. */
+  function revealEditor(node: HTMLElement) {
+    // Next frame: the editor needs a layout pass before its height is real.
+    requestAnimationFrame(() => {
+      node.scrollIntoView({ block: 'nearest', behavior: motionOk() ? 'smooth' : 'auto' });
+    });
+  }
   import { motionOk } from './fx/particles';
   import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
@@ -283,7 +291,12 @@
   </div>
 
   {#if expanded && !completedMode}
-    <TaskEditor {task} oncollapse={() => void collapse()} />
+    <!-- Bring the editor fully on screen when it opens near the bottom:
+         block 'nearest' scrolls only as far as needed, so a mid-screen
+         expansion doesn't jump at all. -->
+    <div use:revealEditor>
+      <TaskEditor {task} oncollapse={() => void collapse()} />
+    </div>
   {/if}
 
   <!-- A finished task opens too (2026-07-29 request): read what it was, and

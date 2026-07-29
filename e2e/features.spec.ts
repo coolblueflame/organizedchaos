@@ -694,3 +694,70 @@ test('finished work can be read, re-filed into a goals list, and counted there',
   await shelf.locator('summary').click();
   await expect(page.getByText('learn the accordion', { exact: true })).toBeVisible();
 });
+
+test('a scroll that starts on another task does not collapse the open editor', async ({ page }) => {
+  // Reported: expand the bottom task, instinctively drag up on a row above to
+  // see the rest of the editor — and the touch was read as a tap, collapsing
+  // it. A drag must scroll; only a true tap switches.
+  await reset(page);
+  await makeList(page, 'Slop');
+  await addTask(page, 'first');
+  await addTask(page, 'second');
+
+  await page.getByText('second', { exact: true }).click();
+  await expect(page.getByTestId('task-name-input')).toBeFocused();
+
+  // Press on the OTHER row and drag 60px — a scroll gesture, not a tap.
+  const other = page.getByTestId(/^task-row-/).filter({ hasText: 'first' }).first();
+  const box = (await other.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 60, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId('task-name-input'), 'the editor survives a scroll').toHaveCount(1);
+
+  // A clean tap on the other row still switches to it. (Assert by VALUE — an
+  // expanded row holds its name in an input, which getByText cannot see.)
+  await page.getByText('first', { exact: true }).click();
+  await expect(page.getByTestId('task-name-input')).toHaveValue('first');
+});
+
+test('expanding a task near the bottom scrolls its editor into view', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Tall');
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).first().waitFor();
+  await page.evaluate(async () => {
+    const listId = (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow!;
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('organizedchaos');
+      open.onsuccess = () => {
+        const store = open.result.transaction('tasks', 'readwrite').objectStore('tasks');
+        for (let i = 0; i < 25; i += 1) {
+          store.put({
+            id: `t${i}`, listId, name: `filler ${i}`, notes: '', tagIds: [], priority: 'medium',
+            inProgress: false, createdAt: i, updatedAt: 1, deleted: false,
+          });
+        }
+        store.transaction.oncomplete = () => resolve();
+        store.transaction.onerror = () => reject(store.transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.goto(`./#/list/${await page.evaluate(() =>
+    (document.querySelector('[data-list-row]') as HTMLElement).dataset.listRow)}`);
+  await page.reload();
+
+  // Open the LAST visible row near the bottom of the viewport.
+  const last = page.getByTestId(/^task-row-/).last();
+  await last.scrollIntoViewIfNeeded();
+  await page.getByText('filler 24', { exact: true }).click();
+
+  // The whole editor ends up on screen (smooth scroll: poll until it settles).
+  await expect.poll(async () => {
+    const box = await page.getByTestId('task-collapse').boundingBox();
+    const h = await page.evaluate(() => window.innerHeight);
+    return box !== null && box.y + box.height <= h;
+  }, { timeout: 4000 }).toBe(true);
+});
