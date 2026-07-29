@@ -10,7 +10,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
-  import { describeRitual, ritualState } from '../domain/ritual';
+  import { describeRitualTask, isRitualTask, ritualProgress, ritualState } from '../domain/ritual';
   import type { Task } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import TaskEditor from './TaskEditor.svelte';
@@ -36,10 +36,16 @@
   });
 
   const rituals = $derived(
-    app.state.tasks.filter((t) => !t.deleted && t.ritual !== undefined),
+    app.state.tasks.filter((t) => !t.deleted && isRitualTask(t)),
   );
 
   const stateOf = (t: Task) => ritualState(t, new Date(), app.state.settings.rolloverHour);
+  const progressOf = (t: Task) => ritualProgress(t, new Date(), app.state.settings.rolloverHour);
+  /** Per-window rituals stay tickable until every window is marked. */
+  const dayDone = (t: Task) => {
+    const p = progressOf(t);
+    return p ? p.done >= p.total : stateOf(t) === 'done';
+  };
 
   const due = $derived(rituals.filter((t) => stateOf(t) === 'due'));
   const waiting = $derived(rituals.filter((t) => stateOf(t) === 'waiting'));
@@ -63,14 +69,14 @@
             <button
               class="tick {tone}"
               data-testid="ritual-complete-{task.id}"
-              disabled={stateOf(task) === 'done'}
-              aria-label={stateOf(task) === 'done' ? 'done today' : 'mark done for today'}
+              disabled={dayDone(task)}
+              aria-label={dayDone(task) ? 'done today' : 'mark done for today'}
               onclick={() => void app.completeTask(task.id)}>
-              <Glyph name={stateOf(task) === 'done' ? 'box-checked' : 'box'} size={16} />
+              <Glyph name={dayDone(task) ? 'box-checked' : 'box'} size={16} />
             </button>
             <button class="info" data-testid="ritual-edit-{task.id}" onclick={() => (editingId = task.id)}>
               <span class="name">{task.name || 'untitled'}</span>
-              <span class="meta">{#if task.ritual}{describeRitual(task.ritual)}{/if}</span>
+              <span class="meta">{describeRitualTask(task)}{#if progressOf(task)}&nbsp;· {progressOf(task)!.done}/{progressOf(task)!.total} today{/if}</span>
             </button>
             {#if listName(task.listId)}
               <button class="go-list" data-testid="ritual-list-{task.id}"

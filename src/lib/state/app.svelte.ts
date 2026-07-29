@@ -11,7 +11,10 @@ import { appDayKey, nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
-import { ritualExclusions, withRitualLifts } from '../domain/ritual';
+import {
+  creditWindowIndex, isPerWindow, isRitualTask, ritualExclusions, ritualSlot, ritualWindows,
+  withRitualLifts,
+} from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
 import { liveQueueIds } from '../domain/dayQueue';
@@ -604,8 +607,13 @@ export class AppStore {
    * ritual itself.
    */
   private async completeRitual(task: Task, opts: { bulk?: boolean } = {}): Promise<void> {
-    const day = appDayKey(new Date(), this.state.settings.rolloverHour);
-    if (task.ritualDoneDay === day) return; // already done today; nothing owed
+    const now = new Date();
+    const day = appDayKey(now, this.state.settings.rolloverHour);
+    const perWindow = isPerWindow(task);
+    // Which mark this completion writes. Per-window rituals credit the active
+    // (or next) unmarked window; -1 / already-done means nothing is owed.
+    const credit = perWindow ? creditWindowIndex(task, now, this.state.settings.rolloverHour) : -1;
+    if (perWindow ? credit === -1 : task.ritualDoneDay === day) return;
 
     // Time counts the same way it does anywhere else: only a stretch that was
     // actually being tracked when it finished. It belongs to the record, not to
@@ -632,8 +640,19 @@ export class AppStore {
     // Accepting a ritual makes it current and in-progress like anything else,
     // and finishing it has to put that down — otherwise it sits there flagged
     // as started, with a clock running, until tomorrow.
+    const priorSlots = task.ritualDoneSlots ? [...task.ritualDoneSlots] : undefined;
+    // Per-window: append today's credited slot (dropping stale days — only
+    // today's marks ever matter again); the day is "done" once every window is.
+    const newSlots = perWindow
+      ? [...(priorSlots ?? []).filter((s) => s.startsWith(`${day}#`)), ritualSlot(day, credit)]
+      : undefined;
+    const dayComplete = !perWindow || newSlots!.length >= ritualWindows(task).length;
     await this.patchTask(task.id, {
-      ritualDoneDay: day,
+      ...(perWindow ? { ritualDoneSlots: newSlots } : {}),
+      // Once-a-day rituals live on ritualDoneDay as always; a per-window ritual
+      // sets it only when its LAST window lands (which also keeps a not-yet-
+      // updated device reading the day as done).
+      ...(dayComplete ? { ritualDoneDay: day } : {}),
       inProgress: false,
       startedAt: undefined,
       activeAccumulatedMs: undefined,
@@ -641,10 +660,12 @@ export class AppStore {
 
     const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
     const ritualTiming = ritualOutcome ? ` · ${ritualOutcome.actual} — ${ritualOutcome.verdict}` : '';
+    const priorDoneDay = task.ritualDoneDay;
     this.pushUndo(`Completed "${task.name || 'task'}"${ritualTiming}`, async () => {
       await this.removeTask(record.id, { silent: true });
       await this.patchTask(task.id, {
-        ritualDoneDay: task.ritualDoneDay,
+        ritualDoneDay: priorDoneDay,
+        ritualDoneSlots: priorSlots,
         inProgress: wasInProgress,
         startedAt: priorStartedAt,
         activeAccumulatedMs: priorAccumulated,
@@ -659,7 +680,10 @@ export class AppStore {
     // double presentation impossible.
     this.fireEgg('ritualCompleted');
     this.fireEgg('taskCompleted');
-    const kept = this.state.tasks.filter((t) => !t.deleted && t.ritual && t.ritualDoneDay === day);
+    const kept = this.state.tasks.filter(
+      (t) => !t.deleted && isRitualTask(t) &&
+        (t.ritualDoneDay === day || (t.ritualDoneSlots ?? []).some((s) => s.startsWith(`${day}#`))),
+    );
     if (kept.length >= 3) this.grantUnlockAndShow('clockwork');
     if (!opts.bulk && this.state.settings.autoSelectNext) await this.drawNext();
   }
@@ -673,7 +697,7 @@ export class AppStore {
    */
   async completeTask(id: string, opts: { bulk?: boolean } = {}): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === id);
-    if (task?.ritual) return this.completeRitual(task, opts);
+    if (task && isRitualTask(task)) return this.completeRitual(task, opts);
     const wasCurrent = this.state.currentTask?.taskId === id;
     // Snapshot enough to put things back exactly as they were.
     const before = task

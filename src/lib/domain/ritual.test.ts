@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_DAYS, WEEKDAYS, type HoursRule } from './schedule';
-import { describeRitual, isRitualDue, ritualExclusions, ritualLifts, ritualState, withRitualLifts } from './ritual';
+import {
+  creditWindowIndex, describeRitual, describeRitualTask, isRitualDue, ritualExclusions,
+  ritualLifts, ritualProgress, ritualSlot, ritualState, withRitualLifts,
+} from './ritual';
 import { DEFAULT_SETTINGS, type Task } from './types';
 
 const settings = { ...DEFAULT_SETTINGS, rolloverHour: 4 };
@@ -96,5 +99,89 @@ describe('describeRitual', () => {
     expect(describeRitual({ days: WEEKDAYS, from: '09:00', to: '10:00' })).toBe('weekdays 09:00–10:00');
     expect(describeRitual({ days: [0, 6], from: '10:00', to: '12:00' })).toBe('weekends 10:00–12:00');
     expect(describeRitual({ days: [1, 3], from: '18:00', to: '19:00' })).toBe('Mon Wed 18:00–19:00');
+  });
+});
+
+// ── multi-window rituals (2026-07-29) ─────────────────────────────────────────
+
+const MORNING: HoursRule = { days: ALL_DAYS, from: '09:00', to: '09:30' };
+const AFTERNOON: HoursRule = { days: ALL_DAYS, from: '14:00', to: '14:30' };
+const EVENING: HoursRule = { days: ALL_DAYS, from: '20:00', to: '20:30' };
+const WATER = { rituals: [MORNING, AFTERNOON, EVENING], ritualPerWindow: true };
+const DOGS = { rituals: [MORNING, EVENING] }; // any one window does the day
+
+describe('multi-window ritualState', () => {
+  it('any-one-window mode: due in every window until done once, then done all day', () => {
+    expect(ritualState(task(DOGS), at('09:10'), 4)).toBe('due');
+    expect(ritualState(task(DOGS), at('20:10'), 4)).toBe('due');
+    expect(ritualState(task(DOGS), at('12:00'), 4)).toBe('waiting');
+    const walked = task({ ...DOGS, ritualDoneDay: '2026-07-28' });
+    expect(ritualState(walked, at('20:10'), 4)).toBe('done');
+  });
+
+  it('per-window mode: each window demands its own completion', () => {
+    const morningDone = task({ ...WATER, ritualDoneSlots: [ritualSlot('2026-07-28', 0)] });
+    expect(ritualState(morningDone, at('09:10'), 4)).toBe('done'); // satisfied for NOW
+    expect(ritualState(morningDone, at('12:00'), 4)).toBe('waiting');
+    expect(ritualState(morningDone, at('14:10'), 4)).toBe('due'); // next window reopens it
+  });
+
+  it('per-window mode: the day is done when every window is marked', () => {
+    const all = task({
+      ...WATER,
+      ritualDoneSlots: [0, 1, 2].map((i) => ritualSlot('2026-07-28', i)),
+    });
+    expect(ritualState(all, at('14:10'), 4)).toBe('done');
+    expect(ritualState(all, at('12:00'), 4)).toBe('done');
+  });
+
+  it("yesterday's slots mean nothing today", () => {
+    const stale = task({ ...WATER, ritualDoneSlots: [ritualSlot('2026-07-27', 0)] });
+    expect(ritualState(stale, at('09:10'), 4)).toBe('due');
+  });
+
+  it('legacy single-rule tasks read exactly as before', () => {
+    expect(ritualState(task({ ritual: LUNCH }), at('12:30'), 4)).toBe('due');
+  });
+
+  it('perWindow with a single window degrades to any-one-window (nothing to separate)', () => {
+    const one = task({ rituals: [MORNING], ritualPerWindow: true, ritualDoneDay: '2026-07-28' });
+    expect(ritualState(one, at('09:10'), 4)).toBe('done');
+  });
+});
+
+describe('creditWindowIndex', () => {
+  it('credits the active unmarked window first', () => {
+    expect(creditWindowIndex(task(WATER), at('14:10'), 4)).toBe(1);
+  });
+
+  it('doing it early credits the first unmarked window of the day', () => {
+    const morningDone = task({ ...WATER, ritualDoneSlots: [ritualSlot('2026-07-28', 0)] });
+    expect(creditWindowIndex(morningDone, at('11:00'), 4)).toBe(1);
+  });
+
+  it('returns -1 once every window is marked', () => {
+    const all = task({
+      ...WATER,
+      ritualDoneSlots: [0, 1, 2].map((i) => ritualSlot('2026-07-28', i)),
+    });
+    expect(creditWindowIndex(all, at('14:10'), 4)).toBe(-1);
+  });
+});
+
+describe('ritualProgress + describeRitualTask', () => {
+  it('reports n of m for per-window rituals only', () => {
+    const half = task({ ...WATER, ritualDoneSlots: [ritualSlot('2026-07-28', 0)] });
+    expect(ritualProgress(half, at('12:00'), 4)).toEqual({ done: 1, total: 3 });
+    expect(ritualProgress(task(DOGS), at('12:00'), 4)).toBeNull();
+    expect(ritualProgress(task({ ritual: LUNCH }), at('12:00'), 4)).toBeNull();
+  });
+
+  it('collapses same-day windows and names the contract', () => {
+    expect(describeRitualTask(task(WATER)))
+      .toBe('every day 09:00–09:30 + 14:00–14:30 + 20:00–20:30 · each time');
+    expect(describeRitualTask(task(DOGS)))
+      .toBe('every day 09:00–09:30 + 20:00–20:30 · any one time');
+    expect(describeRitualTask(task({ ritual: LUNCH }))).toBe('every day 12:00–14:00');
   });
 });

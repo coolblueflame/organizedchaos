@@ -13,7 +13,7 @@
   import { tagColor } from './tagColors';
   import TaskEditor from './TaskEditor.svelte';
   import Glyph from './Glyph.svelte';
-  import { describeRitual, ritualState } from '../domain/ritual';
+  import { describeRitualTask, isRitualTask, ritualState } from '../domain/ritual';
   import { isLongSnooze } from '../domain/sweep';
   import { estimateOutcome } from '../domain/stats';
 
@@ -258,13 +258,13 @@
             <Glyph name="play" size={11} title="in progress — the clock may be running" />
           </span>
         {/if}
-        {#if task.ritual && !completedMode}
+        {#if isRitualTask(task) && !completedMode}
           <span class="mark" class:ritual-due={ritual === 'due'} class:ritual-done={ritual === 'done'}
             data-testid="ritual-mark-{task.id}">
             <Glyph name="period" size={11}
-              title={ritual === 'done' ? `done today · ${describeRitual(task.ritual)}`
-                : ritual === 'due' ? `due now · ${describeRitual(task.ritual)}`
-                : `daily · ${describeRitual(task.ritual)}`} />
+              title={ritual === 'done' ? `done today · ${describeRitualTask(task)}`
+                : ritual === 'due' ? `due now · ${describeRitualTask(task)}`
+                : `daily · ${describeRitualTask(task)}`} />
           </span>
         {/if}
         {#if !completedMode && isLongSnooze(task, new Date(), app.state.settings.rolloverHour)}

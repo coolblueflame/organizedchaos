@@ -376,6 +376,40 @@ test('tagging a whole selection at once, undoably', async ({ page }) => {
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
 });
 
+test('a ritual can hold several daily windows, once-a-day or each-time', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Health');
+  await addTask(page, 'drink water');
+
+  await page.getByText('drink water', { exact: true }).click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('09:00');
+  await page.getByTestId('ritual-to').fill('09:30');
+
+  // A second window appears with its own inputs; the contract checkbox with it.
+  await page.getByTestId('ritual-add-window').click();
+  await page.getByTestId('ritual-from-1').fill('14:00');
+  await page.getByTestId('ritual-to-1').fill('14:30');
+  await expect(page.getByTestId('ritual-each-row')).toContainText('any one window');
+  await page.getByTestId('ritual-each').check();
+  await expect(page.getByTestId('ritual-each-row')).toContainText('every window');
+  await page.getByTestId('ritual-save').click();
+
+  // The summary names both windows and the contract, and survives reopening.
+  await expect(page.getByTestId('task-ritual-row'))
+    .toContainText('every day 09:00–09:30 + 14:00–14:30 · each time');
+  await page.getByTestId('task-ritual-row').click();
+  await expect(page.getByTestId('ritual-from')).toHaveValue('09:00');
+  await expect(page.getByTestId('ritual-from-1')).toHaveValue('14:00');
+  await expect(page.getByTestId('ritual-each')).toBeChecked();
+
+  // Dropping the second window falls back to a plain single-window ritual.
+  await page.getByTestId('ritual-window-drop-1').click();
+  await page.getByTestId('ritual-save').click();
+  await expect(page.getByTestId('task-ritual-row'))
+    .toContainText('every day 09:00–09:30');
+});
+
 test('a daily ritual is the top pick inside its window and leaves no backlog', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Life');

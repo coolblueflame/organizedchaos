@@ -11,7 +11,7 @@
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { projectPriorities } from '../domain/project';
   import { moveAcross, moveWithin, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
-  import { isRitualDue } from '../domain/ritual';
+  import { isRitualDue, isRitualTask } from '../domain/ritual';
   import { createDragScroller } from './dragScroll';
   import { primeKeyboard } from './keyboardBridge';
   import { searchQuery } from './searchState.svelte';
@@ -78,7 +78,7 @@
   const recurringCount = $derived(app.state.templates.filter((t) => !t.deleted).length);
   // The Rituals link appears once any exist — a fifth footer row must earn its place.
   const ritualCount = $derived(
-    app.state.tasks.filter((t) => !t.deleted && t.ritual !== undefined).length,
+    app.state.tasks.filter((t) => !t.deleted && isRitualTask(t)).length,
   );
   const reviewCount = $derived(app.tasksNeedingReview().length);
   const archivedLists = $derived(app.state.lists.filter((l) => l.archived === true));

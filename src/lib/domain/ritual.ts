@@ -26,10 +26,76 @@ import type { Priority, Settings, Task } from './types';
  */
 export type RitualState = 'due' | 'done' | 'waiting' | null;
 
+/** All of a ritual's windows: the multi-window list, or the legacy single rule. */
+export function ritualWindows(task: Task): HoursRule[] {
+  if (task.rituals && task.rituals.length > 0) return task.rituals;
+  return task.ritual ? [task.ritual] : [];
+}
+
+export function isRitualTask(task: Task): boolean {
+  return ritualWindows(task).length > 0;
+}
+
+/** Done-mark key for one window on one app-day. */
+export function ritualSlot(day: string, windowIndex: number): string {
+  return `${day}#${windowIndex}`;
+}
+
+/** Which window indices are already marked for `day`. */
+function markedOn(task: Task, day: string): Set<number> {
+  const out = new Set<number>();
+  for (const s of task.ritualDoneSlots ?? []) {
+    const [d, i] = s.split('#');
+    if (d === day) out.add(Number(i));
+  }
+  return out;
+}
+
+/** Does this ritual track each window separately? (Needs 2+ windows to mean anything.) */
+export function isPerWindow(task: Task): boolean {
+  return task.ritualPerWindow === true && ritualWindows(task).length > 1;
+}
+
+/**
+ * The window a completion should credit right now: an active unmarked window
+ * when one is open, else the day's first unmarked one — doing it early still
+ * counts (the window is when the app brings it up, not permission). -1 = the
+ * whole day is already marked.
+ */
+export function creditWindowIndex(task: Task, now: Date, rolloverHour: number): number {
+  const windows = ritualWindows(task);
+  const marked = markedOn(task, appDayKey(now, rolloverHour));
+  const active = windows.findIndex((w, i) => !marked.has(i) && ruleActiveAt(w, now));
+  if (active !== -1) return active;
+  return windows.findIndex((_, i) => !marked.has(i));
+}
+
+/** "2 of 3 today" for per-window rituals; null when the plain state says it all. */
+export function ritualProgress(
+  task: Task,
+  now: Date,
+  rolloverHour: number,
+): { done: number; total: number } | null {
+  if (!isPerWindow(task)) return null;
+  const windows = ritualWindows(task);
+  const marked = markedOn(task, appDayKey(now, rolloverHour));
+  return { done: Math.min(marked.size, windows.length), total: windows.length };
+}
+
 export function ritualState(task: Task, now: Date, rolloverHour: number): RitualState {
-  if (!task.ritual) return null;
-  if (task.ritualDoneDay === appDayKey(now, rolloverHour)) return 'done';
-  return ruleActiveAt(task.ritual, now) ? 'due' : 'waiting';
+  const windows = ritualWindows(task);
+  if (windows.length === 0) return null;
+  const day = appDayKey(now, rolloverHour);
+  if (isPerWindow(task)) {
+    const marked = markedOn(task, day);
+    if (marked.size >= windows.length) return 'done';
+    if (windows.some((w, i) => !marked.has(i) && ruleActiveAt(w, now))) return 'due';
+    // Between windows — or inside one that's already marked, which reads as
+    // "done for now": green during the satisfied window, grey once it closes.
+    return windows.some((w) => ruleActiveAt(w, now)) ? 'done' : 'waiting';
+  }
+  if (task.ritualDoneDay === day) return 'done';
+  return windows.some((w) => ruleActiveAt(w, now)) ? 'due' : 'waiting';
 }
 
 /** Convenience for the UI, which mostly wants the one question. */
@@ -44,7 +110,7 @@ export function isRitualDue(task: Task, now: Date, rolloverHour: number): boolea
  */
 export function ritualExclusions(tasks: Task[], settings: Settings, now: Date): string[] {
   return tasks
-    .filter((t) => t.ritual && ritualState(t, now, settings.rolloverHour) !== 'due')
+    .filter((t) => isRitualTask(t) && ritualState(t, now, settings.rolloverHour) !== 'due')
     .map((t) => t.id);
 }
 
@@ -84,4 +150,21 @@ export function describeRitual(rule: HoursRule): string {
         : days.length === 2 && days.includes(0) && days.includes(6) ? 'weekends'
           : days.map((d) => NAMES[d]).join(' ');
   return `${when} ${rule.from}–${rule.to}`;
+}
+
+/**
+ * Whole-ritual summary. Windows sharing one day pattern collapse to
+ * "every day 09:00–09:30 + 14:00–14:30"; mixed patterns spell each out.
+ * Multi-window rituals also say which contract they run under.
+ */
+export function describeRitualTask(task: Task): string {
+  const windows = ritualWindows(task);
+  if (windows.length === 0) return '';
+  if (windows.length === 1) return describeRitual(windows[0]!);
+  const dayKey = (r: HoursRule) => [...r.days].sort((a, b) => a - b).join(',');
+  const sameDays = windows.every((w) => dayKey(w) === dayKey(windows[0]!));
+  const body = sameDays
+    ? `${describeRitual(windows[0]!)}${windows.slice(1).map((w) => ` + ${w.from}–${w.to}`).join('')}`
+    : windows.map(describeRitual).join(' · ');
+  return `${body} · ${isPerWindow(task) ? 'each time' : 'any one time'}`;
 }

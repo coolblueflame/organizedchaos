@@ -6,7 +6,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { app } from '../state/app.svelte';
-  import { describeRitual } from '../domain/ritual';
+  import { describeRitualTask, isRitualTask, ritualWindows } from '../domain/ritual';
   import { ALL_DAYS } from '../domain/schedule';
   import { navigate } from './router.svelte';
   import type { Task } from '../domain/types';
@@ -106,33 +106,65 @@
   // ── daily ritual ──────────────────────────────────────────────────────────
   const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   let ritualOpen = $state(false);
-  let ritualFrom = $state('12:00');
-  let ritualTo = $state('14:00');
-  let ritualDays = $state<number[]>([...ALL_DAYS]);
+  /** The windows being edited (2026-07-29: a ritual can have several a day). */
+  let ritualWins = $state<Array<{ from: string; to: string; days: number[] }>>([]);
+  let ritualEach = $state(false);
 
   // Seed the form from the task each time it opens, not reactively: editing the
   // fields must not be fought by the value they came from.
   $effect(() => {
     if (!ritualOpen) return;
-    const existing = untrack(() => task.ritual);
-    if (existing) {
-      ritualFrom = existing.from;
-      ritualTo = existing.to;
-      ritualDays = [...existing.days];
-    }
+    const existing = untrack(() => ritualWindows(task));
+    const each = untrack(() => task.ritualPerWindow === true);
+    ritualWins = existing.length > 0
+      ? existing.map((w) => ({ from: w.from, to: w.to, days: [...w.days] }))
+      : [{ from: '12:00', to: '14:00', days: [...ALL_DAYS] }];
+    ritualEach = each;
   });
 
+  function addRitualWindow() {
+    // A fresh window borrows the last one's days — "drink water" repeats the
+    // same day pattern far more often than it varies it.
+    const prev = ritualWins[ritualWins.length - 1];
+    ritualWins = [...ritualWins, {
+      from: '', to: '', days: prev ? [...prev.days] : [...ALL_DAYS],
+    }];
+  }
+
+  function dropRitualWindow(i: number) {
+    ritualWins = ritualWins.filter((_, x) => x !== i);
+  }
+
+  function toggleRitualDay(i: number, d: number) {
+    ritualWins = ritualWins.map((w, x) => x === i
+      ? { ...w, days: w.days.includes(d) ? w.days.filter((y) => y !== d) : [...w.days, d] }
+      : w);
+  }
+
   async function saveRitual() {
-    if (ritualDays.length === 0 || ritualFrom === ritualTo) { ritualOpen = false; return; }
+    const valid = ritualWins
+      .filter((w) => w.days.length > 0 && w.from && w.to && w.from !== w.to)
+      .map((w) => ({ days: [...w.days].sort((a, b) => a - b), from: w.from, to: w.to }));
+    if (valid.length === 0) { ritualOpen = false; return; }
     await app.patchTask(task.id, {
-      ritual: { days: [...ritualDays].sort((a, b) => a - b), from: ritualFrom, to: ritualTo },
+      rituals: valid,
+      // Legacy mirror: an old build reads `ritual` only, so it at least sees
+      // the first window instead of losing the ritual entirely.
+      ritual: valid[0],
+      ritualPerWindow: valid.length > 1 && ritualEach ? true : undefined,
+      // Window indices are the done-marks' identity; edits reshuffle them, so
+      // today's marks stop meaning anything trustworthy. Start the day clean.
+      ritualDoneSlots: undefined,
     });
     touched();
     ritualOpen = false;
   }
 
   async function removeRitual() {
-    await app.patchTask(task.id, { ritual: undefined, ritualDoneDay: undefined });
+    await app.patchTask(task.id, {
+      ritual: undefined, rituals: undefined, ritualPerWindow: undefined,
+      ritualDoneDay: undefined, ritualDoneSlots: undefined,
+    });
     ritualOpen = false;
   }
 
@@ -236,35 +268,57 @@
   -->
   {#if ritualOpen}
     <div class="ritual-editor">
-      <div class="ritual-row">
-        <label><span>from</span>
-          <input type="time" data-testid="ritual-from" bind:value={ritualFrom} /></label>
-        <label><span>until</span>
-          <input type="time" data-testid="ritual-to" bind:value={ritualTo} /></label>
-      </div>
-      <div class="days">
-        {#each DAY_LABELS as label, i (i)}
-          <button class="day" class:on={ritualDays.includes(i)} data-testid="ritual-day-{i}"
-            onclick={() => (ritualDays = ritualDays.includes(i)
-              ? ritualDays.filter((d) => d !== i) : [...ritualDays, i])}>{label}</button>
-        {/each}
-      </div>
+      {#each ritualWins as win, i (i)}
+        <div class="ritual-window">
+          <div class="ritual-row">
+            <label><span>from</span>
+              <input type="time" data-testid={i === 0 ? 'ritual-from' : `ritual-from-${i}`}
+                bind:value={win.from} /></label>
+            <label><span>until</span>
+              <input type="time" data-testid={i === 0 ? 'ritual-to' : `ritual-to-${i}`}
+                bind:value={win.to} /></label>
+            {#if ritualWins.length > 1}
+              <button class="win-drop" data-testid="ritual-window-drop-{i}"
+                aria-label="remove this time" onclick={() => dropRitualWindow(i)}>✕</button>
+            {/if}
+          </div>
+          <div class="days">
+            {#each DAY_LABELS as label, d (d)}
+              <button class="day" class:on={win.days.includes(d)}
+                data-testid={i === 0 ? `ritual-day-${d}` : `ritual-day-${i}-${d}`}
+                onclick={() => toggleRitualDay(i, d)}>{label}</button>
+            {/each}
+          </div>
+        </div>
+      {/each}
+      <button class="win-add" data-testid="ritual-add-window" onclick={addRitualWindow}>
+        + another time
+      </button>
+      {#if ritualWins.length > 1}
+        <label class="each" data-testid="ritual-each-row">
+          <input type="checkbox" data-testid="ritual-each" bind:checked={ritualEach} />
+          each time counts separately
+          <span class="each-hint">{ritualEach
+            ? '— it comes up again at every window (drink water)'
+            : '— any one window does the whole day (walk the dogs)'}</span>
+        </label>
+      {/if}
       <p class="ritual-note">
-        Inside this window it becomes the randomizer's top pick until it's done.
+        Inside a window it becomes the randomizer's top pick until it's done.
         Miss a day and nothing piles up — it just comes round again tomorrow.
       </p>
       <div class="ritual-actions">
         <button data-testid="ritual-save" onclick={saveRitual}>save</button>
         <button data-testid="ritual-cancel" onclick={() => (ritualOpen = false)}>cancel</button>
-        {#if task.ritual}
+        {#if isRitualTask(task)}
           <button class="drop" data-testid="ritual-remove" onclick={removeRitual}>remove</button>
         {/if}
       </div>
     </div>
   {:else}
-    <button class="repeat-row" class:linked={!!task.ritual} data-testid="task-ritual-row"
+    <button class="repeat-row" class:linked={isRitualTask(task)} data-testid="task-ritual-row"
       onclick={() => (ritualOpen = true)}>
-      {#if task.ritual}⧗ daily · {describeRitual(task.ritual)}
+      {#if isRitualTask(task)}⧗ daily · {describeRitualTask(task)}
       {:else}⧗ make it a daily ritual{/if}
     </button>
   {/if}
@@ -365,7 +419,8 @@
     display: flex; flex-direction: column; gap: 8px;
     border: 1px solid var(--acc-cyan); border-radius: 6px; padding: 10px;
   }
-  .ritual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* The auto column holds a window's ✕ and collapses to nothing without one. */
+  .ritual-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
   .ritual-row label { display: flex; flex-direction: column; gap: 4px; }
   .ritual-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .ritual-row input {
@@ -380,6 +435,25 @@
   }
   .day.on { color: var(--acc-green); border-color: var(--acc-green); }
   .ritual-note { color: var(--dim); font-size: 0.72rem; line-height: 1.5; margin: 0; }
+  .ritual-window { display: flex; flex-direction: column; gap: 8px; }
+  .ritual-window + .ritual-window { border-top: 1px dashed var(--line); padding-top: 10px; }
+  .win-drop {
+    align-self: flex-end; background: none; border: none; color: var(--dim);
+    cursor: pointer; font-size: 0.8rem; padding: 4px 6px;
+  }
+  @media (hover: hover) { .win-drop:hover { color: var(--acc-magenta); } }
+  .win-add {
+    align-self: flex-start; background: none; border: 1px dashed var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    padding: 5px 10px; cursor: pointer;
+  }
+  @media (hover: hover) { .win-add:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
+  .each {
+    display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+    color: var(--text); font-size: 0.78rem; cursor: pointer;
+  }
+  .each input { accent-color: var(--acc-cyan); }
+  .each-hint { color: var(--dim); font-size: 0.72rem; }
   .ritual-actions { display: flex; gap: 8px; }
   .ritual-actions button {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

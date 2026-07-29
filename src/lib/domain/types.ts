@@ -120,6 +120,20 @@ export interface Task extends Base {
   ritual?: import('./schedule').HoursRule;
   /** App-day key of the last time the ritual was done; absent = never. */
   ritualDoneDay?: string;
+  /**
+   * Multi-window rituals (2026-07-29): "drink water" wants several times a
+   * day, "walk the dogs" has a few possible timeframes. When present this is
+   * the truth and `ritual` is kept as a legacy mirror of windows[0] so a
+   * not-yet-updated device still sees a ritual. Resolve via ritualWindows().
+   */
+  rituals?: import('./schedule').HoursRule[];
+  /**
+   * true = each window wants its own completion (the water). false/absent =
+   * any one window satisfies the whole day (the dogs).
+   */
+  ritualPerWindow?: boolean;
+  /** Per-window done-marks for per-window rituals: "<dayKey>#<windowIndex>". */
+  ritualDoneSlots?: string[];
   completedAt?: number;
   /** The RecurrenceTemplate this task was spawned from, if any. */
   recurrenceId?: string;

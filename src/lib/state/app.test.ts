@@ -81,6 +81,58 @@ describe('the day queue', () => {
   });
 });
 
+describe('per-window rituals', () => {
+  const WINDOWS = [
+    { days: [0, 1, 2, 3, 4, 5, 6], from: '09:00', to: '09:30' },
+    { days: [0, 1, 2, 3, 4, 5, 6], from: '14:00', to: '14:30' },
+  ];
+
+  it('each completion credits one window; the last one completes the day', async () => {
+    vi.setSystemTime(new Date('2026-07-29T09:10:00'));
+    const list = await store.addList('Health');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'drink water', rituals: WINDOWS, ritualPerWindow: true });
+
+    await store.completeTask(t.id);
+    let row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.ritualDoneSlots).toEqual(['2026-07-29#0']);
+    expect(row.ritualDoneDay).toBeUndefined(); // the afternoon is still owed
+    expect(row.completedAt).toBeUndefined(); // the ritual itself never completes
+
+    vi.setSystemTime(new Date('2026-07-29T14:10:00'));
+    await store.completeTask(t.id);
+    row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.ritualDoneSlots).toEqual(['2026-07-29#0', '2026-07-29#1']);
+    expect(row.ritualDoneDay).toBe('2026-07-29'); // day closed with the last window
+
+    // Two history records — each window's completion counts on its own.
+    const records = store.state.tasks.filter(
+      (x) => x.name === 'drink water' && x.completedAt !== undefined,
+    );
+    expect(records).toHaveLength(2);
+
+    // Nothing owed: a third tick is a no-op.
+    await store.completeTask(t.id);
+    expect(store.state.tasks.filter(
+      (x) => x.name === 'drink water' && x.completedAt !== undefined,
+    )).toHaveLength(2);
+  });
+
+  it('undo lifts the slot and the history record together', async () => {
+    vi.setSystemTime(new Date('2026-07-29T09:10:00'));
+    const list = await store.addList('Health');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'stretch', rituals: WINDOWS, ritualPerWindow: true });
+    await store.completeTask(t.id);
+    await store.undoLast();
+    const row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.ritualDoneSlots ?? undefined).toBeUndefined();
+    expect(store.state.tasks.filter(
+      (x) => x.name === 'stretch' && x.completedAt !== undefined,
+    )).toHaveLength(0);
+  });
+});
+
 describe('moveRecurringToList', () => {
   it('re-homes the template and its open spawned copy together', async () => {
     const a = await store.addList('A');
