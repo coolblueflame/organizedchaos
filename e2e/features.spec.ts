@@ -662,3 +662,35 @@ test('every screen opens at its top, not at the last screen\'s scroll', async ({
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByText('done 0', { exact: true })).toBeInViewport();
 });
+
+test('finished work can be read, re-filed into a goals list, and counted there', async ({ page }) => {
+  // The year-end flow: move completed wins into a goals list, then read the
+  // count off that list's collapsed history shelf.
+  await reset(page);
+  await makeList(page, 'Inbox');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('learn the accordion');
+  await page.getByTestId('task-notes-input').fill('two songs by December');
+  await page.getByTestId('task-collapse').click();
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+  await page.getByTestId('back').click();
+  await makeList(page, '2026 Goals');
+  await page.getByTestId('back').click();
+
+  // Completed screen: the row opens, shows its description, and moves.
+  await page.getByTestId('completed-link').click();
+  await page.getByText('learn the accordion', { exact: true }).click();
+  await expect(page.getByTestId(`done-detail-${id}`)).toContainText('two songs by December');
+  await page.getByTestId(`done-move-${id}`).selectOption({ label: '2026 Goals' });
+  await page.getByTestId('back').click();
+
+  // The goals list now carries it on its history shelf, count first.
+  await page.getByTestId(/^list-row-/).filter({ hasText: '2026 Goals' }).first().click();
+  const shelf = page.getByTestId('list-completed');
+  await expect(shelf).toContainText('completed here · 1');
+  await shelf.locator('summary').click();
+  await expect(page.getByText('learn the accordion', { exact: true })).toBeVisible();
+});

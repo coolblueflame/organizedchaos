@@ -78,7 +78,9 @@
     <h2 class="section done-header">done <span class="count">{results.completedTotal}</span></h2>
     <section class="rows done" data-testid="search-completed">
       {#each results.completed as task (task.id)}
-        <TaskRow {task} showList completedMode showCompletedAt ontoggle={() => {}} />
+        <TaskRow {task} showList completedMode showCompletedAt
+          expanded={editingTaskId === task.id}
+          ontoggle={() => (editingTaskId = editingTaskId === task.id ? null : task.id)} />
       {/each}
     </section>
     {#if results.completedTotal > results.completed.length}

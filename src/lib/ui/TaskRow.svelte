@@ -285,6 +285,32 @@
   {#if expanded && !completedMode}
     <TaskEditor {task} oncollapse={() => void collapse()} />
   {/if}
+
+  <!-- A finished task opens too (2026-07-29 request): read what it was, and
+       re-file it — moving finished work into a goals list is how a year gets
+       measured against its January list. Lean on purpose: history wants
+       reading and filing, not the full editor. -->
+  {#if expanded && completedMode}
+    <div class="done-detail" data-testid="done-detail-{task.id}">
+      {#if task.notes.trim()}
+        <p class="done-notes">{task.notes}</p>
+      {:else}
+        <p class="done-notes dim">// no description</p>
+      {/if}
+      {#if task.completedAt}
+        <p class="done-meta">completed {new Date(task.completedAt).toLocaleString()}</p>
+      {/if}
+      <label class="done-move">
+        <span>list</span>
+        <select data-testid="done-move-{task.id}" value={task.listId}
+          onchange={(e) => void app.moveTask(task.id, e.currentTarget.value)}>
+          {#each app.state.lists.filter((l) => l.archived !== true) as l (l.id)}
+            <option value={l.id}>{l.title}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -317,6 +343,20 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   .restore:hover { color: var(--acc-cyan); }
+  .done-detail {
+    display: flex; flex-direction: column; gap: 8px;
+    border-top: 1px dashed var(--line); margin-top: 6px; padding: 10px 2px 4px;
+  }
+  .done-notes { margin: 0; color: var(--text); font-size: 0.85rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .done-notes.dim { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
+  .done-meta { margin: 0; color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
+  .done-move { display: flex; align-items: center; gap: 8px; }
+  .done-move span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .done-move select {
+    flex: 1; min-width: 0; max-width: 100%;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 6px 8px; font-size: 0.8rem; outline: none;
+  }
   .mark.snoozed { color: var(--acc-purple); }
   .mark.ritual-due { color: var(--acc-magenta); }
   .mark.ritual-done { color: var(--acc-green); }

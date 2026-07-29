@@ -11,6 +11,8 @@
   import TaskRow from './TaskRow.svelte';
   import { revealOnApproach } from './lazyReveal';
 
+  let openId = $state<string | null>(null);
+
   const groups = $derived(
     groupCompleted(app.state.tasks, app.state.settings.rolloverHour),
   );
@@ -117,7 +119,8 @@
     {#each shown as group (group.key)}
       <h2 class="group-header">{dayLabel(group.key)}</h2>
       {#each group.tasks as task (task.id)}
-        <TaskRow {task} completedMode showList ontoggle={() => {}} />
+        <TaskRow {task} completedMode showList expanded={openId === task.id}
+          ontoggle={() => (openId = openId === task.id ? null : task.id)} />
       {/each}
     {/each}
     {#if rendered < total}

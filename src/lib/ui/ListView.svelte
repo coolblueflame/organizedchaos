@@ -13,6 +13,8 @@
   import type { SortMode } from '../domain/types';
   import GroupedTasks from './GroupedTasks.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
+  import { revealOnApproach } from './lazyReveal';
+  import TaskRow from './TaskRow.svelte';
   import Glyph from './Glyph.svelte';
 
   let { id }: { id: string } = $props();
@@ -23,6 +25,22 @@
   const listTasks = $derived(app.state.tasks.filter((t) => t.listId === id));
 
   const nextMode: Record<SortMode, SortMode> = { priority: 'date', date: 'tag', tag: 'priority' };
+
+  /*
+    The list's own history, Things-style: a collapsed section at the bottom.
+    The COUNT is the headline — "12 of the 2026 goals are done" is readable
+    without opening anything — and the rows page in on scroll because an
+    imported list can hold years of them.
+  */
+  const completedHere = $derived(
+    app.state.tasks
+      .filter((t) => !t.deleted && t.listId === id && t.completedAt !== undefined)
+      .sort((a, b) => b.completedAt! - a.completedAt!),
+  );
+  const DONE_PAGE = 60;
+  let doneBudget = $state(DONE_PAGE);
+  let doneOpenId = $state<string | null>(null);
+  let doneOpen = $state(false);
 
   const groups = $derived.by(() => {
     const mode = list?.sortMode ?? 'priority';
@@ -122,6 +140,28 @@
   {/if}
 
   <button class="new-task" data-testid="new-task" onclick={newTask}>+ new todo</button>
+
+  {#if completedHere.length > 0}
+    <details class="done-shelf" data-testid="list-completed" bind:open={doneOpen}>
+      <summary>completed here · {completedHere.length}</summary>
+      <!-- Rendered only while open: a closed shelf must cost nothing and must
+           not leave finished rows attached where tests and tooling would find
+           them "still on the list". -->
+      {#if doneOpen}
+      <div class="done-rows">
+        {#each completedHere.slice(0, doneBudget) as task (task.id)}
+          <TaskRow {task} completedMode showCompletedAt expanded={doneOpenId === task.id}
+            ontoggle={() => (doneOpenId = doneOpenId === task.id ? null : task.id)} />
+        {/each}
+        {#if completedHere.length > doneBudget}
+          <div class="done-more" use:revealOnApproach={() => (doneBudget += DONE_PAGE)}>
+            {doneBudget} of {completedHere.length} — scroll for more
+          </div>
+        {/if}
+      </div>
+      {/if}
+    </details>
+  {/if}
 </main>
 
 <style>
@@ -148,4 +188,17 @@
     font-size: 0.85rem; padding: 12px; cursor: pointer; text-align: left;
   }
   .new-task:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  .done-shelf { margin-top: 18px; }
+  .done-shelf summary {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    cursor: pointer; padding: 6px 2px; list-style: none;
+  }
+  .done-shelf summary::before { content: '▸ '; }
+  .done-shelf[open] summary::before { content: '▾ '; }
+  .done-shelf summary:hover { color: var(--text); }
+  .done-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; opacity: 0.85; }
+  .done-more {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
+    text-align: center; padding: 12px 0 4px;
+  }
 </style>
