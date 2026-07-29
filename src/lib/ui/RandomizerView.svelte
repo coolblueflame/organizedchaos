@@ -296,6 +296,16 @@
       <div class="triage-fields">
         <PrioritySelect value={triage.priority}
           onchange={(p) => void app.patchTask(triage!.id, { priority: p })} />
+        <!-- Filing it somewhere better IS filling it in — the same re-file the
+             sweep offers (2026-07-28 request). -->
+        <label class="triage-move"><span>list</span>
+          <select data-testid="triage-move" value={triage.listId}
+            onchange={(e) => void app.moveTask(triage!.id, e.currentTarget.value)}>
+            {#each app.state.lists.filter((l) => l.archived !== true) as l (l.id)}
+              <option value={l.id}>{l.title}</option>
+            {/each}
+          </select>
+        </label>
         <label class="triage-notes"><span>description</span>
           <textarea data-testid="triage-notes" rows="2" placeholder="what does this actually involve?"
             value={triage.notes}
@@ -538,9 +548,14 @@
   @media (min-width: 440px) {
     .triage-row { grid-template-columns: 1fr 1fr; }
   }
-  .triage-row label, .triage-notes { display: flex; flex-direction: column; gap: 4px; }
-  .triage-row span, .triage-notes span {
+  .triage-row label, .triage-notes, .triage-move { display: flex; flex-direction: column; gap: 4px; }
+  .triage-row span, .triage-notes span, .triage-move span {
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+  }
+  .triage-move select {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
+    width: 100%; max-width: 100%; min-width: 0;
   }
   .triage-row input, .triage-notes textarea {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

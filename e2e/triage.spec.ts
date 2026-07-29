@@ -136,3 +136,27 @@ test('skipping the fill-in prompt keeps the task untriaged', async ({ page }) =>
   await page.getByTestId(/^list-row-/).first().click();
   await expect(page.getByTestId(`needs-review-${id}`)).toBeVisible();
 });
+
+test('the fill-in prompt can re-file the task into a better list', async ({ page }) => {
+  await reset(page, 'triage');
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Catch-all');
+  await page.getByTestId('new-list-input').press('Enter');
+  await addTask(page, 'wind down with a movie');
+  await page.getByTestId('back').click();
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Wind-down');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-triage')).toContainText('wind down with a movie');
+  await page.getByTestId('triage-move').selectOption({ label: 'Wind-down' });
+  await expect(page.getByTestId('draw-triage'), 'the card follows the move').toContainText('from Wind-down');
+  await page.getByTestId('triage-done').click();
+
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Wind-down' }).first().click();
+  await expect(page.getByText('wind down with a movie', { exact: true })).toBeVisible();
+  await expect(page.getByTestId(/^needs-review-/), 'reviewed too').toHaveCount(0);
+});
