@@ -247,6 +247,11 @@
 
   function notNowClick() {
     if (!drawn) return;
+    // Skipping the queue's top advances THE PLAN, not just this session:
+    // without this, leaving the screen reset the skip and the dice served
+    // the same "not now" task again (2026-07-30 ask). Ordinary un-queued
+    // tasks keep the session-only semantics.
+    if (app.state.queueIds.includes(drawn.id)) void app.removeFromQueue(drawn.id);
     notNow = [...notNow, drawn.id];
     redraw();
   }
