@@ -29,7 +29,24 @@
     estimateQueue(app.state.tasks, app.state.lists).filter((t) => !estSkipped.includes(t.id)),
   );
   const queue = $derived(mode === 'estimates' ? estQueue : triageQueue);
-  const current = $derived(queue[0]);
+
+  /*
+    The card is HELD by id, not read off queue[0]: edits must never advance
+    it (2026-07-30 ask) — and a re-file is an edit that RE-SORTS the
+    list-ordered queue, so without the hold, moving a card yanked it away
+    and the next tap landed on a different task. The hold releases only
+    when the task leaves the queue (an advancing verdict, or the estimate
+    landing), and the effect then latches onto the new front card.
+  */
+  let heldId = $state<string | null>(null);
+  const current = $derived.by(() => {
+    const held = heldId ? queue.find((t) => t.id === heldId) : undefined;
+    return held ?? queue[0];
+  });
+  $effect(() => {
+    const id = current?.id ?? null;
+    if (id !== heldId) heldId = id;
+  });
 
   /** The estimate card's number field, reset per card. */
   let estInput = $state('');
@@ -76,17 +93,15 @@
     app.state.lists.filter((l) => l.archived !== true && l.id !== current?.listId),
   );
 
+  /** Re-files WITHOUT advancing — moving is one of several edits a card
+   *  usually needs; "done → next" is the only way forward (2026-07-30). */
   async function moveTo(listId: string) {
     if (!current) return;
     const dest = app.state.lists.find((l) => l.id === listId);
     if (!dest) return;
-    laterOpen = false;
-    const snapshot = { id: current.id, name: current.name };
-    const r = await app.applySweepVerdict(current.id, 'keep', { listId });
-    if (r) lastPatch = { ...snapshot, before: r.before };
+    await app.patchTask(current.id, { listId });
     lastDest = { id: dest.id, title: dest.title };
     moveSelect = '';
-    decided += 1;
   }
 
   async function onMovePick(value: string) {
@@ -149,6 +164,7 @@
   async function putBack() {
     if (!lastPatch) return;
     await app.revertSweepVerdict(lastPatch.id, lastPatch.before);
+    heldId = lastPatch.id; // the rethink resumes on the card you took back
     lastPatch = null;
     decided = Math.max(0, decided - 1);
   }
@@ -237,21 +253,23 @@
         </label>
         <TagPicker selected={current.tagIds} ontoggle={toggleTag} />
 
-        <!-- Keep-with-priority: one tap reviews AND files it where it belongs. -->
+        <!-- Priority is an EDIT, not a verdict: Ben usually adjusts 2-3
+             things per card, and the old tap-priority-and-advance yanked the
+             card away mid-edit. Only the explicit buttons below move on. -->
         <div class="priorities">
           {#each PRIORITIES as p (p)}
             <button
               class="tier {p}"
               class:current={current.priority === p}
               data-testid="sweep-priority-{p}"
-              onclick={() => void verdict('keep', p)}>{p === 'medium' ? 'med' : p === 'someday' ? 'some day' : p}</button>
+              onclick={() => void app.patchTask(current!.id, { priority: p })}>{p === 'medium' ? 'med' : p === 'someday' ? 'some day' : p}</button>
           {/each}
         </div>
       </section>
 
       <div class="verdicts">
         <button class="keep" data-testid="sweep-keep" onclick={() => void verdict('keep')}>
-          keep as-is →
+          done with this one → next
         </button>
         <div class="row">
           <button data-testid="sweep-later" class:armed={laterOpen}
