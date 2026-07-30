@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  appendChecklistItem, checklistItems, checklistProgress, toggleChecklistLine,
+  appendChecklistItem, checklistItems, checklistProgress, removeChecklistLine,
+  renameChecklistLine, toggleChecklistLine,
 } from './checklist';
 
 describe('checklistItems', () => {
@@ -50,6 +51,25 @@ describe('toggleChecklistLine', () => {
 
   it('preserves star bullets and indentation', () => {
     expect(toggleChecklistLine('  * [ ] nested', 0)).toBe('  * [x] nested');
+  });
+});
+
+describe('renameChecklistLine + removeChecklistLine', () => {
+  const notes = 'pack:\n- [x] socks\n- [ ] charger';
+
+  it('renames in place, keeping the checked state and everything around it', () => {
+    expect(renameChecklistLine(notes, 1, 'wool socks'))
+      .toBe('pack:\n- [x] wool socks\n- [ ] charger');
+  });
+
+  it('refuses non-item lines', () => {
+    expect(renameChecklistLine(notes, 0, 'nope')).toBe(notes);
+    expect(removeChecklistLine(notes, 0)).toBe(notes);
+  });
+
+  it('removes exactly one item line', () => {
+    expect(removeChecklistLine(notes, 2)).toBe('pack:\n- [x] socks');
+    expect(removeChecklistLine('- [ ] only', 0)).toBe('');
   });
 });
 

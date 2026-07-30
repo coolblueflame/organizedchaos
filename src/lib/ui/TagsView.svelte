@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { focusOnMount } from './focusOnMount';
   import { duplicateGroups, sortByUsage, tagUsage } from '../domain/tags';
   import { navigate } from './router.svelte';
   import { tagColor, TAG_COLORS } from './tagColors';
@@ -105,9 +106,8 @@
             ? null : { id: tag.id, mode: 'color' })}></button>
 
         {#if editing?.id === tag.id && editing.mode === 'rename'}
-          <!-- svelte-ignore a11y_autofocus -->
           <input
-            autofocus
+            use:focusOnMount
             class="rename"
             data-testid="tag-rename-{tag.id}"
             bind:value={renameDraft}

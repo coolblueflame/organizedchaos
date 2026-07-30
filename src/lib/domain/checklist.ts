@@ -52,6 +52,23 @@ export function toggleChecklistLine(notes: string, line: number): string {
  * Start a fresh unchecked item on its own line, ready to type into — the
  * button behind which the markup hides so nobody has to remember it.
  */
+/** Replace one item's text, keeping its bullet, indentation and checked state. */
+export function renameChecklistLine(notes: string, line: number, text: string): string {
+  const lines = notes.split('\n');
+  const m = lines[line] !== undefined ? ITEM_RE.exec(lines[line]!) : null;
+  if (!m) return notes;
+  lines[line] = `${m[1]}${m[2]}] ${text}`;
+  return lines.join('\n');
+}
+
+/** Drop one item line entirely (saving an empty rename deletes the item). */
+export function removeChecklistLine(notes: string, line: number): string {
+  const lines = notes.split('\n');
+  if (lines[line] === undefined || !ITEM_RE.test(lines[line]!)) return notes;
+  lines.splice(line, 1);
+  return lines.join('\n');
+}
+
 export function appendChecklistItem(notes: string): string {
   // Strip only trailing BLANK LINES — a content line keeps its exact bytes,
   // including the trailing space of a just-started empty item.

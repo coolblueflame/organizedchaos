@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { focusOnMount } from './focusOnMount';
   import { navigate } from './router.svelte';
   import {
     groupByDate, groupCustom, groupByPriority, groupByTag, subSortGroups,
@@ -156,12 +157,13 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     {#if renaming}
-      <!-- svelte-ignore a11y_autofocus -->
-      <input class="title-input" data-testid="list-title-input" autofocus
+      <input class="title-input" data-testid="list-title-input" use:focusOnMount
         bind:value={titleDraft}
         onblur={saveTitle}
-        onkeydown={(e) => {
+        onkeydowncapture={(e) => {
           if (e.key === 'Enter') saveTitle();
+          // Capture phase: delegated keydown means a bubble-phase stop can't
+          // keep this Escape from also collapsing an open task editor.
           if (e.key === 'Escape') { e.stopPropagation(); renaming = false; }
         }} />
     {:else}

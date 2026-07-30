@@ -45,6 +45,8 @@ test("the current-task card jumps straight to the task's details", async ({ page
   await expect(page.getByTestId('task-name-input')).toHaveValue('pack for the lake');
   await page.getByTestId('task-add-checklist').click();
   await page.keyboard.type('sunscreen');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape'); // end the chain
   await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] sunscreen');
 
   // …and the card now shows the fresh item, tickable from home.
@@ -59,18 +61,28 @@ test('a checklist lives inside a task: button-built, tappable, counted', async (
   await page.getByTestId('new-task').click();
   await page.getByTestId('task-name-input').fill('pack for the lake');
 
-  // The button writes the markup so nobody has to remember it.
-  await page.getByTestId('task-add-checklist').click();
-  await page.keyboard.type('socks');
-  await page.getByTestId('task-add-checklist').click();
-  await page.keyboard.type('charger');
-  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] socks\n- [ ] charger');
-
-  // Items render as tappable boxes; ticking rewrites the text itself.
+  // The button opens an inline item input; Enter chains the next one, and
+  // an abandoned empty item cleans itself up (rapid-entry, checklist-sized).
   const row = page.getByTestId(/^task-row-/).first();
   const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId('task-add-checklist').click();
+  await page.keyboard.type('socks');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('charger');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape'); // end the chain — the empty third item vanishes
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] socks\n- [ ] charger');
+
+  // Tapping the TEXT renames in place; renaming to nothing deletes.
+  await page.getByTestId(`check-text-${id}-0`).click();
+  await expect(page.getByTestId(`check-edit-${id}-0`)).toHaveValue('socks');
+  await page.getByTestId(`check-edit-${id}-0`).fill('wool socks');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] wool socks\n- [ ] charger');
+
+  // Ticking rewrites the text itself.
   await page.getByTestId(`check-item-${id}-0`).click();
-  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [x] socks\n- [ ] charger');
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [x] wool socks\n- [ ] charger');
   await page.waitForTimeout(250);
   await page.getByTestId('task-collapse').last().click();
 
@@ -89,7 +101,7 @@ test('a checklist lives inside a task: button-built, tappable, counted', async (
   // Unticking from the editor round-trips the same text.
   await page.getByTestId(`task-row-${id}`).click();
   await page.getByTestId(`check-item-${id}-0`).last().click();
-  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] socks\n- [x] charger');
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] wool socks\n- [x] charger');
 });
 
 test('list settings: shows the name, cancels cleanly, saves weekday hours', async ({ page }) => {

@@ -9,6 +9,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { focusOnMount } from './focusOnMount';
   import { navigate, router } from './router.svelte';
   import { estimateQueue, SNOOZE_PRESETS, sweepQueue } from '../domain/sweep';
   import type { Task } from '../domain/types';
@@ -281,8 +282,7 @@
         </div>
         {#if creatingList}
           <div class="row">
-            <!-- svelte-ignore a11y_autofocus -->
-            <input class="new-list" data-testid="sweep-new-list" autofocus
+            <input class="new-list" data-testid="sweep-new-list" use:focusOnMount
               placeholder="new list name…" bind:value={newListTitle}
               onkeydown={(e) => {
                 if (e.key === 'Enter') void createAndMove();

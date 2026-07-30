@@ -11,7 +11,7 @@
   import { haptic } from './fx/haptics';
   import Timebox from './Timebox.svelte';
   import { completionCounts, elapsedSoFar, formatElapsed } from '../domain/stats';
-  import { checklistProgress, toggleChecklistLine } from '../domain/checklist';
+  import { checklistProgress } from '../domain/checklist';
   import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
 
@@ -83,7 +83,7 @@
            trip"): tick items right here while it is THE thing you're doing. -->
       <div class="check-wrap">
         <Checklist notes={task.notes} taskId={task.id}
-          ontoggle={(line) => void app.patchTask(task!.id, { notes: toggleChecklistLine(task!.notes, line) })} />
+          onchange={(n) => void app.patchTask(task!.id, { notes: n })} />
         <span class="check-progress" data-testid="current-check-progress">{progress.done}/{progress.total}</span>
       </div>
     {/if}
