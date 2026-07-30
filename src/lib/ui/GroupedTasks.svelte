@@ -62,6 +62,23 @@
   const PAGE = 60;
   let budget = $state(PAGE);
 
+  // A deep-linked or programmatically-expanded task must actually RENDER:
+  // if the expanded id sits beyond the current budget, grow to reach it
+  // (grow-only, same contract as scrolling).
+  $effect(() => {
+    if (!editingTaskId) return;
+    let at = 0;
+    for (const g of groups) {
+      for (const t of g.tasks) {
+        if (t.id === editingTaskId) {
+          if (at >= budget) budget = at + PAGE;
+          return;
+        }
+        at += 1;
+      }
+    }
+  });
+
   const total = $derived(groups.reduce((n, g) => n + g.tasks.length, 0));
 
   /** Groups trimmed to the budget, in order, each still knowing its full self. */

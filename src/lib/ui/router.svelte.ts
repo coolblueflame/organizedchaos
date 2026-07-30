@@ -9,7 +9,7 @@
 
 export type Route =
   | { name: 'home' }
-  | { name: 'list'; id: string }
+  | { name: 'list'; id: string; taskId?: string }
   | { name: 'sort'; mode: 'date' | 'priority' | 'tag' }
   | { name: 'completed' }
   | { name: 'randomizer'; listId?: string }
@@ -25,7 +25,11 @@ export type Route =
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
-  if (parts[0] === 'list' && parts[1]) return { name: 'list', id: parts[1] };
+  if (parts[0] === 'list' && parts[1]) {
+    // Optional deep link to one task, editor open: #/list/<id>/task/<taskId>.
+    if (parts[2] === 'task' && parts[3]) return { name: 'list', id: parts[1], taskId: parts[3] };
+    return { name: 'list', id: parts[1] };
+  }
   if (parts[0] === 'sort' && (parts[1] === 'date' || parts[1] === 'priority' || parts[1] === 'tag')) {
     return { name: 'sort', mode: parts[1] };
   }
@@ -48,7 +52,7 @@ function parse(hash: string): Route {
 function toHash(r: Route): string {
   switch (r.name) {
     case 'home': return '#/';
-    case 'list': return `#/list/${r.id}`;
+    case 'list': return r.taskId ? `#/list/${r.id}/task/${r.taskId}` : `#/list/${r.id}`;
     case 'sort': return `#/sort/${r.mode}`;
     case 'completed': return '#/completed';
     case 'randomizer': return r.listId ? `#/randomizer/${r.listId}` : '#/randomizer';

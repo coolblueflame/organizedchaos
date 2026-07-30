@@ -71,7 +71,10 @@
       <button class="clear" data-testid="current-clear" onclick={() => void app.clearCurrent()}
         aria-label="clear current task">✕</button>
     </div>
-    <button class="body" onclick={() => navigate({ name: 'list', id: task!.listId })}>
+    <!-- Straight to the task's own editor, not just its list — the details
+         are what you tap a task's name for (2026-07-30 ask: checklists). -->
+    <button class="body" data-testid="current-open-details"
+      onclick={() => navigate({ name: 'list', id: task!.listId, taskId: task!.id })}>
       <span class="name">{task.name || 'untitled'}</span>
       {#if listTitle}<span class="list">in {listTitle}</span>{/if}
     </button>

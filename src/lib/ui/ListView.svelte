@@ -17,9 +17,21 @@
   import TaskRow from './TaskRow.svelte';
   import Glyph from './Glyph.svelte';
 
-  let { id }: { id: string } = $props();
+  let { id, revealTaskId }: { id: string; revealTaskId?: string } = $props();
 
   let editingTaskId = $state<string | null>(null);
+
+  // Deep link (#/list/<id>/task/<taskId>): arrive with that task's editor
+  // open — the current-task card uses it to jump straight to the details.
+  // Opening this way is a deliberate open, so it counts as triage like any
+  // other; handled once per navigation, then the user owns the state.
+  let revealed: string | undefined;
+  $effect(() => {
+    if (!revealTaskId || revealTaskId === revealed) return;
+    revealed = revealTaskId;
+    editingTaskId = revealTaskId;
+    void app.markReviewed(revealTaskId);
+  });
 
   // Tap-to-rename (parked polish, 2026-07-28 ask): the title IS the control.
   let renaming = $state(false);

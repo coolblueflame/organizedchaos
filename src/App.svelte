@@ -96,7 +96,7 @@
 {:else}
   {@const r = router.current}
   {#if r.name === 'list'}
-    <ListView id={r.id} />
+    <ListView id={r.id} revealTaskId={r.taskId} />
   {:else if r.name === 'sort'}
     <SortView mode={r.mode} />
   {:else if r.name === 'completed'}

@@ -29,6 +29,30 @@ async function addTask(page: Page, name: string) {
   await page.getByTestId('task-collapse').last().click();
 }
 
+test("the current-task card jumps straight to the task's details", async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Trips');
+  await addTask(page, 'pack for the lake');
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-row-${id}`).click();
+  await page.getByTestId('task-make-current').last().click();
+  await expect(page.getByTestId('current-task-card')).toBeVisible();
+
+  // Tap the name on the card → land in the list WITH the editor open,
+  // ready for the actual use case: adding checklist items.
+  await page.getByTestId('current-open-details').click();
+  await expect(page.getByTestId('task-name-input')).toHaveValue('pack for the lake');
+  await page.getByTestId('task-add-checklist').click();
+  await page.keyboard.type('sunscreen');
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] sunscreen');
+
+  // …and the card now shows the fresh item, tickable from home.
+  await page.getByTestId('back').click();
+  await page.getByTestId(`check-item-${id}-0`).click();
+  await expect(page.getByTestId('current-check-progress')).toContainText('1/1');
+});
+
 test('a checklist lives inside a task: button-built, tappable, counted', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Trips');
