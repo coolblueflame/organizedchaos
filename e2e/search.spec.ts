@@ -19,7 +19,11 @@ async function addTask(page: Page, name: string, notes?: string) {
   await page.getByTestId('new-task').click();
   await page.getByTestId('task-name-input').fill(name);
   if (notes) await page.getByTestId('task-notes-input').fill(notes);
-  await page.getByTestId('task-collapse').click();
+  // Same hardening as features.spec's twin: let any re-sort settle, and
+  // .last() past the ~220ms ghost editor a re-grouped row leaves behind.
+  // (This helper's bare version cost a CI cycle on 2026-07-30.)
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
   // by name, not .first() — rows sort by priority, so position isn't insertion order
   const row = page.getByTestId(/^task-row-/).filter({ hasText: name }).first();
   return (await row.getAttribute('data-testid'))!.replace('task-row-', '');
