@@ -133,7 +133,19 @@ export function drawTask(
     const lift = lifts?.get(t.id);
     return Math.max(own, lift ? priorityRank(lift) : 0) === topRank;
   });
-  const candidates = intrinsic.length > 0 ? intrinsic : tier;
+  let candidates = intrinsic.length > 0 ? intrinsic : tier;
+  /*
+    An intrinsic-empty tier is here purely on PROJECT pressure (task-level
+    lifts count as intrinsic above), and project pressure is about FINISHING
+    the list: started tasks are served absolutely first, not merely 5:1
+    weighted (2026-07-30 ask) — completing one shrinks the remaining estimate;
+    starting another just spreads the work thinner. Ordinary draws keep the
+    weighted preference so no single task can monopolise the dice.
+  */
+  if (intrinsic.length === 0) {
+    const started = candidates.filter((t) => t.inProgress);
+    if (started.length > 0) candidates = started;
+  }
 
   const weightOf = (t: Task) => (t.inProgress ? IN_PROGRESS_WEIGHT : 1);
   const total = candidates.reduce((sum, t) => sum + weightOf(t), 0);

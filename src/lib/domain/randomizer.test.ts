@@ -160,6 +160,44 @@ describe('drawTask — the day queue', () => {
   });
 });
 
+describe('drawTask — project pressure finishes what it started', () => {
+  const projectMax = new Map([['L1', 'max' as const]]);
+
+  it('a project-lifted tier serves started tasks absolutely first', () => {
+    const untouched = task({ priority: 'low' });
+    const started = task({ priority: 'low', inProgress: true });
+    // firstRng would pick `untouched` from an unfiltered candidate list —
+    // the started-first rule must make the choice before the dice do.
+    const got = drawTask([untouched, started], DEFAULT_SETTINGS, now, firstRng,
+      undefined, projectMax);
+    expect(got?.id).toBe(started.id);
+  });
+
+  it('several started tasks still draw among themselves', () => {
+    const a = task({ priority: 'low', inProgress: true });
+    const b = task({ priority: 'low', inProgress: true });
+    const cold = task({ priority: 'low' });
+    const got = drawTask([cold, a, b], DEFAULT_SETTINGS, now, firstRng,
+      undefined, projectMax);
+    expect([a.id, b.id]).toContain(got?.id);
+  });
+
+  it('intrinsically-urgent work still outranks a lifted started task', () => {
+    const lifted = task({ priority: 'low', inProgress: true });
+    const urgent = task({ priority: 'max', listId: 'L2' });
+    const got = drawTask([lifted, urgent], DEFAULT_SETTINGS, now, firstRng,
+      undefined, projectMax);
+    expect(got?.id).toBe(urgent.id);
+  });
+
+  it('with nothing started, the lifted tier draws normally', () => {
+    const a = task({ priority: 'low' });
+    const b = task({ priority: 'low' });
+    const got = drawTask([a, b], DEFAULT_SETTINGS, now, firstRng, undefined, projectMax);
+    expect([a.id, b.id]).toContain(got?.id);
+  });
+});
+
 describe('drawTask — tier selection', () => {
   it('only draws from the highest non-empty effective tier', () => {
     const med = task({ priority: 'medium' });
