@@ -17,6 +17,8 @@
   import { describeRecurrence } from './recurrenceText';
   import { activeMs, formatElapsed } from '../domain/stats';
   import { liveQueueIds } from '../domain/dayQueue';
+  import { appendChecklistItem, toggleChecklistLine } from '../domain/checklist';
+  import Checklist from './Checklist.svelte';
   import type { RecurrenceMode } from '../domain/types';
   import Glyph from './Glyph.svelte';
 
@@ -43,6 +45,29 @@
     if (notes !== task.notes) {
       void app.patchTask(task.id, { notes });
       touched();
+    }
+  }
+
+  let notesEl = $state<HTMLTextAreaElement | null>(null);
+
+  /** Ticking rides the exact same save path as typing into the textarea. */
+  function toggleItem(line: number) {
+    notes = toggleChecklistLine(notes, line);
+    flush();
+  }
+
+  /** The button that knows the markup so nobody else has to. */
+  function addChecklistItem() {
+    const next = appendChecklistItem(notes);
+    notes = next;
+    flush();
+    if (notesEl) {
+      // Write the DOM value NOW rather than waiting for the binding's flush:
+      // focus + caret must land inside this tap's own event turn — that is
+      // both the iOS keyboard law and what lets typing start immediately.
+      notesEl.value = next;
+      notesEl.focus();
+      notesEl.setSelectionRange(next.length, next.length);
     }
   }
 
@@ -193,7 +218,11 @@
 
 <div class="editor">
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
-    rows="2" bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
+    rows="2" bind:this={notesEl} bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
+  <Checklist {notes} taskId={task.id} ontoggle={toggleItem} />
+  <button class="add-check" data-testid="task-add-checklist" onclick={addChecklistItem}>
+    <Glyph name="box" size={11} /> checklist item
+  </button>
 
   <PrioritySelect value={task.priority}
     onchange={(p) => { void app.patchTask(task.id, { priority: p }); touched(); }} />
@@ -456,6 +485,13 @@
   }
   .each input { accent-color: var(--acc-cyan); }
   .each-hint { color: var(--dim); font-size: 0.72rem; }
+  .add-check {
+    align-self: flex-start; display: inline-flex; align-items: center; gap: 5px;
+    background: none; border: 1px dashed var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 4px 9px; cursor: pointer;
+  }
+  @media (hover: hover) { .add-check:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
   .ritual-actions { display: flex; gap: 8px; }
   .ritual-actions button {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

@@ -11,6 +11,8 @@
   import { haptic } from './fx/haptics';
   import Timebox from './Timebox.svelte';
   import { completionCounts, elapsedSoFar, formatElapsed } from '../domain/stats';
+  import { checklistProgress, toggleChecklistLine } from '../domain/checklist';
+  import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
 
   /** Completing THE current task is the app's biggest moment — confetti-grade. */
@@ -40,6 +42,7 @@
   });
 
   const listTitle = $derived(task ? app.state.lists.find((l) => l.id === task!.listId)?.title : undefined);
+  const progress = $derived(task ? checklistProgress(task.notes) : null);
 
   /**
    * The elapsed readout has to be driven by a clock, not by the task: nothing
@@ -72,6 +75,15 @@
       <span class="name">{task.name || 'untitled'}</span>
       {#if listTitle}<span class="list">in {listTitle}</span>{/if}
     </button>
+    {#if progress}
+      <!-- The working surface for a checklist-shaped task ("pack for the
+           trip"): tick items right here while it is THE thing you're doing. -->
+      <div class="check-wrap">
+        <Checklist notes={task.notes} taskId={task.id}
+          ontoggle={(line) => void app.patchTask(task!.id, { notes: toggleChecklistLine(task!.notes, line) })} />
+        <span class="check-progress" data-testid="current-check-progress">{progress.done}/{progress.total}</span>
+      </div>
+    {/if}
     <div class="timebox-row">
       <Timebox {task} />
       {#if task.startedAt || task.activeAccumulatedMs}
@@ -118,6 +130,11 @@
   }
   .name { display: block; font-size: 1.1rem; font-weight: 600; }
   .list { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
+  .check-wrap { position: relative; padding: 2px 0 8px; }
+  .check-progress {
+    position: absolute; top: 2px; right: 0;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
+  }
   .timebox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .elapsed { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
   .actions { display: flex; gap: 8px; }

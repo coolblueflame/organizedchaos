@@ -29,6 +29,45 @@ async function addTask(page: Page, name: string) {
   await page.getByTestId('task-collapse').last().click();
 }
 
+test('a checklist lives inside a task: button-built, tappable, counted', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Trips');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('pack for the lake');
+
+  // The button writes the markup so nobody has to remember it.
+  await page.getByTestId('task-add-checklist').click();
+  await page.keyboard.type('socks');
+  await page.getByTestId('task-add-checklist').click();
+  await page.keyboard.type('charger');
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] socks\n- [ ] charger');
+
+  // Items render as tappable boxes; ticking rewrites the text itself.
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`check-item-${id}-0`).click();
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [x] socks\n- [ ] charger');
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
+
+  // The row wears a live count instead of the plain notes marker.
+  await expect(page.getByTestId(`check-count-${id}`)).toContainText('1/2');
+
+  // As the CURRENT task, the checklist is workable straight from the card.
+  await page.getByTestId(`task-row-${id}`).click();
+  await page.getByTestId('task-make-current').last().click();
+  await expect(page.getByTestId('current-task-card')).toBeVisible();
+  await page.getByTestId(`check-item-${id}-1`).click();
+  await expect(page.getByTestId('current-check-progress')).toContainText('2/2');
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId(`check-count-${id}`)).toContainText('2/2');
+
+  // Unticking from the editor round-trips the same text.
+  await page.getByTestId(`task-row-${id}`).click();
+  await page.getByTestId(`check-item-${id}-0`).last().click();
+  await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] socks\n- [x] charger');
+});
+
 test('list settings: shows the name, cancels cleanly, saves weekday hours', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Office');

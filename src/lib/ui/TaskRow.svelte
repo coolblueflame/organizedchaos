@@ -14,6 +14,7 @@
   import TaskEditor from './TaskEditor.svelte';
   import Glyph from './Glyph.svelte';
   import { describeRitualTask, isRitualTask, ritualState } from '../domain/ritual';
+  import { checklistProgress } from '../domain/checklist';
   import { isLongSnooze } from '../domain/sweep';
   import { estimateOutcome } from '../domain/stats';
 
@@ -65,6 +66,8 @@
   const ritual = $derived(ritualState(task, new Date(), app.state.settings.rolloverHour));
   /** A page marker so you can see there's detail worth expanding for. */
   const hasNotes = $derived(task.notes.trim().length > 0);
+  /** A checklist inside the notes upgrades the marker to a live count. */
+  const checkProgress = $derived(checklistProgress(task.notes));
   const listTitle = $derived(app.state.lists.find((l) => l.id === task.listId)?.title);
   const rowTags = $derived(task.tagIds
     .map((id) => app.state.tags.find((t) => t.id === id))
@@ -249,7 +252,13 @@
             ⧗ {formatElapsed(activeMs(task)!)}
           </span>
         {/if}
-        {#if hasNotes}
+        {#if checkProgress}
+          <span class="mark check-count" class:all-done={checkProgress.done === checkProgress.total}
+            data-testid="check-count-{task.id}"
+            title="checklist inside — expand to tick things off">
+            <Glyph name="box-checked" size={11} /> {checkProgress.done}/{checkProgress.total}
+          </span>
+        {:else if hasNotes}
           <span class="mark" data-testid="has-notes-{task.id}">
             <Glyph name="notes" size={11} title="has a description — expand to read it" />
           </span>
@@ -421,6 +430,8 @@
   .deadline.overdue { color: var(--acc-magenta); font-weight: 700; }
   .flame { color: var(--acc-orange); font-size: 0.65rem; }
   .mark { display: inline-flex; align-items: center; color: var(--dim); }
+  .check-count { gap: 3px; font-family: var(--font-mono); font-size: 0.65rem; }
+  .check-count.all-done { color: var(--acc-green); }
   /* The one that means "you can't do this yet" earns a warmer colour. */
   .blocked-mark { color: var(--acc-orange); }
   .prio { width: 8px; height: 8px; border-radius: 50%; }
