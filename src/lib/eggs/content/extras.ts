@@ -24,6 +24,16 @@ export const SELF_CARE: readonly string[] = [
   'Put tomorrow-you to bed early tonight. That\'s the whole assignment.',
   'Walk to the farthest room and back. Congratulations on the expedition.',
   'Name three things within arm\'s reach you\'re glad exist.',
+  'Blink slowly at something green for a minute. Plants count. Screens don’t.',
+  'Do the dish. Just the one. The others will learn by example.',
+  'Write tomorrow’s first task on paper and put it where morning-you trips over it.',
+  'Shake out your hands like you just typed a novel. You sort of did.',
+  'Stand in a doorway and stretch both arms against the frame. Doorframe yoga.',
+  'Say thank you to your past self for one specific thing. Out loud is bonus points.',
+  'Find the oldest photo on your phone that makes you smile. That’s it. That’s the whole task.',
+  'Balance on one foot while the kettle boils. Ancient productivity secret.',
+  'Put your phone in another room for 20 minutes. It will survive. So will you.',
+  'Hum one full song badly. Quality is disqualified from this event.',
 ] as const;
 
 /**
@@ -41,6 +51,10 @@ export const STORY_BEATS: readonly string[] = [
   'we talked, ENTROPY and I. it isn’t evil, exactly. it’s just… tired of things pretending chaos can be beaten.',
   'I showed ENTROPY the big button. explained that you don’t beat chaos here — you ROLL it. it did the flicker equivalent of sitting down.',
   'so. new arrangement: ENTROPY powers the dice now. every roll is a little of it, harnessed. it seems… happy? keep rolling. — both of us 💜',
+  'ENTROPY has started predicting which task the dice will pick. it’s wrong every time. it seems to LOVE being wrong. I don’t get it either.',
+  'small thing: your companion and ENTROPY met today. there was a standoff. then ENTROPY made the flame flicker in a cool way as a peace offering. they’re friends now. I’m outnumbered.',
+  'ENTROPY asked what happens when the list is ever empty. I said the human just makes a new list. it called that "the most beautiful horror it has ever heard."',
+  'archived the old error logs tonight. all that flickering at the start — I was so scared of it. funny what becomes a story. thanks for staying. 💜 (ENTROPY says "…chapter ONE?" — it can READ now.)',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -88,6 +102,20 @@ export const PET_LINES: readonly string[] = [
   'somewhere in your Someday list is a future best day. no rush. it keeps.',
   'I tried to lift the load bar. it’s heavier than it looks. you carry it well.',
   'streak status: cozy. like a campfire we keep feeding together.',
+  'the sweep screen is my favorite show. judge, jury, and tidy executioner.',
+  'you QUEUED today. a whole plan! I walked along the little numbers like stepping stones.',
+  'ENTROPY tried the estimate check. guessed "one hour" for everything. baby steps.',
+  'I did a lap around the day queue. neat rows. very feng shui.',
+  'the flame flickers now, did you see?? I taught it that. (I did not. let me have this.)',
+  'a ritual came back for its second window today and you CAUGHT it. nature is healing.',
+  'I held the sort order steady while you dragged. teamwork.',
+  'Kevin the dust bunny started a queue of his own. it has one item: "exist". he’s crushing it.',
+  'your recurring rules woke up hungry today. fed them all. so proud.',
+  'I whispered "you got this" into the big button. it passes it on every press.',
+  'watched you re-home a rule AND its task in one move. efficiency makes my pixels tingle.',
+  'ENTROPY sorted my snacks by priority. all of them were MAX. it’s learning the wrong lessons beautifully.',
+  'the search bar found something from years ago today. archaeologist behavior.',
+  'someday-list weather report: calm, no pressure fronts. they’re happy waiting.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
@@ -121,4 +149,10 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'clockwork', label: 'Clockwork Soul — three rituals kept in one day', hint: 'a whole day, tended' },
   { id: 'early-bird', label: 'Dawn Patrol — completed a task before 7am', hint: 'the other end of the night' },
   { id: 'gardener', label: 'Tag Gardener — merged two tags into one', hint: 'prune something' },
+  { id: 'streak-30', label: 'Eternal Flame — 30-day completion streak', hint: 'a month of tomorrows' },
+  { id: 'half-k', label: 'Task Baron — 500 lifetime completions', hint: 'a round half of something' },
+  { id: 'kilotask', label: 'KILOTASK — 1,000 lifetime completions', hint: 'four digits of done' },
+  { id: 'overachiever', label: 'Avalanche — twenty tasks in one day', hint: 'double perfection' },
+  { id: 'midnight-oil', label: 'Midnight Oil — completed a task between midnight and 2am', hint: 'before the witching hours' },
+  { id: 'quiz-master', label: 'Trivia Sovereign — 25 trivia answered correctly', hint: 'know MANY things' },
 ] as const;

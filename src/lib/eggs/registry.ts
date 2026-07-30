@@ -5,7 +5,8 @@
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
 import {
-  BULK_LINES, QUIPS, RITUAL_LINES, STREAK_LINES, TIMEBOX_LINES, UNBLOCK_LINES, WORK_PERIOD_LINES,
+  BULK_LINES, QUIPS, RITUAL_LINES, STREAK_LINES, SWEEP_LINES, TIMEBOX_LINES, UNBLOCK_LINES,
+  WORK_PERIOD_LINES,
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
@@ -16,7 +17,7 @@ const HOUR = 3600_000;
 
 export const MOMENTS = [
   'rainbow-wave', 'matrix-rain', 'crt-flicker', 'confetti-storm',
-  'disco', 'starfield', 'invert-blip', 'friendly-bsod',
+  'disco', 'starfield', 'invert-blip', 'friendly-bsod', 'aurora',
 ] as const;
 export type MomentName = (typeof MOMENTS)[number];
 
@@ -78,6 +79,10 @@ export const REGISTRY: EggDef[] = [
     id: 'ritual-line', weight: 60, triggers: ['ritualCompleted'],
     present: (c) => ({ kind: 'note', emoji: '🕯️', accent: 'green', text: pick(RITUAL_LINES, c.rng) }),
   },
+  {
+    id: 'sweep-line', weight: 60, triggers: ['sweepActed'],
+    present: (c) => ({ kind: 'note', emoji: '🧹', accent: 'cyan', text: pick(SWEEP_LINES, c.rng) }),
+  },
   unlockEgg('ritualist', ['ritualCompleted'], () => true),
   unlockEgg('boxer', ['timeboxFinished'], () => true),
   unlockEgg('shepherd', ['taskDragged'], () => true),
@@ -121,6 +126,14 @@ export const REGISTRY: EggDef[] = [
     const h = c.now.getHours();
     return h >= 4 && h < 7;
   }),
-  // quiz-whiz, konami, chaos-word, hatchling, sweeper, clairvoyant, gardener
-  // and clockwork are granted directly by their own flows (grantUnlockAndShow).
+  unlockEgg('streak-30', ['taskCompleted'], (c) => c.streakDays >= 30),
+  unlockEgg('half-k', ['taskCompleted'], (c) => c.lifetimeCompletions >= 500),
+  unlockEgg('kilotask', ['taskCompleted'], (c) => c.lifetimeCompletions >= 1000),
+  unlockEgg('overachiever', ['taskCompleted'], (c) => c.completionsToday >= 20),
+  unlockEgg('midnight-oil', ['taskCompleted'], (c) => {
+    const h = c.now.getHours();
+    return h >= 0 && h < 2;
+  }),
+  // quiz-whiz, quiz-master, konami, chaos-word, hatchling, sweeper, clairvoyant,
+  // gardener and clockwork are granted directly by their own flows (grantUnlockAndShow).
 ];

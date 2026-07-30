@@ -187,6 +187,7 @@ export class AppStore {
     this.syncEggMirrors();
     // Earned-by-knowledge discovery threshold.
     if (this.eggs && this.eggs.triviaStats.correct >= 10) this.grantUnlockAndShow('quiz-whiz');
+    if (this.eggs && this.eggs.triviaStats.correct >= 25) this.grantUnlockAndShow('quiz-master');
   }
 
   /**

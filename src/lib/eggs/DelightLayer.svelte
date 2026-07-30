@@ -266,6 +266,20 @@
     animation: crt 0.12s steps(2) infinite;
   }
   @keyframes crt { 50% { opacity: 0.6; transform: translateY(1px); } }
+  .m-aurora {
+    /* Sheets of light drifting over the dark — soft, unlike the loud ones. */
+    background:
+      radial-gradient(120% 60% at 20% 110%, rgba(126, 231, 135, 0.22), transparent 60%),
+      radial-gradient(120% 60% at 80% 115%, rgba(121, 192, 255, 0.20), transparent 60%),
+      radial-gradient(140% 70% at 50% 120%, rgba(210, 168, 255, 0.16), transparent 65%),
+      rgba(11, 14, 20, 0.35);
+    background-size: 220% 220%, 220% 220%, 220% 220%, 100% 100%;
+    animation: aurora-drift 2.6s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift {
+    from { background-position: 0% 100%, 100% 100%, 50% 100%, 0 0; }
+    to { background-position: 60% 40%, 30% 55%, 70% 45%, 0 0; }
+  }
   .m-friendly-bsod { background: #1533b8; display: grid; place-items: center; }
   .bsod { color: #fff; font-family: var(--font-mono); text-align: left; max-width: 420px; padding: 20px; }
   .bsod-face { font-size: 4rem; margin: 0 0 12px; }

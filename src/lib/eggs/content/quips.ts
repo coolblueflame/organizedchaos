@@ -100,6 +100,34 @@ export const QUIPS: readonly string[] = [
   'Task down. Swagger up.',
   'Your future self just sent a thank-you note.',
   'Executed flawlessly. The witnesses (me) were impressed.',
+  'The council of dice has reviewed your work. Verdict: magnificent.',
+  'Somewhere a whiteboard just gained a checkmark out of respect.',
+  'Speedran that errand like it owed you money.',
+  'Task status: extremely former.',
+  'The backlog just updated its threat assessment. You’re listed.',
+  'Achievement synced to the cloud (the emotional one).',
+  'Ding! Level up. Skill points allocated to Getting Things Done.',
+  'That was textbook. They should teach that completion in schools.',
+  'The item has been crafted. The recipe was courage.',
+  'Fus Ro DONE.',
+  'Enemies defeated: 1 (it was a chore).',
+  'You looked at entropy and said "not today." Verifiably.',
+  'The simulation devs are patching you next release — too strong.',
+  'S-rank clear. No continues used.',
+  'Your todo list called. It’s scared. Good.',
+  'Quest complete. Reward: one (1) smug little glow.',
+  'Waluigi time? No. YOUR time.',
+  'Another brick out of the wall of doom.',
+  'Task retired with full honors and a tiny parade.',
+  'Chaos looked away for ONE second and you finished a thing.',
+  'The estimate feared you. Rightly.',
+  'Absolutely no notes. Ship it.',
+  'That’s going in the highlight reel.',
+  'Legend says the task is still completed to this day.',
+  'You pressed the button of destiny and destiny blinked.',
+  'Inventory updated: −1 burden, +1 swagger.',
+  'The little checkbox dreamed of this day.',
+  'Frame-perfect execution. TAS bot is taking notes.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */
@@ -113,6 +141,12 @@ export const RITUAL_LINES: readonly string[] = [
   'Done today. Tomorrow it simply begins again — no debts here.',
   'You kept the small promise. Those are the load-bearing ones.',
   'The routine holds. Civilizations have been built on less.',
+  'The candle is lit again. Same flame, new day.',
+  'Quietly heroic, daily edition.',
+  'Not glamorous. Just kept. That’s the whole magic.',
+  'The day and you shook hands on schedule.',
+  'One more bead on a very long string.',
+  'Kept promises compound. Interest rate: excellent.',
 ] as const;
 
 export const TIMEBOX_LINES: readonly string[] = [
@@ -128,6 +162,12 @@ export const TIMEBOX_LINES: readonly string[] = [
   'The sand has run out. Flip me over anytime.',
   'Pomodoro achieved. Tomato acquired. 🍅',
   'GG. The clock never stood a chance.',
+  'Round complete. The bell is very proud.',
+  'Whistle blown. Hit the showers, champion.',
+  'The hourglass respects you now.',
+  'Session archived. Muscles (mental): sore in a good way.',
+  'The clock ran its race. You ran yours better.',
+  'Buzzer beater! …or at least a buzzer meeter.',
 ] as const;
 
 /** Lines for declaring a work period. */
@@ -139,6 +179,12 @@ export const WORK_PERIOD_LINES: readonly string[] = [
   'Speedrun timer started. Any%.',
   'Right then. Sleeves: rolled.',
   'The forge is hot.',
+  'Timer live. May your coffee stay warm exactly as long as needed.',
+  'Heads down. The world can buffer.',
+  'Session opened. Scope: locked. Vibes: industrial.',
+  'The work period sees all fitting tasks. Choose your fighter.',
+  'Countdown running. Be the montage.',
+  'Door closed, mind open.',
 ] as const;
 
 /** Lines for sweeping several tasks at once. */
@@ -150,6 +196,12 @@ export const BULK_LINES: readonly string[] = [
   'Mass deletion of obligations. Gorgeous.',
   'That was a combo, and I saw it.',
   'Ah, the ol’ select-and-obliterate. A classic.',
+  'Wholesale progress. Retail is for cowards.',
+  'One gesture, many victories. Very economical.',
+  'The group select giveth, and the group select taketh a LOT away.',
+  'Fleet actions on the todo sea. Admiral energy.',
+  'Several birds, one extremely efficient stone.',
+  'That column of checkmarks appeared in formation. Beautiful drill work.',
 ] as const;
 
 /** Lines for finishing something other tasks were waiting on. */
@@ -164,6 +216,11 @@ export const UNBLOCK_LINES: readonly string[] = [
   'You were the bottleneck’s bottleneck. Not anymore.',
   'Merge conflict of the soul: resolved.',
   'Green light. ✅ Traffic may proceed.',
+  'Chain reaction authorized. Dominoes, fall in.',
+  'The dam is open. Let the work flow.',
+  'You cleared the one everyone was politely queueing behind.',
+  'Root dependency satisfied. The tree may now grow.',
+  'That task was a cork. POP.',
 ] as const;
 
 /** Rarer streak / heater lines — the app noticing you’re on one. */
@@ -178,4 +235,24 @@ export const STREAK_LINES: readonly string[] = [
   'New personal best pace. The ghost car is way behind.',
   'M-M-M-MONSTER STREAK.',
   'The productivity gods demand nothing. They’re just impressed.',
+  'Day after day after day. The flame has opinions about you now. Good ones.',
+  'The streak is old enough to have a personality. It chose "relentless."',
+  'Chain unbroken. Blacksmiths weep at the craftsmanship.',
+  'Your consistency has consistency.',
+  'This isn’t a hot streak anymore. This is a climate.',
+  'The calendar is just a fan account of your streak at this point.',
+] as const;
+
+/** Lines for sweep verdicts — brisk, respectful of the courage to decide. */
+export const SWEEP_LINES: readonly string[] = [
+  'Verdict rendered. Next case.',
+  'The backlog thins. The mind clears.',
+  'Decisive. The sweep respects decisive.',
+  'Another one sorted. Marie Kondo felt a disturbance.',
+  'Judged fairly, filed swiftly.',
+  'That task waited YEARS for ten seconds of your attention. Worth it.',
+  'Curation is creation’s quiet sibling. Nice work.',
+  'Snip. The garden looks better already.',
+  'The pile shrinks because someone finally LOOKED at it.',
+  'Court is efficient today.',
 ] as const;
