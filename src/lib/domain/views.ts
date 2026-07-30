@@ -26,7 +26,9 @@ export function applySubSort(tasks: Task[], sub: SubSort): Task[] {
   if (sub === 'smart') return tasks;
   const sorted = [...tasks];
   if (sub === 'alpha') {
-    sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    // numeric: "item 2" belongs before "item 10", not after it.
+    sorted.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   } else if (sub === 'created') {
     sorted.sort((a, b) => a.createdAt - b.createdAt);
   } else {

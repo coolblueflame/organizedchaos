@@ -206,6 +206,25 @@ test("a ritual's checkbox lets go after completing — and after an undo", async
   await expect(page.getByTestId(`ritual-mark-${id}`)).toHaveClass(/ritual-done/);
 });
 
+test('tapping the list title renames it in place', async ({ page }) => {
+  await makeList(page, 'Errnads'); // typo, on purpose — the whole use case
+  await page.getByTestId('list-title').click();
+  await expect(page.getByTestId('list-title-input')).toHaveValue('Errnads');
+  await page.getByTestId('list-title-input').fill('Errands');
+  await page.getByTestId('list-title-input').press('Enter');
+  await expect(page.getByTestId('list-title')).toContainText('Errands');
+
+  // Escape backs out without saving.
+  await page.getByTestId('list-title').click();
+  await page.getByTestId('list-title-input').fill('Wrong Turn');
+  await page.getByTestId('list-title-input').press('Escape');
+  await expect(page.getByTestId('list-title')).toContainText('Errands');
+
+  // The new name is real data — home shows it too.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId(/^list-row-/).first()).toContainText('Errands');
+});
+
 test('deleting a task takes two taps, and undo restores it', async ({ page }) => {
   await makeList(page, 'Twice');
   await page.getByTestId('new-task').click();

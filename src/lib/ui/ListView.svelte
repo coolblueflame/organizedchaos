@@ -21,6 +21,18 @@
 
   let editingTaskId = $state<string | null>(null);
 
+  // Tap-to-rename (parked polish, 2026-07-28 ask): the title IS the control.
+  let renaming = $state(false);
+  let titleDraft = $state('');
+  function saveTitle() {
+    // Escape sets renaming=false and the input's teardown still fires blur —
+    // without this guard the abandoned draft saved anyway.
+    if (!renaming) return;
+    renaming = false;
+    const t = titleDraft.trim();
+    if (t && list && t !== list.title) void app.renameList(id, t);
+  }
+
   const list = $derived(app.state.lists.find((l) => l.id === id));
   const listTasks = $derived(app.state.tasks.filter((t) => t.listId === id));
 
@@ -131,7 +143,21 @@
 <main>
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
-    <h1>{list?.title ?? '…'}</h1>
+    {#if renaming}
+      <!-- svelte-ignore a11y_autofocus -->
+      <input class="title-input" data-testid="list-title-input" autofocus
+        bind:value={titleDraft}
+        onblur={saveTitle}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') saveTitle();
+          if (e.key === 'Escape') { e.stopPropagation(); renaming = false; }
+        }} />
+    {:else}
+      <button class="title" data-testid="list-title" title="tap to rename"
+        onclick={() => { titleDraft = list?.title ?? ''; renaming = true; }}>
+        <h1>{list?.title ?? '…'}</h1>
+      </button>
+    {/if}
     <button class="dice" data-testid="list-randomize" aria-label="randomize from this list"
       onclick={() => navigate({ name: 'randomizer', listId: id })}><Glyph name="dice" size={15} /></button>
     <button class="sort" data-testid="list-sort" onclick={cycleSort}>
@@ -192,7 +218,18 @@
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
-  h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; flex: 1; }
+  h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
+  .title {
+    flex: 1; min-width: 0; background: none; border: none; padding: 0;
+    color: inherit; text-align: left; cursor: text;
+  }
+  .title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title-input {
+    flex: 1; min-width: 0;
+    background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 8px;
+    color: var(--text); font-family: var(--font-mono); font-size: 1.05rem;
+    padding: 6px 10px;
+  }
   .dice {
     background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 4px 6px;
     filter: grayscale(0.3);

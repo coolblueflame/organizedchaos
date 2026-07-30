@@ -87,6 +87,16 @@ describe('sub-sorting within groups', () => {
     expect(subSortGroups(group, 'alpha')[0]!.tasks.map((t) => t.name)).toEqual(['Alpha', 'mid', 'zeta']);
   });
 
+  it('alphabetical is numeric-aware: item 2 before item 10', () => {
+    const g = [{ key: 'g', label: 'g', tasks: [
+      task({ priority: 'low', name: 'item 10' }),
+      task({ priority: 'low', name: 'item 2' }),
+      task({ priority: 'low', name: 'item 1' }),
+    ] }];
+    expect(subSortGroups(g, 'alpha')[0]!.tasks.map((t) => t.name))
+      .toEqual(['item 1', 'item 2', 'item 10']);
+  });
+
   it('oldest and newest order by creation', () => {
     expect(subSortGroups(group, 'created')[0]!.tasks.map((t) => t.name)).toEqual(['zeta', 'mid', 'Alpha']);
     expect(subSortGroups(group, 'newest')[0]!.tasks.map((t) => t.name)).toEqual(['Alpha', 'mid', 'zeta']);
