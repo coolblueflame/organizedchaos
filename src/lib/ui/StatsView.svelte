@@ -10,7 +10,8 @@
   import { navigate } from './router.svelte';
   import { listHealth, shortAge } from '../domain/listHealth';
   import {
-    averageActiveMs, burdenSeries, completionSeries, formatDuration, formatElapsed,
+    averageActiveMs, burdenSeries, completionSeries, formatDuration, formatDurationLong,
+    formatElapsed,
     totalEstimateHours,
   } from '../domain/stats';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
@@ -36,6 +37,9 @@
     plainTasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
 
   const estimateHours = $derived(totalEstimateHours(plainTasks));
+  const openCount = $derived(
+    plainTasks.filter((t) => !t.deleted && t.completedAt === undefined).length,
+  );
   const avgActive = $derived(averageActiveMs(plainTasks));
 
   const unconfirmedEstimates = $derived(estimateQueue(plainTasks, app.state.lists).length);
@@ -63,11 +67,10 @@
       <button class="info" aria-label="how is this computed?"
         onclick={() => (showAssumption = !showAssumption)}>ⓘ</button>
     </span>
-    <span class="hero-num">{formatDuration(estimateHours)}</span>
-    <!-- The exact figure, to the minute: a 2,400-hour backlog measured in
-         weeks only moves when 40 hours shift — this line moves with every
-         estimate you finish or add (2026-07-29 ask). -->
-    <span class="hero-exact" data-testid="stats-estimate-exact">exactly {formatElapsed(estimateHours * 3_600_000)}</span>
+    <!-- Every unit spelled out so the number moves with each completion;
+         nobody remembers yesterday's four-digit hour count (2026-07-30 ask). -->
+    <span class="hero-num">{formatDurationLong(estimateHours)}</span>
+    <span class="hero-exact" data-testid="stats-open-count">across {openCount.toLocaleString()} open todo{openCount === 1 ? '' : 's'}</span>
     {#if unconfirmedEstimates > 0}
       <button class="est-check" data-testid="stats-est-check"
         onclick={() => navigate({ name: 'sweep', mode: 'estimates' })}>

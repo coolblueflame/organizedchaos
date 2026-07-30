@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type Priority, type Task } from './types';
 import {
+  formatDurationLong,
   burdenSeries, completionCounts, completionSeries, formatDuration, totalEstimateHours,
   winsList, estimateOutcome,
 } from './stats';
@@ -82,6 +83,20 @@ describe('estimates', () => {
     expect(formatDuration(24 * 7 + 24 * 2)).toBe('1w 2d');
     expect(formatDuration(24 * 30 + 24 * 7)).toBe('1mo 1w');
     expect(formatDuration(24 * 365 + 24 * 60)).toBe('1y 2mo');
+  });
+});
+
+describe('formatDurationLong', () => {
+  it('spells out every unit down to hours, minutes only when fractional', () => {
+    expect(formatDurationLong(2 * 720 + 168 + 72 + 5)).toBe('2mo 1w 3d 5h');
+    expect(formatDurationLong(26)).toBe('1d 2h');
+    expect(formatDurationLong(2.5)).toBe('2h 30m');
+    expect(formatDurationLong(0.5)).toBe('30m');
+    expect(formatDurationLong(0)).toBe('0h');
+  });
+
+  it('skips zero units instead of printing them', () => {
+    expect(formatDurationLong(720 + 3)).toBe('1mo 3h'); // no weeks, no days
   });
 });
 

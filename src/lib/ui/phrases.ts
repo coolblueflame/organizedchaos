@@ -4,6 +4,7 @@
  * and punchy. Mix of Ben's originals, dev-culture bits, and chaos-agent energy.
  */
 export const PHRASES: readonly string[] = [
+  'Finish the fight.',
   // Ben's originals
   "Let's do this.",
   "Let's gooooo!",

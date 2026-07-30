@@ -34,8 +34,8 @@ test('completions feed the strip and the stats screen renders both charts', asyn
   await page.getByTestId('stats-strip').click();
 
   await expect(page.getByTestId('stats-estimate')).toContainText('0h'); // nothing open
-  await expect(page.getByTestId('stats-estimate-exact'), 'the to-the-minute line')
-    .toContainText('exactly');
+  await expect(page.getByTestId('stats-open-count'), 'the open-todo count line')
+    .toContainText('across 0 open todos');
   await expect(page.locator('svg[role="img"]')).toHaveCount(2); // bar + line charts
   await page.getByTestId('stats-gran-week').click(); // toggle doesn't explode
   await expect(page.locator('svg[role="img"]')).toHaveCount(2);

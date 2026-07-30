@@ -138,6 +138,29 @@ export function formatDuration(hours: number): string {
 }
 
 /**
+ * The whole duration spelled out, every unit down to the hour (and minutes
+ * when the estimate has a fractional hour): "2mo 1w 3d 5h 30m". The stats
+ * hero uses this so the number MOVES with every estimate finished or added —
+ * a weeks-only figure needs 40 hours of change before it visibly budges
+ * (2026-07-30 ask, replacing the separate "exactly …h" line).
+ */
+export function formatDurationLong(hours: number): string {
+  if (hours <= 0) return '0h';
+  const parts: string[] = [];
+  let rest = Math.floor(hours);
+  for (const [suffix, size] of DURATION_UNITS) {
+    const amount = Math.floor(rest / size);
+    if (amount > 0) {
+      parts.push(`${amount}${suffix}`);
+      rest -= amount * size;
+    }
+  }
+  const minutes = Math.round((hours - Math.floor(hours)) * 60);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  return parts.length ? parts.join(' ') : '0h';
+}
+
+/**
  * Tracked working time for a finished task — only present when it was
  * completed while actually in progress (see Task.activeMs).
  */
