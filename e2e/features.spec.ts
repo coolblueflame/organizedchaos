@@ -137,6 +137,11 @@ test('project deadline shows the remaining workload and marks the list', async (
   const listId = (await page.getByTestId(/^list-row-/).first().getAttribute('data-testid'))!
     .replace('list-row-', '');
 
+  // The list's own workload line, same 1h-default math as the stats hero.
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByTestId('list-work-left')).toContainText('2h of work left');
+  await page.getByTestId('back').click();
+
   await page.getByTestId(`list-menu-${listId}`).click();
   await page.getByTestId('list-settings-deadline').fill('2026-08-30');
   await expect(page.getByTestId('list-settings-readout')).toContainText('2h of work left');

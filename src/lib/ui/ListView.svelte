@@ -15,6 +15,7 @@
   import GroupedTasks from './GroupedTasks.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
   import { revealOnApproach } from './lazyReveal';
+  import { formatDurationLong, totalEstimateHours } from '../domain/stats';
   import TaskRow from './TaskRow.svelte';
   import Glyph from './Glyph.svelte';
 
@@ -48,6 +49,8 @@
 
   const list = $derived(app.state.lists.find((l) => l.id === id));
   const listTasks = $derived(app.state.tasks.filter((t) => t.listId === id));
+  /** The list's own workload, same 1h-default math as the stats hero. */
+  const workLeft = $derived(totalEstimateHours(listTasks));
 
   const nextMode: Record<SortMode, SortMode> =
     { priority: 'date', date: 'tag', tag: 'custom', custom: 'priority' };
@@ -185,6 +188,14 @@
     {/if}
   </header>
 
+  {#if workLeft > 0}
+    <!-- The stats hero, list-sized: what finishing THIS list would cost
+         (2026-07-30 ask — the per-project view of the same number). -->
+    <p class="work-left" data-testid="list-work-left">
+      ≈ {formatDurationLong(workLeft)} of work left
+    </p>
+  {/if}
+
   <GroupedTasks
     groups={sortedGroups}
     mode={list?.sortMode ?? 'priority'}
@@ -233,6 +244,10 @@
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
+  .work-left {
+    margin: -6px 0 12px; color: var(--dim); font-family: var(--font-mono);
+    font-size: 0.7rem;
+  }
   .title {
     flex: 1; min-width: 0; background: none; border: none; padding: 0;
     color: inherit; text-align: left; cursor: text;
