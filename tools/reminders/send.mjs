@@ -33,6 +33,15 @@ if (!digest) {
   process.exit(0);
 }
 
+// Dry run: everything up to the actual send, nothing to anyone's phone.
+// Manual workflow dispatches default to this — a real subscriber got a
+// duplicate morning digest from a verification dispatch on 2026-08-01,
+// which is exactly once too often.
+if (process.env.OC_DRY_RUN === 'true') {
+  console.log(`DRY RUN — would push to ${subs.length} device(s):`, digest.body);
+  process.exit(0);
+}
+
 webpush.setVapidDetails(
   'mailto:ben@noodlecake.com',
   process.env.VAPID_PUBLIC_KEY,
