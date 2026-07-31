@@ -7,6 +7,7 @@
   import { navigate } from './router.svelte';
   import SyncHowTo from './SyncHowTo.svelte';
   import { install } from './install.svelte';
+  import { currentPushSubscription, deviceLabel, pushSupported, subscribePush } from './push';
   import Glyph from './Glyph.svelte';
 
   let howToOpen = $state(false);
@@ -40,6 +41,49 @@
   }
 
   const lastSync = $derived(app.lastSyncAt ? new Date(app.lastSyncAt).toLocaleTimeString() : 'never');
+
+  // ── serverless reminders (2026-07-30): the data repo's Action pushes a
+  //    morning digest to every device registered here. ──────────────────────
+  let remindersOn = $state<boolean | null>(null); // null = still checking
+  let reminderBusy = $state(false);
+  let reminderError = $state('');
+
+  $effect(() => {
+    void currentPushSubscription().then((s) => (remindersOn = s !== null));
+  });
+
+  async function enableReminders() {
+    if (reminderBusy) return;
+    reminderBusy = true;
+    reminderError = '';
+    try {
+      const sub = await subscribePush();
+      await app.saveReminderSubscription(sub, deviceLabel(), true);
+      remindersOn = true;
+    } catch (err) {
+      reminderError = err instanceof Error ? err.message : String(err);
+    } finally {
+      reminderBusy = false;
+    }
+  }
+
+  async function disableReminders() {
+    if (reminderBusy) return;
+    reminderBusy = true;
+    reminderError = '';
+    try {
+      const sub = await currentPushSubscription();
+      if (sub) {
+        await app.saveReminderSubscription(sub, deviceLabel(), false);
+        await sub.unsubscribe();
+      }
+      remindersOn = false;
+    } catch (err) {
+      reminderError = err instanceof Error ? err.message : String(err);
+    } finally {
+      reminderBusy = false;
+    }
+  }
 
   function setting(patch: Partial<typeof app.state.settings>) {
     void app.updateSettings(patch);
@@ -101,6 +145,32 @@
       </div>
     {/if}
   </section>
+
+  {#if pushSupported()}
+    <section class="group" data-testid="settings-reminders">
+      <h2>morning reminders</h2>
+      <p class="hint">
+        A daily push when deadlines are due or overdue — sent each morning by
+        your own data repo's free CI. No server anywhere.
+      </p>
+      {#if app.syncStatus === 'disabled'}
+        <p class="hint">connect sync above first — reminders ride on the same repo.</p>
+      {:else if remindersOn === null}
+        <p class="hint">checking this device…</p>
+      {:else if remindersOn}
+        <p class="status">this device is registered ✓</p>
+        <button data-testid="reminders-disable" disabled={reminderBusy} onclick={() => void disableReminders()}>
+          turn off on this device
+        </button>
+      {:else}
+        <button class="primary" data-testid="reminders-enable" disabled={reminderBusy}
+          onclick={() => void enableReminders()}>
+          enable on this device
+        </button>
+      {/if}
+      {#if reminderError}<p class="error">{reminderError}</p>{/if}
+    </section>
+  {/if}
 
   <section class="group">
     <h2>backup & data</h2>

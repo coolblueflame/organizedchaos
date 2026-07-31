@@ -29,6 +29,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'],
+        // Push + notification-click handlers ride along with the generated SW.
+        importScripts: ['sw-push.js'],
         // sql.js wasm (~1.6MB) must precache so import works offline too
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },

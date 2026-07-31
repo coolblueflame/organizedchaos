@@ -295,6 +295,28 @@ export class AppStore {
     return this.repo.loadSnapshot();
   }
 
+  // ── serverless reminders (2026-07-30) ────────────────────────────────────
+
+  /**
+   * Register/deregister THIS device in the data repo's push-subscriptions.json
+   * — the file the reminders Action reads. Wholesale read-modify-write keyed
+   * by endpoint; needs sync to be connected (the same PAT does the writing).
+   */
+  async saveReminderSubscription(sub: PushSubscription, device: string, enable: boolean): Promise<void> {
+    const auth = await this.repo.getSyncAuth();
+    if (!auth) throw new Error('connect sync first — reminders ride on the same repo');
+    const client = new GithubClient(auth);
+    const path = 'push-subscriptions.json';
+    const file = await client.getFile(path);
+    const rows: Array<{ device: string; endpoint: string; subscription: unknown; updatedAt: number }> =
+      Array.isArray(file?.json) ? (file!.json as never) : [];
+    const kept = rows.filter((r) => r.endpoint !== sub.endpoint);
+    if (enable) {
+      kept.push({ device, endpoint: sub.endpoint, subscription: sub.toJSON(), updatedAt: Date.now() });
+    }
+    await client.putFile(path, kept, file?.sha);
+  }
+
   // ── the day queue (2026-07-29 request) ───────────────────────────────────
 
   /**
