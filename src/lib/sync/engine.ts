@@ -204,7 +204,13 @@ export class SyncEngine {
       }
       await this.deps.saveCache?.(nextCache);
     } catch (e) {
-      if (e instanceof ConflictError) return true;
+      if (e instanceof ConflictError) {
+        // The shas recorded for files that DID land before the conflict must
+        // survive the abort — dropping them made the retry re-download our own
+        // successful pushes as if another device had written them.
+        await this.deps.saveCache?.(nextCache);
+        return true;
+      }
       throw e;
     }
     return false;

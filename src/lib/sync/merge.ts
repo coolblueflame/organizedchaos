@@ -170,18 +170,22 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     ...(delight ? { delight } : {}),
   };
 
+  // canonical(), not JSON.stringify: one side has come back from IndexedDB and
+  // the other from JSON, so key order is layout, not content — the rows already
+  // compare this way, and a stringify here let a layout-only difference in a
+  // singleton flag phantom localChanged/remoteChanged work every cycle.
   const sameAs = (side: RemoteSnapshot) =>
     sameRows(merged.lists, side.lists) &&
     sameRows(merged.tasks, side.tasks) &&
     sameRows(merged.tags, side.tags) &&
     sameRows(merged.templates, side.templates) &&
-    JSON.stringify(merged.currentTask) === JSON.stringify(side.currentTask) &&
+    canonical(merged.currentTask) === canonical(side.currentTask) &&
     merged.currentTaskUpdatedAt === side.currentTaskUpdatedAt &&
-    JSON.stringify(merged.settings) === JSON.stringify(side.settings) &&
+    canonical(merged.settings) === canonical(side.settings) &&
     merged.settingsUpdatedAt === side.settingsUpdatedAt &&
-    JSON.stringify(merged.queueIds) === JSON.stringify(side.queueIds) &&
+    canonical(merged.queueIds) === canonical(side.queueIds) &&
     merged.queueUpdatedAt === side.queueUpdatedAt &&
-    JSON.stringify(merged.delight ?? null) === JSON.stringify(side.delight ?? null);
+    canonical(merged.delight ?? null) === canonical(side.delight ?? null);
 
   return { merged, localChanged: !sameAs(local), remoteChanged: !sameAs(remote) };
 }

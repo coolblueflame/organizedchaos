@@ -25,6 +25,8 @@ class FakeClient {
   failNetwork = false;
   /** When set, the next N puts conflict (simulating a racing writer). */
   conflictNext = 0;
+  /** When set, exactly the Nth put (1-based, lifetime) conflicts. */
+  conflictAtPut = 0;
   private shaSeq = 0;
 
   async listFiles(): Promise<RemoteFileEntry[]> {
@@ -45,6 +47,7 @@ class FakeClient {
       this.conflictNext -= 1;
       throw new ConflictError('simulated race');
     }
+    if (this.conflictAtPut === this.putCount) throw new ConflictError('simulated race');
     const existing = this.files.get(path);
     if (existing && existing.sha !== sha) throw new ConflictError('sha mismatch');
     if (!existing && sha) throw new ConflictError('sha for missing file');
@@ -249,6 +252,21 @@ describe('download caching', () => {
     const after = countingEngine(cache);
     await after.engine.syncNow(); // pushes again
     expect(after.gets, 'our own writes are already known').toEqual([]);
+  });
+
+  it('a mid-push conflict keeps the shas of files that DID land', async () => {
+    // Fresh remote, several files to push (active + logbook + meta). Let the
+    // SECOND put conflict: the first file landed with a sha we were told.
+    local = snap({ tasks: [task({ priority: 'high', completedAt: 1_700_000_000_000 })] });
+    const cache = { value: {} as Record<string, { sha: string; json: unknown }> };
+    client.conflictAtPut = 2;
+    const run = countingEngine(cache);
+    await run.engine.syncNow(); // conflicts once, retries, converges
+
+    // The retry must recognise the file WE pushed before the abort — dropping
+    // its recorded sha made the engine re-download its own successful push.
+    expect(run.gets, 'no re-downloading our own pre-conflict pushes').toEqual([]);
+    expect(run.engine.status).toBe('idle');
   });
 
   it('rewrites an orphaned logbook year empty instead of leaving it to haunt', async () => {

@@ -182,6 +182,27 @@ describe('mergeSnapshots — change flags', () => {
     expect(push.localChanged).toBe(false);
     expect(push.remoteChanged).toBe(true);
   });
+
+  it('a layout-only difference in a singleton is not a change', () => {
+    // Same settings CONTENT, different key order — one side came back from
+    // IndexedDB, the other from JSON. Rows already compared canonically; the
+    // singletons went through JSON.stringify and flagged phantom work.
+    const local = snap({
+      settings: { hoursPerDay: 2, rolloverHour: 4 } as RemoteSnapshot['settings'],
+      settingsUpdatedAt: 50,
+      currentTask: { taskId: 'x', acceptedAt: 1 },
+      currentTaskUpdatedAt: 60,
+    });
+    const remote = snap({
+      settings: { rolloverHour: 4, hoursPerDay: 2 } as RemoteSnapshot['settings'],
+      settingsUpdatedAt: 50,
+      currentTask: { acceptedAt: 1, taskId: 'x' } as RemoteSnapshot['currentTask'],
+      currentTaskUpdatedAt: 60,
+    });
+    const r = mergeSnapshots(local, remote);
+    expect(r.localChanged).toBe(false);
+    expect(r.remoteChanged).toBe(false);
+  });
 });
 
 describe('when both sides claim the same instant', () => {
