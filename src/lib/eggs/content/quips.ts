@@ -128,6 +128,16 @@ export const QUIPS: readonly string[] = [
   'Inventory updated: −1 burden, +1 swagger.',
   'The little checkbox dreamed of this day.',
   'Frame-perfect execution. TAS bot is taking notes.',
+  'Objective marker cleared. New waypoint pending.',
+  'The respawn timer on your motivation: instant, apparently.',
+  'Combo meter rising. Style rank: S for "did the thing".',
+  'You dodge-rolled procrastination with perfect i-frames.',
+  'Checkpoint reached. Progress saved to the cloud AND your soul.',
+  'Rip and tear, until it is done. (It is done.)',
+  'The road ahead was full of tasks. You mario-karted through.',
+  'Sidequest complete! Main quest morale +10.',
+  'No skill tree needed — you unlocked that one with sheer spite.',
+  'Boss phase two never came. You ended it in phase one.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */
@@ -255,4 +265,44 @@ export const SWEEP_LINES: readonly string[] = [
   'Snip. The garden looks better already.',
   'The pile shrinks because someone finally LOOKED at it.',
   'Court is efficient today.',
+] as const;
+
+/**
+ * Evening voice — warmer, quieter, for the end of the day. Gated by the
+ * registry to late hours only; the app should feel like it dims with you.
+ */
+export const NIGHT_NOTES: readonly string[] = [
+  'The day is mostly written now. You showed up for it. That was the hard part.',
+  'Whatever didn’t get done today wasn’t abandoned — it’s just scheduled for a version of you that’s slept.',
+  'Quiet hours. The list can hold everything overnight so you don’t have to.',
+  'You did enough today. Not everything — enough. Those were never the same thing.',
+  'Night check-in: streak warm, backlog contained, human presumably horizontal soon?',
+  'Tomorrow gets a fresh 4am boundary and a fresh you. Both are renewable resources.',
+  'The tasks sleep when you do. It’s in their contract.',
+  'End-of-day math: what you finished counts once, what you learned counts twice, what you rested counts tomorrow.',
+  'Closing thought: nobody remembers the nights they optimized. Go be somewhere soft.',
+  'The dice are tired too. See you in the morning. 🌙',
+  'If today was heavy, that’s not failure — that’s load-bearing. Set it down for the night.',
+  'Last call from your todo list: hydrate, dim the lights, and let the chaos idle till dawn.',
+] as const;
+
+/**
+ * Occasional genuinely-useful notes — productivity, social, self-kindness.
+ * Sparse by design: advice you didn’t ask for is only charming in small doses.
+ */
+export const TIPS: readonly string[] = [
+  'Two-minute rule: if it takes less than two minutes, the fastest system is no system. Just do it now.',
+  'Estimates improve fastest when you check them AFTER. You have a screen for that, as it happens.',
+  'A task you keep skipping is usually mis-sized, not unimportant. Split it and watch it move.',
+  'Naming a task with a VERB doubles its odds: "dentist" is a noun; "book the dentist" is a plan.',
+  'The best time to reply to that message was earlier. The second best time is before the guilt compounds.',
+  'If everything is high priority, the priorities are decorative. Someday is a feature, not a failure.',
+  'Energy beats time: schedule hard thinking where your good hours actually live, not where the calendar has gaps.',
+  'When stuck, lower the bar until you’d feel silly NOT starting. Momentum does the rest.',
+  'Compliment people behind their backs. It always makes it back around, improved.',
+  'A deadline you tell someone about is worth three you keep to yourself.',
+  'Rest is a productivity tool with terrible marketing.',
+  'Done today beats perfect someday — perfect is just procrastination in a nicer outfit.',
+  'Your future self is a coworker. Leave them notes, not mysteries.',
+  'The inbox is other people’s priorities. The list is yours. Visit the list first.',
 ] as const;

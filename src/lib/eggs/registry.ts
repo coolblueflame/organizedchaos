@@ -5,8 +5,8 @@
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
 import {
-  BULK_LINES, QUIPS, RITUAL_LINES, STREAK_LINES, SWEEP_LINES, TIMEBOX_LINES, UNBLOCK_LINES,
-  WORK_PERIOD_LINES,
+  BULK_LINES, NIGHT_NOTES, QUIPS, RITUAL_LINES, STREAK_LINES, SWEEP_LINES, TIMEBOX_LINES,
+  TIPS, UNBLOCK_LINES, WORK_PERIOD_LINES,
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
@@ -87,6 +87,24 @@ export const REGISTRY: EggDef[] = [
   unlockEgg('boxer', ['timeboxFinished'], () => true),
   unlockEgg('shepherd', ['taskDragged'], () => true),
   unlockEgg('keymaster', ['taskUnblocked'], () => true),
+
+  // The evening voice: late hours only, at most once a night-ish. The app
+  // dims with the day — a warmer register when a completion lands after dark.
+  {
+    id: 'night-note', weight: 45, triggers: ['taskCompleted', 'screenVisited'],
+    maxPerDay: 1, cooldownMs: 6 * HOUR,
+    condition: (c) => {
+      const h = c.now.getHours();
+      return h >= 21 || h < 2;
+    },
+    present: (c) => ({ kind: 'note', emoji: '🌙', accent: 'purple', text: pick(NIGHT_NOTES, c.rng) }),
+  },
+  // Occasionally-useful notes; sparse — unsolicited advice charms in small doses.
+  {
+    id: 'tip', weight: 14, triggers: ['taskCompleted', 'screenVisited'],
+    cooldownMs: 5 * HOUR, maxPerDay: 2,
+    present: (c) => ({ kind: 'note', emoji: '🧭', accent: 'cyan', text: pick(TIPS, c.rng) }),
+  },
 
   // Trivia — persistent score, sparse by design.
   {
