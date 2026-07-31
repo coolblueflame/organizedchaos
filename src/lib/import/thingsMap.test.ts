@@ -80,6 +80,38 @@ describe('decoders', () => {
     expect(res.mode).toEqual({ kind: 'afterCompletion', interval: 7, unit: 'days' });
     expect(res.note).toMatch(/could not decode/i);
   });
+
+  it('tokenizes self-closing tags instead of skipping past them', () => {
+    // An empty <array/> used to vanish from the token stream entirely, so the
+    // parser consumed the NEXT element as this key's value — every key after
+    // it read the wrong data.
+    const d = parsePlistDict(plist(
+      '<key>of</key><array/><key>fa</key><integer>2</integer><key>empty</key><dict/>'));
+    expect(d.of).toEqual([]);
+    expect(d.fa).toBe(2);
+    expect(d.empty).toEqual({});
+  });
+
+  it('flags monthly-by-weekday rules for review instead of guessing silently', () => {
+    // "Monthly on the 3rd Tuesday": an `of` dict with wd but no dy.
+    const byWeekday = plist(
+      '<key>fa</key><integer>1</integer><key>fu</key><integer>8</integer>' +
+      '<key>of</key><array><dict><key>wd</key><integer>3</integer></dict></array>' +
+      '<key>tp</key><integer>1</integer>');
+    const res = decodeRecurrencePlist(byWeekday);
+    expect(res.mode).toEqual({ kind: 'monthly', dayOfMonth: 1 });
+    expect(res.note).toMatch(/monthly by weekday/i);
+  });
+
+  it('flags count-from-the-end monthly rules when clamping to the 31st', () => {
+    const lastDay = plist(
+      '<key>fa</key><integer>1</integer><key>fu</key><integer>8</integer>' +
+      '<key>of</key><array><dict><key>dy</key><integer>-1</integer></dict></array>' +
+      '<key>tp</key><integer>1</integer>');
+    const res = decodeRecurrencePlist(lastDay);
+    expect(res.mode).toEqual({ kind: 'monthly', dayOfMonth: 31 });
+    expect(res.note).toMatch(/counting from the end/i);
+  });
 });
 
 describe('mapThings', () => {

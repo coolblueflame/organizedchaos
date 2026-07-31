@@ -875,6 +875,30 @@ describe('AppStore', () => {
     expect(after.tagIds).toContain(appTag.id);
   });
 
+  it('importThings: re-importing with the count-history choice flipped updates existing rows', async () => {
+    const mapped = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], templates: [], review: [],
+      tasks: [{
+        id: 'TT1', thingsUuid: 'TT1', listId: 'TP1', name: 'old victory', notes: '', priority: 'medium' as const,
+        tagIds: [], inProgress: false, createdAt: 100, updatedAt: 100, deleted: false,
+        completedAt: 200, importedHistory: true as const,
+      }],
+      counts: { lists: 1, tags: 0, openTasks: 0, completedTasks: 1, templates: 0 },
+    };
+    await store.importThings(mapped);
+    const row = () => store.state.tasks.find((t) => t.thingsUuid === 'TT1')!;
+    expect(row().importedHistory).toBe(true);
+
+    // Same file, choice flipped: the row is not "newer", but the flag is OUR
+    // classification, not a Things field — the toggle must still take effect.
+    await store.importThings(mapped, { countHistoryInTotals: true });
+    expect(row().importedHistory).toBeUndefined();
+
+    await store.importThings(mapped); // and back
+    expect(row().importedHistory).toBe(true);
+  });
+
   it('importThings: floor-stamped entities (areas/tags) never beat local edits on re-import', async () => {
     const mapped = {
       lists: [{ id: 'TA1', thingsUuid: 'TA1', title: 'Area', sortMode: 'priority' as const, createdAt: 1, updatedAt: 1, deleted: false }],

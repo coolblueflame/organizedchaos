@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, type Priority, type Task } from '../domain/types';
+import type { Priority, Task } from '../domain/types';
 import { fromFiles, SCHEMA_VERSION, SchemaTooNewError, toFiles, type RemoteSnapshot } from './files';
 
 const now = new Date('2026-07-26T12:00:00');
@@ -13,7 +13,7 @@ const task = (over: Partial<Task> & { priority: Priority }): Task => ({
 const snap = (over: Partial<RemoteSnapshot> = {}): RemoteSnapshot => ({
   lists: [], tasks: [], tags: [], templates: [],
   currentTask: null, currentTaskUpdatedAt: 0,
-  settings: { ...DEFAULT_SETTINGS }, settingsUpdatedAt: 0,
+  settings: {}, settingsUpdatedAt: 0,
     queueIds: [], queueUpdatedAt: 0,
   ...over,
 });
@@ -59,7 +59,17 @@ describe('toFiles / fromFiles', () => {
     const back = fromFiles({});
     expect(back.tasks).toEqual([]);
     expect(back.currentTask).toBeNull();
-    expect(back.settings).toEqual(DEFAULT_SETTINGS);
+    // Sparse, NOT default-filled: a fresh remote has no settings choices, and
+    // inventing defaults here is how old-version defaults got frozen into
+    // synced blobs. Defaults belong to the read edge (repo.getSettings).
+    expect(back.settings).toEqual({});
+  });
+
+  it('round-trips settings sparse — never materializing defaults', () => {
+    const files = toFiles(snap({ settings: { hoursPerDay: 3 } }), now);
+    const active = files['active.json'] as { settings: Record<string, unknown> };
+    expect(active.settings).toEqual({ hoursPerDay: 3 });
+    expect(fromFiles(files).settings).toEqual({ hoursPerDay: 3 });
   });
 
   it('rejects a future schema version', () => {

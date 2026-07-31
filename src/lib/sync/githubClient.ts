@@ -59,11 +59,32 @@ export class GithubClient {
   /** Root listing — how the engine discovers which logbook-<year> files exist. */
   async listFiles(): Promise<RemoteFileEntry[]> {
     const res = await fetch(this.url(''), { headers: this.headers() });
-    if (res.status === 404) return []; // empty repo has no contents listing
+    if (res.status === 404) return this.confirmRepoIsEmpty();
     if (res.status === 401 || res.status === 403) throw new AuthError(`GitHub auth failed (${res.status})`);
     if (!res.ok) throw new Error(`GitHub list failed: ${res.status}`);
     const rows = (await res.json()) as Array<{ path: string; sha: string; type: string }>;
     return rows.filter((r) => r.type === 'file').map((r) => ({ path: r.path, sha: r.sha }));
+  }
+
+  /**
+   * A 404 on the contents listing is ambiguous. An empty repo answers 404 —
+   * but so does a private repo this token can no longer SEE, because GitHub
+   * hides private repos from unauthorized callers rather than admit they
+   * exist (a fine-grained PAT whose repo grant lapsed stays valid, so the
+   * 401/403 path never fires). Treating that as "empty" made an expired
+   * grant read as a blank slate: the sync cycle dropped the whole file cache
+   * and reported nothing wrong. One extra request on this rare path settles
+   * it — repo metadata answers 200 for an empty-but-accessible repo.
+   */
+  private async confirmRepoIsEmpty(): Promise<RemoteFileEntry[]> {
+    const res = await fetch(
+      `https://api.github.com/repos/${this.cfg.owner}/${this.cfg.repo}`,
+      { headers: this.headers() },
+    );
+    if (res.ok) return []; // genuinely an empty repo
+    throw new AuthError(res.status === 404
+      ? 'GitHub can’t see the sync repo with this token — the token’s access may have expired or been revoked, or the repo was renamed. Reconnect in Settings.'
+      : `GitHub auth failed (${res.status})`);
   }
 
   /**

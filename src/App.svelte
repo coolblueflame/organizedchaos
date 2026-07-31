@@ -96,14 +96,25 @@
   </main>
 {:else}
   {@const r = router.current}
+  <!-- {#key} on every parameterized screen: two adjacent routes of the same
+       kind (list A → list B) would otherwise REUSE the component instance,
+       carrying one screen's local state — drafts, scroll, open editors —
+       into the other. No such adjacency is reachable today, which is exactly
+       why this stayed latent; the key makes the next new link safe by default. -->
   {#if r.name === 'list'}
-    <ListView id={r.id} revealTaskId={r.taskId} />
+    {#key r.id}
+      <ListView id={r.id} revealTaskId={r.taskId} />
+    {/key}
   {:else if r.name === 'sort'}
-    <SortView mode={r.mode} />
+    {#key r.mode}
+      <SortView mode={r.mode} />
+    {/key}
   {:else if r.name === 'completed'}
     <CompletedView />
   {:else if r.name === 'randomizer'}
-    <RandomizerView listId={r.listId} />
+    {#key r.listId}
+      <RandomizerView listId={r.listId} />
+    {/key}
   {:else if r.name === 'inprogress'}
     <InProgressView />
   {:else if r.name === 'recurring'}

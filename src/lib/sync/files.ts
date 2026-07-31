@@ -6,9 +6,8 @@
  *   meta.json          — { schema } version gate
  * Tombstones older than 90 days are compacted away here (spec §3).
  */
-import {
-  DEFAULT_SETTINGS,
-  type CurrentTaskRef, type List, type RecurrenceTemplate, type Settings, type Tag, type Task,
+import type {
+  CurrentTaskRef, List, RecurrenceTemplate, Settings, Tag, Task,
 } from '../domain/types';
 
 export const SCHEMA_VERSION = 1;
@@ -51,7 +50,14 @@ export interface RemoteSnapshot {
   templates: RecurrenceTemplate[];
   currentTask: CurrentTaskRef | null;
   currentTaskUpdatedAt: number;
-  settings: Settings;
+  /**
+   * SPARSE — only what the user explicitly set. Materializing DEFAULT_SETTINGS
+   * into this blob froze the defaults of whatever app version wrote it: a
+   * device that never touched a setting would push today's default as if it
+   * were a choice, and a future release changing a default could never reach
+   * anyone. Defaults are applied at the read edge (repo.getSettings/loadState).
+   */
+  settings: Partial<Settings>;
   settingsUpdatedAt: number;
   /** The day queue (ordered task ids) — a stamped singleton like settings. */
   queueIds: string[];
@@ -71,7 +77,8 @@ interface ActiveFile {
   templates: RecurrenceTemplate[];
   currentTask: CurrentTaskRef | null;
   currentTaskUpdatedAt: number;
-  settings: Settings;
+  /** Sparse; see RemoteSnapshot.settings. Older remotes hold materialized blobs. */
+  settings: Partial<Settings>;
   settingsUpdatedAt: number;
   /** Optional on the wire: remotes written before the queue existed lack them. */
   queueIds?: string[];
@@ -147,7 +154,7 @@ export function fromFiles(files: SyncFilePayloads): RemoteSnapshot {
     templates: active.templates ?? [],
     currentTask: active.currentTask ?? null,
     currentTaskUpdatedAt: active.currentTaskUpdatedAt ?? 0,
-    settings: { ...DEFAULT_SETTINGS, ...(active.settings ?? {}) },
+    settings: active.settings ?? {},
     settingsUpdatedAt: active.settingsUpdatedAt ?? 0,
     // Pre-queue remotes report an empty queue at stamp 0, which always loses.
     queueIds: active.queueIds ?? [],

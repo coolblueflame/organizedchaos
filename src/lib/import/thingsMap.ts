@@ -85,15 +85,25 @@ export function cocoaToMs(v: number): number {
  * runs identically in the browser and in node tests.
  */
 export function parsePlistDict(xml: string): Record<string, unknown> {
-  const tokens = [...xml.matchAll(/<(\/?)(dict|array|key|integer|real|string)>([^<]*)/g)];
+  // The trailing (\/?) catches self-closing forms — plist writers emit an
+  // empty collection as <array/> or <dict/>, which the paired-tag pattern
+  // alone would skip right past, silently shifting every token after it.
+  const tokens = [...xml.matchAll(/<(\/?)(dict|array|key|integer|real|string)\s*(\/?)>([^<]*)/g)];
   let i = 0;
 
   function value(): unknown {
     const t = tokens[i];
     if (!t) throw new Error('plist: unexpected end');
-    const [, close, tag, text] = t;
+    const [, close, tag, selfClose, text] = t;
     if (close) throw new Error(`plist: unexpected </${tag}>`);
     i++;
+    if (selfClose) {
+      // An empty element IS its value: no children, no closing tag to skip.
+      if (tag === 'array') return [];
+      if (tag === 'dict') return {};
+      if (tag === 'integer' || tag === 'real') return 0;
+      return '';
+    }
     if (tag === 'integer' || tag === 'real') { skipClose(tag); return Number(text); }
     if (tag === 'string') { skipClose(tag); return text; }
     if (tag === 'array') {
@@ -107,7 +117,7 @@ export function parsePlistDict(xml: string): Record<string, unknown> {
       while (tokens[i] && !(tokens[i]![1] && tokens[i]![2] === 'dict')) {
         const keyTok = tokens[i]!;
         if (keyTok[2] !== 'key') throw new Error('plist: expected <key>');
-        const key = keyTok[3]!;
+        const key = keyTok[4]!; // [3] is the self-close slash group; text moved to [4]
         i++;
         skipClose('key');
         dict[key] = value();
@@ -153,11 +163,30 @@ export function decodeRecurrencePlist(xml: string): DecodedRecurrence {
     }
 
     if (fu === FU.MONTH) {
+      // "Monthly on the 3rd Tuesday"-style rules carry a weekday (`wd`) and an
+      // ordinal instead of a day-of-month — a shape our model can't express.
+      // The decode has to guess a plain day; what it must NOT do is guess
+      // silently, or the rule fires on the wrong day forever with no flag.
+      if (of[0]?.dy === undefined && of[0]?.wd !== undefined) {
+        return {
+          mode: { kind: 'monthly', dayOfMonth: 1 },
+          note: 'was "monthly by weekday" in Things (e.g. 3rd Tuesday) — our model repeats by day of month; set to the 1st, please adjust',
+        };
+      }
       const dy = Number(of[0]?.dy ?? 1);
+      // Negative dy counts from the month's end ("last day"); 31 is the
+      // closest our model gets (spawn clamps it to each month's last day),
+      // but it's still a guess the user should see. Anything else unreadable
+      // gets the same clamp with an honest generic note.
       const dayOfMonth = dy >= 1 && dy <= 31 ? dy : 31;
+      const clampNote = dy < 0
+        ? 'was "monthly counting from the end" in Things — set to the 31st (runs on the last day), please review'
+        : 'the monthly day could not be read — set to the 31st, please review';
       return {
         mode: { kind: 'monthly', dayOfMonth },
-        note: fa > 1 ? `was "every ${fa} months" in Things — now monthly` : undefined,
+        note: dayOfMonth !== dy
+          ? clampNote
+          : fa > 1 ? `was "every ${fa} months" in Things — now monthly` : undefined,
       };
     }
     if (fu === FU.WEEK) {

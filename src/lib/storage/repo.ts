@@ -273,9 +273,13 @@ export class Repo {
       const parsed = readStamped<Partial<Settings>>(row?.value, (v) =>
         typeof v === 'object' && v !== null && !('data' in (v as object)));
       const updatedAt = nextStamp(parsed.updatedAt);
+      // SPARSE on purpose — no DEFAULT_SETTINGS spread. This blob syncs, and
+      // materializing defaults into it froze whatever this app version's
+      // defaults were as if the user had chosen them (see RemoteSnapshot.settings).
+      // Reads apply defaults at the edge (getSettings/loadState).
       await this.db.kv.put({
         key: 'settings',
-        value: { data: { ...DEFAULT_SETTINGS, ...(parsed.data ?? {}), ...patch }, updatedAt },
+        value: { data: { ...(parsed.data ?? {}), ...patch }, updatedAt },
       });
       return updatedAt;
     });
@@ -286,16 +290,26 @@ export class Repo {
   /** Full store INCLUDING tombstones — what the sync merge operates on. */
   async loadSnapshot(): Promise<RemoteSnapshot> {
     const state = await this.loadState();
-    const [lists, tasks, tags, templates, eggs] = await Promise.all([
+    const [lists, tasks, tags, templates, eggs, settingsRow] = await Promise.all([
       this.db.lists.toArray(), this.db.tasks.toArray(),
       this.db.tags.toArray(), this.db.templates.toArray(),
       this.getKv<StoredDelight>('eggState'),
+      this.db.kv.get('settings'),
     ]);
+    // The snapshot feeds sync, so it must carry settings SPARSE — loadState
+    // materialized defaults into `state.settings` for the app's own use, and
+    // letting those reach active.json is the materialization bug again.
+    const sparseSettings = readStamped<Partial<Settings>>(settingsRow?.value, (v) =>
+      typeof v === 'object' && v !== null && !('data' in (v as object))).data ?? {};
     // Only the achievement half travels. The rest of eggState is pacing — what
     // has been shown lately, the quiet-time clock — which describes this device
     // and would gag another one if it were shared.
     const delight: DelightProgress | undefined = eggs ? storedToProgress(eggs) : undefined;
-    return { ...state, lists, tasks, tags, templates, ...(delight ? { delight } : {}) };
+    return {
+      ...state, lists, tasks, tags, templates,
+      settings: sparseSettings,
+      ...(delight ? { delight } : {}),
+    };
   }
 
   /**

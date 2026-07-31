@@ -85,6 +85,14 @@ describe('Repo', () => {
     expect((await repo.loadState()).settingsUpdatedAt).toBe(Date.now());
   });
 
+  it('the SYNC snapshot carries settings sparse — only what was explicitly set', async () => {
+    await repo.updateSettings({ hoursPerDay: 2 });
+    // loadState materializes defaults for the app; the snapshot must not,
+    // or this device pushes its version's defaults into the shared blob as
+    // if the user chose them (and pins them there forever).
+    expect((await repo.loadSnapshot()).settings).toEqual({ hoursPerDay: 2 });
+  });
+
   it('reads legacy (pre-sync) kv shapes with stamp 0', async () => {
     await db.kv.put({ key: 'currentTask', value: { taskId: 'legacy', acceptedAt: 5 } });
     await db.kv.put({ key: 'settings', value: { hoursPerDay: 3 } });

@@ -1260,6 +1260,12 @@ export class AppStore {
     // the one pass. A no-op on data that is already plain.
     mapped = $state.snapshot(mapped) as MappedImport;
 
+    // Which incoming rows are Things-logbook history, captured BEFORE the
+    // opt-in below erases the marker — the re-import reconciliation pass at
+    // the bottom needs it either way.
+    const historyUuids = new Set(
+      mapped.tasks.filter((t) => t.importedHistory).map((t) => t.thingsUuid!));
+
     if (opts.countHistoryInTotals) {
       // Opted in: treat imported completions as ordinary completions.
       mapped = { ...mapped, tasks: mapped.tasks.map((t) => ({ ...t, importedHistory: undefined })) };
@@ -1348,6 +1354,26 @@ export class AppStore {
         ...prior.tagIds.filter((tagId) => appNativeTags.has(tagId)),
       ])],
     }));
+
+    // Re-imports used to make the count-history checkbox a one-shot: matched
+    // rows only update when the Things side is NEWER, and re-importing the
+    // same library never is — so toggling the checkbox did nothing (reported
+    // as a review note). The flag is OUR classification, not a Things field,
+    // so "newest wins" doesn't apply to it: align every history row with the
+    // current choice, stamping only actual changes so they sync.
+    const byId = new Map(snap.tasks.map((t) => [t.id, t]));
+    for (const uuid of historyUuids) {
+      const row = byId.get(idMap.get(uuid) ?? '');
+      if (!row || row.completedAt === undefined) continue; // reopened here = a real task now
+      const flag = opts.countHistoryInTotals ? undefined : true;
+      if (row.importedHistory !== flag) {
+        row.importedHistory = flag;
+        // Strictly newer than the row's own stamp (the nextStamp clamp, in
+        // miniature): a bare Date.now() can TIE the previous write within the
+        // same millisecond, and a tie doesn't supersede at write time.
+        row.updatedAt = Math.max(Date.now(), row.updatedAt + 1);
+      }
+    }
 
     await this.repo.replaceAll(snap);
     await this.refreshFromDisk();
