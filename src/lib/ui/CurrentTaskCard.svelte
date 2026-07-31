@@ -15,8 +15,19 @@
   import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
 
+  /**
+   * The focus loop's missing hinge (2026-07-31, shortlist item 6): finishing
+   * the current task used to dead-end in the idle card, and continuing meant
+   * finding the big button again. Acting on the card (done / not today) arms
+   * a one-tap "roll the next one" in its place — the loop closes itself.
+   * Session-local on purpose: an app open later should greet, not push.
+   */
+  let { onroll }: { onroll?: () => void } = $props();
+  let loopArmed = $state(false);
+
   /** Completing THE current task is the app's biggest moment — confetti-grade. */
   function completeCurrent(e: MouseEvent, taskId: string) {
+    loopArmed = true;
     try {
       const r = (e.currentTarget as Element).getBoundingClientRect();
       const done = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
@@ -40,6 +51,14 @@
   $effect(() => {
     if (app.state.currentTask && !task) void app.clearCurrent();
   });
+
+  // Accepting a fresh draw disarms the invitation — the card is working again.
+  $effect(() => {
+    if (task) loopArmed = false;
+  });
+
+  const doneToday = $derived(
+    completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour).today);
 
   const listTitle = $derived(task ? app.state.lists.find((l) => l.id === task!.listId)?.title : undefined);
   const progress = $derived(task ? checklistProgress(task.notes) : null);
@@ -100,12 +119,23 @@
       <button class="done" data-testid="current-complete" onclick={(e) => completeCurrent(e, task!.id)}>
         ✓ done
       </button>
-      <button class="later" data-testid="current-not-today" onclick={() => void app.sendNotToday(task!.id)}>
+      <button class="later" data-testid="current-not-today"
+        onclick={() => { loopArmed = true; void app.sendNotToday(task!.id); }}>
         not today
       </button>
     </div>
   </section>
   {/key}
+{:else if loopArmed && onroll}
+  <section class="card roll-next" data-testid="current-roll-next">
+    <span class="eyebrow next">▸ next?</span>
+    <span class="roll-count">
+      {doneToday > 0 ? `that’s ${doneToday} today.` : 'that one’s handled.'}
+    </span>
+    <button class="roll" data-testid="roll-next" onclick={onroll}>
+      <Glyph name="dice" size={12} /> roll the next one
+    </button>
+  </section>
 {:else}
   <section class="card idle" data-testid="current-task-idle">
     <span class="eyebrow dim">▸ {chillWord}</span>
@@ -152,6 +182,19 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; padding: 9px; cursor: pointer;
   }
   @media (hover: hover) { .later:hover { color: var(--text); } }
+  .card.roll-next {
+    border-color: var(--acc-purple);
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap;
+  }
+  .eyebrow.next { color: var(--acc-purple); }
+  .roll-count { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }
+  .roll {
+    margin-left: auto; background: var(--bg2); border: 1px solid var(--acc-purple);
+    border-radius: 8px; color: var(--acc-purple); font-family: var(--font-mono);
+    font-weight: 700; font-size: 0.8rem; padding: 8px 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  @media (hover: hover) { .roll:hover { background: var(--acc-purple); color: var(--bg0); } }
   .card.idle {
     border-color: var(--line); opacity: 0.55;
     display: flex; align-items: baseline; gap: 10px; padding: 10px 14px;

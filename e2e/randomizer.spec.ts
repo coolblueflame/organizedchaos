@@ -57,6 +57,38 @@ test('draw → accept → current task card survives reload → complete', async
   await expect(page.getByText('alpha', { exact: true })).toBeVisible();
 });
 
+test('completing the current task invites the next roll, closing the loop', async ({ page }) => {
+  const names = ['first up', 'the encore'];
+  await seed(page, names);
+  await page.getByTestId('big-button').click();
+  // The draw is random — remember which of the two it picked. Wait out the
+  // scramble reveal before reading, or the text matches neither name.
+  await expect(page.getByTestId('draw-card')).toContainText(/first up|the encore/);
+  const drawn = (await page.getByTestId('draw-card').textContent())!;
+  const first = names.find((n) => drawn.includes(n))!;
+  const other = names.find((n) => n !== first)!;
+  await page.getByTestId('draw-accept').click();
+  await expect(page.getByTestId('current-task-card')).toContainText(first);
+  await page.getByTestId('current-complete').click();
+
+  // The card doesn't dead-end into idle — it offers the next roll.
+  const invite = page.getByTestId('current-roll-next');
+  await expect(invite).toContainText('that’s 1 today');
+  await page.getByTestId('roll-next').click();
+  await expect(page.getByTestId('draw-card')).toContainText(other);
+  await page.getByTestId('draw-accept').click();
+
+  // Accepting a fresh draw disarms the invitation state behind it.
+  await expect(page.getByTestId('current-task-card')).toContainText(other);
+  await expect(page.getByTestId('current-roll-next')).toHaveCount(0);
+
+  // Session-local by design: a fresh load greets instead of pushing.
+  await page.getByTestId('current-not-today').click();
+  await expect(page.getByTestId('current-roll-next')).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('current-task-idle')).toBeVisible();
+});
+
 test('not now cycles to a different task; exhausting pool offers skip reset', async ({ page }) => {
   await seed(page, ['one', 'two']);
   await page.getByTestId('big-button').click();

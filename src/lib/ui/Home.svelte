@@ -346,7 +346,7 @@
 
   <StatsStrip />
 
-  <CurrentTaskCard />
+  <CurrentTaskCard onroll={bigButton} />
 
   <WorkPeriod />
 

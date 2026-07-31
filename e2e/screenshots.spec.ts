@@ -76,7 +76,7 @@ test('capture app screens', async ({ page }) => {
 
   // complete the current task, then the stats screen
   await page.getByTestId('current-complete').click();
-  await page.getByTestId('current-task-idle').waitFor(); // completion settled
+  await page.getByTestId('current-roll-next').waitFor(); // completion settled → loop invitation
   await page.getByTestId('stats-strip').click();
   await page.getByTestId('stats-estimate').waitFor();
   await page.waitForTimeout(400); // let charts paint
