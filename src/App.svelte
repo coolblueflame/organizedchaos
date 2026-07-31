@@ -44,6 +44,7 @@
   import SearchView from './lib/ui/SearchView.svelte';
   import TagsView from './lib/ui/TagsView.svelte';
   import RitualsView from './lib/ui/RitualsView.svelte';
+  import WeekReviewView from './lib/ui/WeekReviewView.svelte';
   import SweepView from './lib/ui/SweepView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import InstallHowTo from './lib/ui/InstallHowTo.svelte';
@@ -119,6 +120,8 @@
     <TagsView />
   {:else if r.name === 'rituals'}
     <RitualsView />
+  {:else if r.name === 'week'}
+    <WeekReviewView />
   {:else if r.name === 'sweep'}
     <SweepView />
   {:else}

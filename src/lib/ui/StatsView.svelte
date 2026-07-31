@@ -62,6 +62,10 @@
     <h1>Stats</h1>
   </header>
 
+  <button class="week-link" data-testid="stats-week-link" onclick={() => navigate({ name: 'week' })}>
+    ▸ this week in review
+  </button>
+
   <section class="panel hero" data-testid="stats-estimate">
     <span class="hero-label">estimated time to finish everything
       <button class="info" aria-label="how is this computed?"
@@ -248,6 +252,13 @@
   th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); color: var(--text); }
   th { color: var(--dim); font-family: var(--font-mono); }
   .hero-exact { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
+  .week-link {
+    display: block; width: 100%; text-align: left; margin-bottom: 12px;
+    background: var(--bg1); border: 1px solid color-mix(in srgb, var(--acc-green) 30%, var(--line));
+    border-radius: 12px; padding: 12px 16px; cursor: pointer;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.85rem;
+  }
+  @media (hover: hover) { .week-link:hover { background: var(--bg2); } }
   .est-check {
     background: none; border: none; color: var(--acc-yellow); cursor: pointer;
     font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 0; text-align: left;
