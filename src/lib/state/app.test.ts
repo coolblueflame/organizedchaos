@@ -875,6 +875,20 @@ describe('AppStore', () => {
     expect(after.tagIds).toContain(appTag.id);
   });
 
+  it('importThings: refuses to run two imports concurrently', async () => {
+    const mapped = {
+      lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
+      tags: [], tasks: [], templates: [], review: [],
+      counts: { lists: 1, tags: 0, openTasks: 0, completedTasks: 0, templates: 0 },
+    };
+    // Two racing imports would each read a snapshot, mint separate app ids for
+    // every new row, and duplicate the library — the store must refuse.
+    const first = store.importThings(mapped);
+    await expect(store.importThings(mapped)).rejects.toThrow(/already running/);
+    await first; // and the winner completes normally
+    expect(store.state.lists.filter((l) => l.thingsUuid === 'TP1')).toHaveLength(1);
+  });
+
   it('importThings: re-importing with the count-history choice flipped updates existing rows', async () => {
     const mapped = {
       lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],

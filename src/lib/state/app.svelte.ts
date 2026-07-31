@@ -1248,9 +1248,29 @@ export class AppStore {
    * than the local one (so re-imports never clobber local edits). All Things-
    * uuid cross-references are remapped to app ids. One transaction.
    */
+  /** Set while an import is running — see the guard at the top of importThings. */
+  private importInFlight = false;
+
   async importThings(
     mapped: MappedImport,
     opts: { countHistoryInTotals?: boolean } = {},
+  ): Promise<MappedImport['counts']> {
+    // ImportView's step guard blocks a double-tap, but it is per-component:
+    // navigating away mid-import and starting a second one from a fresh view
+    // would race two snapshot-read → id-mint → write cycles and duplicate
+    // every new row. The store is the choke point, so the store refuses.
+    if (this.importInFlight) throw new Error('an import is already running — give it a moment');
+    this.importInFlight = true;
+    try {
+      return await this.importThingsInner(mapped, opts);
+    } finally {
+      this.importInFlight = false;
+    }
+  }
+
+  private async importThingsInner(
+    mapped: MappedImport,
+    opts: { countHistoryInTotals?: boolean },
   ): Promise<MappedImport['counts']> {
     // Belt and braces against the bug class that has now bitten this codebase
     // three times: a reactive proxy reaching IndexedDB, which cannot

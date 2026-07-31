@@ -27,8 +27,13 @@
   let editingUuid = $state<string | null>(null);
 
   async function onFile(e: Event) {
-    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
+    // Clear the input NOW (currentTarget is gone after the await): change only
+    // fires when the value changes, so after a failed parse, re-picking the
+    // SAME file — the natural retry — would otherwise do nothing at all.
+    input.value = '';
     step = 'parsing';
     error = '';
     try {
