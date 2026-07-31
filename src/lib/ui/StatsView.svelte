@@ -66,6 +66,10 @@
     ▸ this week in review
   </button>
 
+  <button class="week-link wrapped" data-testid="stats-wrapped-link" onclick={() => navigate({ name: 'wrapped' })}>
+    ▸ wrapped — the whole year
+  </button>
+
   <section class="panel hero" data-testid="stats-estimate">
     <span class="hero-label">estimated time to finish everything
       <button class="info" aria-label="how is this computed?"
@@ -259,6 +263,7 @@
     color: var(--acc-green); font-family: var(--font-mono); font-size: 0.85rem;
   }
   @media (hover: hover) { .week-link:hover { background: var(--bg2); } }
+  .week-link.wrapped { color: var(--acc-purple); border-color: color-mix(in srgb, var(--acc-purple) 30%, var(--line)); }
   .est-check {
     background: none; border: none; color: var(--acc-yellow); cursor: pointer;
     font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 0; text-align: left;
