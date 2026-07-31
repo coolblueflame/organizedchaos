@@ -138,6 +138,16 @@ export const QUIPS: readonly string[] = [
   'Sidequest complete! Main quest morale +10.',
   'No skill tree needed — you unlocked that one with sheer spite.',
   'Boss phase two never came. You ended it in phase one.',
+  'Finish the fight. …you just did. Welcome home.',
+  'Hey, you. You’re finally awake. And suspiciously productive.',
+  'Star acquired. ⭐ Course cleared.',
+  'You stayed determined. The task did not.',
+  'The party gains 250 gold and a rumor about the next quest.',
+  'That one had i-frames. You hit it anyway.',
+  'New high score on the oldest arcade cabinet: Real Life.',
+  'The minimap shows nothing left in this zone. Clean clear.',
+  'Fast travel unlocked: straight past that task forever.',
+  'The credits aren’t rolling because you’re clearly not done being great.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */
@@ -305,4 +315,43 @@ export const TIPS: readonly string[] = [
   'Done today beats perfect someday — perfect is just procrastination in a nicer outfit.',
   'Your future self is a coworker. Leave them notes, not mysteries.',
   'The inbox is other people’s priorities. The list is yours. Visit the list first.',
+] as const;
+
+/**
+ * Lines for adding a task to the day queue — the act of PLANNING, not
+ * finishing. The voice notices you rigging tomorrow's dice on purpose.
+ */
+export const QUEUE_LINES: readonly string[] = [
+  'Queued. The dice now owe you a favor.',
+  'Stacking the deck, I see. Chaos approves of responsible cheating.',
+  'Added to the plan. Tomorrow-you just exhaled.',
+  'Onto the conveyor belt it goes.',
+  'A plan! An actual plan. The randomizer will pretend not to be moved.',
+  'Reservation confirmed. Party of one (task).',
+  'The lineup card is set, coach.',
+  'Scheduled chaos is still chaos. It’s just polite about it.',
+  'The queue accepts your offering.',
+  'Noted, numbered, and next-ish.',
+  'Front of the line? Not yet. But it’s in the building.',
+  'Deck stacked. The deal comes whenever you press the button.',
+  'Ah, premeditated productivity. The best kind.',
+] as const;
+
+/**
+ * Lines for ticking a checklist box inside a todo — a step, not a finish.
+ * Kept modest on purpose: the big cheer stays reserved for the whole task.
+ */
+export const CHECKLIST_LINES: readonly string[] = [
+  'One box down. The tiny victories are load-bearing.',
+  'Sub-task subdued.',
+  'Checked. The list within the list approves.',
+  'That’s one fewer thing INSIDE the thing.',
+  'Item secured. Inventory updated.',
+  'The fine print is getting finished. Bold move.',
+  'Line item: lined out.',
+  'Piece by piece, the shape appears.',
+  'Chipping away. Sculpting, technically.',
+  'Small box. Satisfying click.',
+  'Every big task is little boxes in a trench coat. Got one.',
+  'Progress bar: visibly less bar.',
 ] as const;

@@ -5,8 +5,8 @@
 import type { EggDef } from './engine';
 import { FACTS } from './content/facts';
 import {
-  BULK_LINES, NIGHT_NOTES, QUIPS, RITUAL_LINES, STREAK_LINES, SWEEP_LINES, TIMEBOX_LINES,
-  TIPS, UNBLOCK_LINES, WORK_PERIOD_LINES,
+  BULK_LINES, CHECKLIST_LINES, NIGHT_NOTES, QUEUE_LINES, QUIPS, RITUAL_LINES, STREAK_LINES,
+  SWEEP_LINES, TIMEBOX_LINES, TIPS, UNBLOCK_LINES, WORK_PERIOD_LINES,
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
@@ -83,10 +83,20 @@ export const REGISTRY: EggDef[] = [
     id: 'sweep-line', weight: 60, triggers: ['sweepActed'],
     present: (c) => ({ kind: 'note', emoji: '🧹', accent: 'cyan', text: pick(SWEEP_LINES, c.rng) }),
   },
+  {
+    id: 'queue-line', weight: 60, triggers: ['queuePlanned'], cooldownMs: HOUR / 4,
+    present: (c) => ({ kind: 'note', emoji: '🃏', accent: 'cyan', text: pick(QUEUE_LINES, c.rng) }),
+  },
+  {
+    id: 'checklist-line', weight: 60, triggers: ['checklistTicked'], cooldownMs: HOUR / 4,
+    present: (c) => ({ kind: 'note', emoji: '☑️', accent: 'green', text: pick(CHECKLIST_LINES, c.rng) }),
+  },
   unlockEgg('ritualist', ['ritualCompleted'], () => true),
   unlockEgg('boxer', ['timeboxFinished'], () => true),
   unlockEgg('shepherd', ['taskDragged'], () => true),
   unlockEgg('keymaster', ['taskUnblocked'], () => true),
+  unlockEgg('deck-stacker', ['queuePlanned'], () => true),
+  unlockEgg('fine-print', ['checklistTicked'], () => true),
 
   // The evening voice: late hours only, at most once a night-ish. The app
   // dims with the day — a warmer register when a completion lands after dark.

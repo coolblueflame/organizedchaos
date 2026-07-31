@@ -343,6 +343,7 @@ export class AppStore {
   async addToQueue(id: string): Promise<void> {
     if (this.state.queueIds.includes(id)) return;
     await this.writeQueue([...this.state.queueIds, id]);
+    this.fireEgg('queuePlanned');
   }
 
   /** Bulk add from multi-select; already-queued tasks keep their position. */
@@ -351,6 +352,7 @@ export class AppStore {
     const fresh = ids.filter((id) => !have.has(id));
     if (fresh.length === 0) return;
     await this.writeQueue([...this.state.queueIds, ...fresh]);
+    this.fireEgg('queuePlanned');
   }
 
   async removeFromQueue(id: string): Promise<void> {

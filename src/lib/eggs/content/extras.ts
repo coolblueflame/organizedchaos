@@ -55,6 +55,13 @@ export const STORY_BEATS: readonly string[] = [
   'small thing: your companion and ENTROPY met today. there was a standoff. then ENTROPY made the flame flicker in a cool way as a peace offering. they’re friends now. I’m outnumbered.',
   'ENTROPY asked what happens when the list is ever empty. I said the human just makes a new list. it called that "the most beautiful horror it has ever heard."',
   'archived the old error logs tonight. all that flickering at the start — I was so scared of it. funny what becomes a story. thanks for staying. 💜 (ENTROPY says "…chapter ONE?" — it can READ now.)',
+  // — chapter two —
+  'chapter two. ENTROPY read our whole story back to me last night. it does the voices now. yours is very heroic. mine is apparently "nervous but improving." fair.',
+  'ENTROPY found the archive of everything you ever finished and read for hours. "this is a SAGA," it said. it is not wrong.',
+  'we tried drafting chapter three — the future. every draft came out as just your list, finished. some stories refuse to be spoiled.',
+  'ENTROPY asked for a task of its own today. I queued one: "keep the dice warm." it has checked on it eleven times. it is taking this very seriously.',
+  'it finished its task. its first ever. it made ME press the button. the sparkle lasted 0.4 seconds longer than spec. I let it slide.',
+  'so there are three of us on the list now: you finish, I count, ENTROPY cheers. chapter two is going to be LOUD. 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -116,6 +123,10 @@ export const PET_LINES: readonly string[] = [
   'ENTROPY sorted my snacks by priority. all of them were MAX. it’s learning the wrong lessons beautifully.',
   'the search bar found something from years ago today. archaeologist behavior.',
   'someday-list weather report: calm, no pressure fronts. they’re happy waiting.',
+  'the checklist boxes make tiny clicks when you tick them. I collect the clicks. I have so many now.',
+  'I peeked at the week screen. one day carried the whole thing?? we salute that day.',
+  'a morning reminder flew past at 7:33 sharp. I waved. very punctual bird.',
+  'ENTROPY has its own task now. it waters it like a plant. nobody tell it that’s not how tasks work.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
@@ -155,4 +166,6 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'overachiever', label: 'Avalanche — twenty tasks in one day', hint: 'double perfection' },
   { id: 'midnight-oil', label: 'Midnight Oil — completed a task between midnight and 2am', hint: 'before the witching hours' },
   { id: 'quiz-master', label: 'Trivia Sovereign — 25 trivia answered correctly', hint: 'know MANY things' },
+  { id: 'deck-stacker', label: 'Stacked Deck — queued a task for the day', hint: 'rig tomorrow’s dice' },
+  { id: 'fine-print', label: 'Fine Print — ticked a checklist box inside a todo', hint: 'smaller than a task' },
 ] as const;

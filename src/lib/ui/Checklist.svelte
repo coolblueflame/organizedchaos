@@ -12,6 +12,7 @@
   } from '../domain/checklist';
   import Glyph from './Glyph.svelte';
   import { focusOnMount } from './focusOnMount';
+  import { app } from '../state/app.svelte';
 
   let { notes, taskId, onchange, allowAdd = false }: {
     notes: string;
@@ -75,7 +76,11 @@
           <li>
             <button class="tick" class:done={item.done}
               data-testid="check-item-{taskId}-{item.line}"
-              onclick={() => onchange(toggleChecklistLine(notes, item.line))}
+              onclick={() => {
+                onchange(toggleChecklistLine(notes, item.line));
+                // Only completing a step gets a voice — unticking is a correction.
+                if (!item.done) app.fireEgg('checklistTicked');
+              }}
               aria-pressed={item.done} aria-label="toggle">
               <Glyph name={item.done ? 'box-checked' : 'box'} size={14} />
             </button>

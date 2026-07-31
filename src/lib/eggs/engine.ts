@@ -12,7 +12,8 @@ export type EggEvent =
   | 'taskCompleted' | 'drawAccepted' | 'drawSkipped'
   | 'screenVisited' | 'appOpened' | 'bigButtonPressed'
   | 'timeboxFinished' | 'workPeriodStarted' | 'bulkActed' | 'taskDragged'
-  | 'taskUnblocked' | 'ritualCompleted' | 'sweepActed';
+  | 'taskUnblocked' | 'ritualCompleted' | 'sweepActed'
+  | 'queuePlanned' | 'checklistTicked';
 
 export interface EggContext {
   event: EggEvent;
@@ -116,6 +117,9 @@ const DEFAULT_CHANCE: Record<EggEvent, number> = {
   taskUnblocked: 0.55, ritualCompleted: 0.5,
   // Sweeping is rapid-fire by design; keep its voice rare or it becomes noise.
   sweepActed: 0.05,
+  queuePlanned: 0.25,
+  // Checklist ticks come in bursts (packing lists); mostly stay quiet.
+  checklistTicked: 0.1,
 };
 
 /**
@@ -138,6 +142,9 @@ const EVENT_GAP: Partial<Record<EggEvent, number>> = {
   timeboxFinished: 20_000,
   screenVisited: 300_000,
   appOpened: 300_000,
+  // Burst-prone planning actions: one voice per burst is plenty.
+  queuePlanned: 120_000,
+  checklistTicked: 120_000,
 };
 
 /** Ambient events get a hard daily ceiling well under the global one. */
