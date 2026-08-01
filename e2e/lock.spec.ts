@@ -69,10 +69,29 @@ test('a locked list hides its contents everywhere until the PIN opens it', async
   await page.getByTestId('search-entry').click();
   await page.getByTestId('search-input').fill('surprise');
   await expect(page.getByText('plan the surprise party')).toBeVisible();
+  await page.getByTestId('back').click();
+
+  // Complete the secret task while unlocked — celebration surfaces must not
+  // read its name back out once the app relocks.
+  await secretsRow.locator('.list-main').click();
+  const row = page.getByTestId(/^task-row-/).first();
+  const taskId = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${taskId}`).click();
+  await expect(page.getByTestId(`task-row-${taskId}`)).toHaveCount(0);
+  await page.getByTestId('back').click();
+  await page.goto('./#/week');
+  await expect(page.getByTestId('week-wins')).toContainText('surprise party'); // unlocked: fine
+
+  await page.goto('./#/');
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-lock-now').click();
+  await page.getByTestId('back').click();
+  await page.goto('./#/week');
+  await expect(page.getByTestId('week-wins')).toHaveCount(0); // its only win is sealed
+  await page.goto('./#/');
 
   // Persistence: by now the locked flag has long since hit disk — a fresh
   // load re-arms the session and the flag survives.
-  await page.getByTestId('back').click();
   await page.reload();
   await secretsRow.locator('.list-main').click();
   await expect(page.getByTestId('lock-gate')).toBeVisible();

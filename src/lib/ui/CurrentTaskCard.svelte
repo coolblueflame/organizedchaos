@@ -12,6 +12,8 @@
   import Timebox from './Timebox.svelte';
   import { completionCounts, elapsedSoFar, formatElapsed } from '../domain/stats';
   import { checklistProgress } from '../domain/checklist';
+  import { lockedListIds } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
 
@@ -52,6 +54,15 @@
     if (app.state.currentTask && !task) void app.clearCurrent();
   });
 
+  /**
+   * A current task from a now-locked list (accepted before relocking, or a
+   * fresh load with a persisted ref) must not read its name out. Distinct
+   * from `task` being null on purpose: the ref is VALID — the self-heal
+   * above must not clear it, the card just declines to show it.
+   */
+  const lockedAway = $derived(
+    task !== null && lockedListIds(app.state.lists, lock.unlocked).has(task.listId));
+
   // Accepting a fresh draw disarms the invitation — the card is working again.
   $effect(() => {
     if (task) loopArmed = false;
@@ -82,7 +93,11 @@
   const chillWord = CHILL[Math.floor(Math.random() * CHILL.length)]!;
 </script>
 
-{#if task}
+{#if task && lockedAway}
+  <section class="card idle" data-testid="current-task-locked">
+    <span class="eyebrow dim"><Glyph name="locked" size={10} /> current task is in a locked list</span>
+  </section>
+{:else if task}
   {#key task.id}
   <section class="card sheen-once" data-testid="current-task-card">
     <div class="head">

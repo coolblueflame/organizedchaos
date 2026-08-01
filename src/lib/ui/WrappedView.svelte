@@ -8,6 +8,8 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { clock } from './clock.svelte';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { daysUntilWrapped, wrappedIsOpen, yearWrapped } from '../domain/wrapped';
   import { formatElapsed } from '../domain/stats';
   import { UNLOCKS } from '../eggs/content/extras';
@@ -15,7 +17,11 @@
   import FlameGlyph from './FlameGlyph.svelte';
 
   // Same proxy-escape as StatsView: the scan reads every task.
-  const plainTasks = $derived($state.snapshot(app.state.tasks) as typeof app.state.tasks);
+  // Locked lists' tasks stay out of the wins and totals while locked — a
+  // celebration screen reading their names out loud would defeat the PIN.
+  const plainTasks = $derived(withoutLocked(
+    $state.snapshot(app.state.tasks) as typeof app.state.tasks,
+    app.state.lists, lock.unlocked));
   const open = $derived(wrappedIsOpen(clock.now, app.state.settings.rolloverHour));
   const countdown = $derived(daysUntilWrapped(clock.now, app.state.settings.rolloverHour));
   const r = $derived(yearWrapped(
