@@ -233,22 +233,19 @@
         onfocus={onNameFocus}
         onkeydown={onNameKey} />
     {:else}
-    <button class="body" onclick={ontoggle}>
+    <!-- Two stacked rows (2026-08-01 night ask): the title WRAPS, never
+         truncates — badges + tag names were squeezing it to a sliver. Tags
+         live on their own smaller line below. -->
+    <button class="body stacked" onclick={ontoggle}>
+      <span class="body-top">
       <span class="name" class:done={completedMode}>{task.name || 'untitled'}</span>
       {#if showList && listTitle}<span class="list-tag">{listTitle}</span>{/if}
       <span class="badges">
-        <!-- Text, not dots (2026-08-01 ask): the yellow review dot read as
-             another priority colour, and with 100+ tags the colour circles
-             carried no information at all. Names carry it; three then a count. -->
+        <!-- Text, not a dot (2026-08-01 ask): the yellow review dot read as
+             another priority colour. -->
         {#if task.needsReview && !completedMode}
           <span class="review-badge" data-testid="needs-review-{task.id}"
             title="not triaged yet — open it or set a field">NEW</span>
-        {/if}
-        {#each rowTags.slice(0, 3) as t (t.id)}
-          <span class="tag-name" style="color: {tagColor(t.colorIndex)}">{t.name}</span>
-        {/each}
-        {#if rowTags.length > 3}
-          <span class="tag-name more">+{rowTags.length - 3}</span>
         {/if}
         {#if showCompletedAt && task.completedAt}
           <span class="done-at">✓ {new Date(task.completedAt).toLocaleDateString()}</span>
@@ -307,6 +304,20 @@
         {#if escalated}<span class="flame"><Glyph name="escalate" size={10} title="escalated by deadline" /></span>{/if}
         <span class="prio {effective}"></span>
       </span>
+      </span>
+      {#if rowTags.length > 0}
+        <!-- The tag line: names, not dots (2026-08-01 — colour circles carry
+             nothing at 124 tags), on their own row so the title keeps its
+             whole width. -->
+        <span class="tag-row">
+          {#each rowTags.slice(0, 4) as t (t.id)}
+            <span class="tag-name" style="color: {tagColor(t.colorIndex)}">{t.name}</span>
+          {/each}
+          {#if rowTags.length > 4}
+            <span class="tag-name more">+{rowTags.length - 4}</span>
+          {/if}
+        </span>
+      {/if}
     </button>
     {/if}
 
@@ -414,7 +425,13 @@
     color: var(--text); font-size: 0.9rem; padding: 10px 0; cursor: pointer;
     text-align: left; min-width: 0;
   }
-  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Two stacked lines: title row (name wraps, badges hug the right) and the
+     smaller tag line beneath it. */
+  .body.stacked { flex-direction: column; align-items: stretch; gap: 2px; }
+  .body-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  /* Never truncated (2026-08-01 night ask) — the name takes the width it
+     needs and WRAPS; badges yield rather than squeeze it out. */
+  .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .name.done { text-decoration: line-through; color: var(--dim); }
   /* Reads as the title, behaves as the field — same size, same weight, no chrome. */
   .name-input {
@@ -426,9 +443,10 @@
   .name-input::placeholder { color: var(--dim); }
   .list-tag { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; flex: none; }
   .badges { margin-left: auto; display: flex; align-items: center; gap: 5px; flex: none; min-width: 0; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
   .tag-name {
     font-family: var(--font-mono); font-size: 0.62rem; opacity: 0.85;
-    max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .tag-name.more { color: var(--dim); }
   .review-badge {
