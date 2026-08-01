@@ -36,9 +36,14 @@ test('a locked list hides its contents everywhere until the PIN opens it', async
   const listId = (await secretsRow.getAttribute('data-testid'))!.replace('list-row-', '');
   await page.getByTestId(`list-menu-${listId}`).click();
   await page.getByTestId('list-settings-lock').click();
+  await expect(secretsRow.locator('.locked-mark')).toBeVisible(); // the mirror took it
 
-  // Setting the PIN unlocked the session; a reload re-arms the lock.
-  await page.reload();
+  // Setting the PIN unlocked the session; "lock now" re-arms it without a
+  // reload — a reload HERE would race the just-fired IndexedDB write (the
+  // exact scheduling bet CI collects; it did, once).
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-lock-now').click();
+  await page.getByTestId('back').click();
 
   // Search cannot see it…
   await page.getByTestId('search-entry').click();
@@ -65,11 +70,10 @@ test('a locked list hides its contents everywhere until the PIN opens it', async
   await page.getByTestId('search-input').fill('surprise');
   await expect(page.getByText('plan the surprise party')).toBeVisible();
 
-  // "lock now" re-arms without a reload.
+  // Persistence: by now the locked flag has long since hit disk — a fresh
+  // load re-arms the session and the flag survives.
   await page.getByTestId('back').click();
-  await page.getByTestId('settings-link').click();
-  await page.getByTestId('settings-lock-now').click();
-  await page.getByTestId('back').click();
+  await page.reload();
   await secretsRow.locator('.list-main').click();
   await expect(page.getByTestId('lock-gate')).toBeVisible();
 });
