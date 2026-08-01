@@ -623,10 +623,12 @@
   }
   .load-fill { display: block; height: 100%; background: var(--acc-green); opacity: 0.55; }
   .count { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; }
-  .locked-mark { color: var(--acc-yellow); flex: none; display: inline-flex; }
+  .locked-mark { color: var(--acc-yellow); flex: none; display: inline-flex; margin-left: 8px; }
   .locked-mark.open { color: var(--dim); opacity: 0.6; }
   .window {
-    margin-right: 10px;
+    /* Breathing room on the left (2026-08-01 night ask): symbol-only marks
+       sat flush against the title and read as part of the list's name. */
+    margin-left: 8px; margin-right: 10px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.65rem;
   }
   .window.asleep { color: var(--dim); }
