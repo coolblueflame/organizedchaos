@@ -237,13 +237,19 @@
       <span class="name" class:done={completedMode}>{task.name || 'untitled'}</span>
       {#if showList && listTitle}<span class="list-tag">{listTitle}</span>{/if}
       <span class="badges">
+        <!-- Text, not dots (2026-08-01 ask): the yellow review dot read as
+             another priority colour, and with 100+ tags the colour circles
+             carried no information at all. Names carry it; three then a count. -->
         {#if task.needsReview && !completedMode}
-          <span class="review-dot" data-testid="needs-review-{task.id}"
-            title="not triaged yet — open it or set a field"></span>
+          <span class="review-badge" data-testid="needs-review-{task.id}"
+            title="not triaged yet — open it or set a field">NEW</span>
         {/if}
-        {#each rowTags as t (t.id)}
-          <span class="tag-dot" style="background: {tagColor(t.colorIndex)}"></span>
+        {#each rowTags.slice(0, 3) as t (t.id)}
+          <span class="tag-name" style="color: {tagColor(t.colorIndex)}">{t.name}</span>
         {/each}
+        {#if rowTags.length > 3}
+          <span class="tag-name more">+{rowTags.length - 3}</span>
+        {/if}
         {#if showCompletedAt && task.completedAt}
           <span class="done-at">✓ {new Date(task.completedAt).toLocaleDateString()}</span>
         {/if}
@@ -419,11 +425,16 @@
   }
   .name-input::placeholder { color: var(--dim); }
   .list-tag { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; flex: none; }
-  .badges { margin-left: auto; display: flex; align-items: center; gap: 5px; flex: none; }
-  .tag-dot { width: 7px; height: 7px; border-radius: 50%; }
-  .review-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--acc-yellow); box-shadow: 0 0 5px var(--acc-yellow);
+  .badges { margin-left: auto; display: flex; align-items: center; gap: 5px; flex: none; min-width: 0; }
+  .tag-name {
+    font-family: var(--font-mono); font-size: 0.62rem; opacity: 0.85;
+    max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tag-name.more { color: var(--dim); }
+  .review-badge {
+    color: var(--acc-yellow); border: 1px solid color-mix(in srgb, var(--acc-yellow) 55%, transparent);
+    border-radius: 4px; padding: 0 4px;
+    font-family: var(--font-mono); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em;
   }
   .deadline { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   .done-at { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }

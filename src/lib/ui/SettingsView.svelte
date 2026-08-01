@@ -9,8 +9,14 @@
   import { install } from './install.svelte';
   import { currentPushSubscription, deviceLabel, pushSupported, subscribePush } from './push';
   import Glyph from './Glyph.svelte';
+  import LockGate from './LockGate.svelte';
+  import { hasPin, lock, setPin } from './lock.svelte';
 
   let howToOpen = $state(false);
+  let pinDraft = $state('');
+  /** SW controller present = this device serves the app from cache offline. */
+  const offlineReady = typeof navigator !== 'undefined'
+    && !!navigator.serviceWorker?.controller;
 
   let owner = $state('coolblueflame');
   let repoName = $state('organizedchaos-data');
@@ -183,6 +189,77 @@
       {:else if app.persistentStorage === 'unsupported'}best-effort (browser doesn't support persistence)
       {:else}checking…{/if}
     </p>
+    <p class="hint">offline:
+      {#if offlineReady}ready ✓ — the app opens and works without a connection; changes sync when you're back online
+      {:else}not cached yet on this device — open it once online (or install it) first{/if}
+    </p>
+  </section>
+
+  <section class="group" data-testid="settings-privacy">
+    <h2>locked lists</h2>
+    {#if hasPin()}
+      <p class="hint">A PIN is set. Lock any list from its ⋯ settings sheet; locked lists hide
+        their contents and stay out of the dice until unlocked.
+        {#if lock.unlocked}This session is <b>unlocked</b>.{:else}This session is <b>locked</b>.{/if}</p>
+      {#if lock.unlocked}
+        <button data-testid="settings-lock-now" onclick={() => lock.relock()}>lock now</button>
+      {:else}
+        <LockGate />
+      {/if}
+      <details>
+        <summary class="hint">change PIN</summary>
+        <div class="pin-row">
+          <input type="password" inputmode="numeric" placeholder="new PIN"
+            data-testid="settings-pin-input" bind:value={pinDraft} />
+          <button data-testid="settings-pin-save" disabled={pinDraft.length < 4 || !lock.unlocked}
+            onclick={() => { void setPin(pinDraft); pinDraft = ''; }}>
+            {lock.unlocked ? 'save new PIN' : 'unlock first'}
+          </button>
+        </div>
+      </details>
+    {:else}
+      <p class="hint">Set a PIN to enable locking lists (from each list's ⋯ sheet). This is a
+        privacy screen for shoulder-surfers and borrowed phones — <b>not encryption</b>: the
+        data itself is stored and synced like everything else.</p>
+      <div class="pin-row">
+        <input type="password" inputmode="numeric" placeholder="PIN (4+ characters)"
+          data-testid="settings-pin-input" bind:value={pinDraft} />
+        <button data-testid="settings-pin-save" disabled={pinDraft.length < 4}
+          onclick={() => { void setPin(pinDraft); pinDraft = ''; }}>set PIN</button>
+      </div>
+    {/if}
+  </section>
+
+  <section class="group" data-testid="settings-legend">
+    <h2>what the symbols mean</h2>
+    <details class="legend">
+      <summary>the full legend</summary>
+      <h3>on tasks</h3>
+      <ul>
+        <li><span class="l-prio max"></span><span class="l-prio high"></span><span class="l-prio medium"></span><span class="l-prio low"></span><span class="l-prio someday"></span>
+          priority: magenta MAX · orange high · green medium · blue low · grey someday</li>
+        <li><span class="l-badge">NEW</span> not triaged yet — open it or set any field</li>
+        <li><Glyph name="escalate" size={11} /> a deadline has escalated its effective priority</li>
+        <li><Glyph name="play" size={11} /> in progress — the clock may be running</li>
+        <li><Glyph name="blocked" size={11} /> waiting on another task; the randomizer skips it</li>
+        <li><Glyph name="moon" size={11} /> snoozed — out of the draw until it wakes</li>
+        <li><Glyph name="period" size={11} /> daily ritual: magenta = window open now · green = done today · grey = waiting</li>
+        <li><Glyph name="timebox" size={11} /> starts a countdown when accepted</li>
+        <li><Glyph name="notes" size={11} /> has a description — expand to read it</li>
+        <li><Glyph name="box-checked" size={11} /> n/m — a checklist inside, ticked so far</li>
+        <li><span class="l-text">⧗</span> time actually tracked on it</li>
+        <li><span class="l-text">#N</span> its place in today's queue</li>
+        <li>coloured words at the row's end are its tags (first three, then +n)</li>
+      </ul>
+      <h3>on lists</h3>
+      <ul>
+        <li><Glyph name="dice" size={11} /> inside its eligible hours — the randomizer draws from it</li>
+        <li><Glyph name="moon" size={11} /> outside its hours — asleep until its window</li>
+        <li><Glyph name="bolt" size={11} /> MAX-priority tasks get through even while asleep</li>
+        <li>the thin bar under a list = how much of the heaviest list's load it carries</li>
+        <li><span class="l-text">✦</span> summoned by the dice — a list the app itself made</li>
+      </ul>
+    </details>
   </section>
 
   <section class="group">
@@ -201,7 +278,7 @@
         onchange={(e) => setting({ autoSelectNext: e.currentTarget.checked })} /></label>
   </section>
 
-  <p class="about">organized chaos v{__APP_VERSION__} — a todo list with a gambling problem</p>
+  <p class="about">organized chaos v{__APP_VERSION__} — a todo list that tempts fate</p>
 </main>
 
 {#if howToOpen}
@@ -210,6 +287,26 @@
 
 <style>
   .with-glyph { display: inline-flex; align-items: center; gap: 6px; }
+  .pin-row { display: flex; gap: 8px; margin-top: 6px; }
+  .pin-row input { flex: 1; min-width: 0; }
+
+  .legend summary { cursor: pointer; color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.8rem; }
+  .legend h3 { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 4px; }
+  .legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .legend li { display: flex; align-items: baseline; gap: 6px; font-size: 0.8rem; color: var(--text); line-height: 1.45; }
+  .legend li :global(svg) { flex: none; transform: translateY(1px); color: var(--dim); }
+  .l-prio { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; }
+  .l-prio.someday { background: var(--dim); opacity: 0.4; }
+  .l-prio.low { background: var(--acc-blue); }
+  .l-prio.medium { background: var(--acc-green); }
+  .l-prio.high { background: var(--acc-orange); }
+  .l-prio.max { background: var(--acc-magenta); }
+  .l-badge {
+    color: var(--acc-yellow); border: 1px solid color-mix(in srgb, var(--acc-yellow) 55%, transparent);
+    border-radius: 4px; padding: 0 4px; flex: none;
+    font-family: var(--font-mono); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em;
+  }
+  .l-text { color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; flex: none; }
 
 
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }

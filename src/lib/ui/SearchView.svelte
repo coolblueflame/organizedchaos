@@ -6,6 +6,8 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { searchTasks, searchTemplates } from '../domain/search';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { describeRecurrence } from './recurrenceText';
   import { searchQuery } from './searchState.svelte';
   import TaskRow from './TaskRow.svelte';
@@ -29,7 +31,7 @@
   });
 
   const results = $derived(
-    searchTasks(app.state.tasks, scanned, app.state.settings, new Date()),
+    searchTasks(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked), scanned, app.state.settings, new Date()),
   );
   const tplResults = $derived(searchTemplates(app.state.templates, scanned));
   const nothing = $derived(

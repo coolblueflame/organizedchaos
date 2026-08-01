@@ -9,6 +9,8 @@
   import { toast } from './toast.svelte';
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { projectPriorities } from '../domain/project';
   import { moveAcross, moveWithin, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
   import { isRitualDue, isRitualTask } from '../domain/ritual';
@@ -38,6 +40,14 @@
     haptic('tick');
     app.fireEgg('bigButtonPressed');
     navigate({ name: 'randomizer' });
+  }
+
+  /** The roll-next card skips the accept screen (2026-08-01 ask): the big
+      button is right there for browsing — this one commits. An empty pool
+      falls through to the randomizer so its empty state can explain itself. */
+  async function rollStraightIn() {
+    haptic('tick');
+    if (!(await app.rollStraightIn())) navigate({ name: 'randomizer' });
   }
 
   // A little ritual for the curious: rapid taps on the wordmark do… something.
@@ -267,10 +277,13 @@
     if (order) await app.reorderQueue(order);
   }
 
-  /** The rows to render: the live drag order while a drag is in flight. */
+  /** The rows to render: the live drag order while a drag is in flight.
+      Locked lists' tasks stay QUEUED but don't render their names while the
+      app is locked — the queue is the home screen's most readable surface. */
   const shownQueue = $derived.by(() => {
-    if (!queueOrder) return queueTasks;
-    const byId = new Map(queueTasks.map((t) => [t.id, t]));
+    const visible = withoutLocked(queueTasks, app.state.lists, lock.unlocked);
+    if (!queueOrder) return visible;
+    const byId = new Map(visible.map((t) => [t.id, t]));
     return queueOrder.map((id) => byId.get(id)).filter((t): t is Task => t !== undefined);
   });
 
@@ -340,13 +353,13 @@
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
-  <p class="tagline">// a todo list with a gambling problem</p>
+  <p class="tagline">// a todo list that tempts fate</p>
 
   <InstallBanner />
 
   <StatsStrip />
 
-  <CurrentTaskCard onroll={bigButton} />
+  <CurrentTaskCard onroll={() => void rollStraightIn()} />
 
   <WorkPeriod />
 
@@ -398,6 +411,8 @@
           <button class="list-main" onclick={() => navigate({ name: 'list', id: l.id })}>
             <span class="prompt" aria-hidden="true">&gt;</span>
             <span class="list-title">{l.title}</span>
+            {#if l.locked}<span class="locked-mark" title={lock.unlocked ? 'locked list — open this session' : 'locked — PIN needed to open'}
+              class:open={lock.unlocked}><Glyph name="locked" size={10} /></span>{/if}
             {#if l.deadline}
               {@const tier = projectTiers.get(l.id)}
               <span class="project {tier ?? 'low'}" title="project deadline {l.deadline}">
@@ -407,7 +422,10 @@
             {#if describeWindow(l)}
               <span class="window" class:asleep={!isListActiveAt(l, clock.now)}
                 title="the randomizer draws from this list {describeWindow(l)}{l.urgentOverridesHours ? ' — MAX-priority tasks get through any time' : ''}">
-                <Glyph name={isListActiveAt(l, clock.now) ? 'dice' : 'moon'} size={10} /> {describeWindow(l)}{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
+                <!-- Symbol only (2026-08-01 ask): the full window text cluttered
+                     rows once most lists had hours. Detail lives in the title
+                     tooltip and the list's settings sheet. -->
+                <Glyph name={isListActiveAt(l, clock.now) ? 'dice' : 'moon'} size={10} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={10} />{/if}
               </span>
             {/if}
             <span class="load" aria-hidden="true">
@@ -605,6 +623,8 @@
   }
   .load-fill { display: block; height: 100%; background: var(--acc-green); opacity: 0.55; }
   .count { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; }
+  .locked-mark { color: var(--acc-yellow); flex: none; display: inline-flex; }
+  .locked-mark.open { color: var(--dim); opacity: 0.6; }
   .window {
     margin-right: 10px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.65rem;

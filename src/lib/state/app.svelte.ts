@@ -17,6 +17,8 @@ import {
 } from '../domain/ritual';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
+import { lockedTaskIds } from '../domain/lock';
+import { lockSession } from './lockSession.svelte';
 import { liveQueueIds } from '../domain/dayQueue';
 import { ensureNotificationPermission } from '../ui/notify';
 import { reorderPatches } from '../domain/listOrder';
@@ -413,6 +415,10 @@ export class AppStore {
   /** Shelve or revive a list — see domain/archive.ts for what that means. */
   async setListArchived(id: string, archived: boolean): Promise<void> {
     await this.patchList(id, { archived: archived || undefined });
+  }
+
+  async setListLocked(id: string, locked: boolean): Promise<void> {
+    await this.patchList(id, { locked: locked || undefined });
   }
 
   /** Commit a hand-arranged custom order for one list's open tasks. */
@@ -859,6 +865,20 @@ export class AppStore {
    * outside its window must never be handed to you, and one inside its window
    * should be handed to you first.
    */
+  /**
+   * The roll-next card's action (2026-08-01 ask): skip the randomizer's
+   * accept screen entirely — draw under the full ruleset and take the result
+   * straight into the current-task slot. Don't like it? The card's own
+   * buttons put it back and this can run again. Returns false when the pool
+   * is empty so the caller can show WHY instead of doing nothing.
+   */
+  async rollStraightIn(): Promise<boolean> {
+    const before = this.state.currentTask?.taskId;
+    await this.drawNext();
+    return this.state.currentTask?.taskId !== undefined
+      && this.state.currentTask.taskId !== before;
+  }
+
   private async drawNext(): Promise<void> {
     const now = new Date();
     const next = drawTask(
@@ -867,6 +887,9 @@ export class AppStore {
         excludeIds: [
           ...ritualExclusions(this.state.tasks, this.state.settings, now),
           ...archivedTaskIds(this.state.tasks, this.state.lists),
+          // Locked lists' tasks never draw while locked — handing one to the
+          // user would read its name out loud.
+          ...lockedTaskIds(this.state.tasks, this.state.lists, lockSession.unlocked),
         ],
         queueFirst: liveQueueIds(this.state.queueIds, this.state.tasks),
         dueFirst: dueRitualIds(this.state.tasks, this.state.settings, now),

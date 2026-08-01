@@ -16,17 +16,21 @@
   import { PRIORITIES, type Priority } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import TagPicker from './TagPicker.svelte';
+  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
 
   /** Which sweep: 'triage' (the yellow dots) or 'estimates' (2026-07-29 ask). */
   const mode = $derived(
     router.current.name === 'sweep' && router.current.mode === 'estimates' ? 'estimates' : 'triage',
   );
 
-  const triageQueue = $derived(sweepQueue(app.state.tasks, app.state.lists));
+  const visibleTasks = $derived(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked));
+  const triageQueue = $derived(sweepQueue(visibleTasks, app.state.lists));
   /** Skips are session-only: "can't answer right now" ≠ a decision worth saving. */
   let estSkipped = $state<string[]>([]);
   const estQueue = $derived(
-    estimateQueue(app.state.tasks, app.state.lists).filter((t) => !estSkipped.includes(t.id)),
+    estimateQueue(visibleTasks, app.state.lists).filter((t) => !estSkipped.includes(t.id)),
   );
   const queue = $derived(mode === 'estimates' ? estQueue : triageQueue);
 
@@ -203,12 +207,16 @@
           <button class="keep" data-testid="est-confirm-hour" onclick={() => void confirmEstimate(1)}>
             ✓ 1 hour is right
           </button>
+          <!-- Label OUTSIDE the box (2026-08-01 ask: the placeholder was cut
+               off and unitless — "really it's…" begged the question, hours or
+               minutes?). The parser takes either. -->
+          <span class="est-label">no — really it takes…</span>
           <div class="row est-row">
-            <input type="number" min="0.5" step="0.5" placeholder="really it's… (h)"
+            <input type="text" placeholder={ESTIMATE_HINT}
               data-testid="est-input" bind:value={estInput}
-              onkeydown={(e) => { if (e.key === 'Enter') void confirmEstimate(parseFloat(estInput)); }} />
-            <button data-testid="est-save" disabled={!(parseFloat(estInput) > 0)}
-              onclick={() => void confirmEstimate(parseFloat(estInput))}>save</button>
+              onkeydown={(e) => { if (e.key === 'Enter') void confirmEstimate(parseEstimate(estInput) ?? 0); }} />
+            <button data-testid="est-save" disabled={parseEstimate(estInput) === null}
+              onclick={() => void confirmEstimate(parseEstimate(estInput) ?? 0)}>save</button>
             <button class="skip" data-testid="est-skip" onclick={skipEstimate}>skip</button>
           </div>
         </div>
@@ -244,12 +252,15 @@
             value={current.notes}
             oninput={(e) => void app.patchTask(current!.id, { notes: e.currentTarget.value })}></textarea>
         </label>
-        <label class="field est"><span>estimate (h)</span>
-          <input type="number" min="0.5" step="0.5" placeholder="none" data-testid="sweep-estimate"
+        <label class="field est"><span>estimate</span>
+          <input type="text" placeholder={ESTIMATE_HINT} data-testid="sweep-estimate"
             value={current.estimateHours ?? ''}
-            oninput={(e) => void app.patchTask(current!.id, {
-              estimateHours: parseFloat(e.currentTarget.value) > 0 ? parseFloat(e.currentTarget.value) : undefined,
-            })} />
+            oninput={(e) => {
+              const v = e.currentTarget.value.trim();
+              const hours = v === '' ? null : parseEstimate(v);
+              if (v !== '' && hours === null) return; // partial input: not a wipe
+              void app.patchTask(current!.id, { estimateHours: hours ?? undefined });
+            }} />
         </label>
         <TagPicker selected={current.tagIds} ontoggle={toggleTag} />
 
@@ -364,6 +375,7 @@
 
   .est-notes { color: var(--dim); font-size: 0.82rem; white-space: pre-wrap; margin: 6px 0 0; }
   .assumed { color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.75rem; margin: 10px 0 0; }
+  .est-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; }
   .est-row input {
     flex: 1; min-width: 0; max-width: 180px;
     background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;

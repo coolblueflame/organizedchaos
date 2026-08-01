@@ -1,6 +1,8 @@
 <!-- All open tasks flagged in-progress (spec §6). -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { navigate } from './router.svelte';
   import { openTasks } from '../domain/views';
   import TaskRow from './TaskRow.svelte';
@@ -10,7 +12,7 @@
 
   $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => (editingTaskId = null)));
 
-  const started = $derived(openTasks(app.state.tasks).filter((t) => t.inProgress));
+  const started = $derived(openTasks(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked)).filter((t) => t.inProgress));
 </script>
 
 <main>

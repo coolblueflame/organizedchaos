@@ -50,6 +50,22 @@ test('captures several tasks in a row without leaving home', async ({ page }) =>
   await expect(page.getByText('second thing', { exact: true })).toBeVisible();
 });
 
+test('the queue toggle plans captured tasks for today — including the last one', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Inbox');
+
+  await page.getByTestId('quick-add-open').click();
+  await page.getByTestId('quick-add-queue').check();
+  await page.getByTestId('quick-add-name').fill('buy sunscreen');
+  await page.getByTestId('quick-add-name').press('Enter'); // chained commit
+  await page.getByTestId('quick-add-name').fill('pack cooler');
+  await page.getByTestId('quick-add-close').click(); // final one commits on close
+
+  const queue = page.getByTestId('queue-section');
+  await expect(queue).toContainText('buy sunscreen');
+  await expect(queue).toContainText('pack cooler');
+});
+
 test('closing without typing leaves no phantom task', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Inbox');

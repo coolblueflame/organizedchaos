@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
   import { navigate } from './router.svelte';
   import { drawTask, eligibleForDraw } from '../domain/randomizer';
   import { effectivePriority, isEscalated } from '../domain/priority';
@@ -23,6 +24,8 @@
   import { dueRitualIds, isRitualDue, ritualExclusions, withRitualLifts } from '../domain/ritual';
   import { clock } from './clock.svelte';
   import { archivedTaskIds } from '../domain/archive';
+  import { lockedTaskIds } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { liveQueueIds } from '../domain/dayQueue';
   import { SELF_CARE } from '../eggs/content/extras';
   import { completionCounts } from '../domain/stats';
@@ -96,7 +99,7 @@
       ? app.state.lists.filter((l) => !omittedLists.includes(l.id)).map((l) => l.id)
       : undefined,
     tagIds: filterTags,
-    excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue, ...onShelf],
+    excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue, ...onShelf, ...lockedOut],
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
     // The hand-planned order outranks the tiers (2026-07-29 request).
@@ -162,6 +165,8 @@
    */
   /** Tasks on archived lists — never proposed, always findable. */
   const onShelf = $derived(archivedTaskIds(app.state.tasks, app.state.lists));
+  /** Locked lists' tasks while locked — same never-proposed rule as the shelf. */
+  const lockedOut = $derived(lockedTaskIds(app.state.tasks, app.state.lists, lock.unlocked));
 
   const ritualsNotDue = $derived(
     ritualExclusions(app.state.tasks, app.state.settings, clock.now),
@@ -214,7 +219,7 @@
       excludeIds: [
         ...(omit === 'skips' ? [] : notNow),
         ...(omit === 'hours' ? [] : blockedByHours),
-        ...ritualsNotDue, ...onShelf,
+        ...ritualsNotDue, ...onShelf, ...lockedOut,
       ],
       maxEstimateHours: omit === 'period' ? undefined : base.maxEstimateHours,
     };
@@ -344,12 +349,15 @@
             <input type="date" data-testid="triage-deadline" value={triage.deadline ?? ''}
               oninput={(e) => void app.patchTask(triage!.id, { deadline: e.currentTarget.value || undefined })} />
           </label>
-          <label><span>estimate (h)</span>
-            <input type="number" min="0.5" step="0.5" placeholder="1" data-testid="triage-estimate"
+          <label><span>estimate</span>
+            <input type="text" placeholder={ESTIMATE_HINT} data-testid="triage-estimate"
               value={triage.estimateHours ?? ''}
-              oninput={(e) => void app.patchTask(triage!.id, {
-                estimateHours: parseFloat(e.currentTarget.value) > 0 ? parseFloat(e.currentTarget.value) : undefined,
-              })} />
+              oninput={(e) => {
+                const v = e.currentTarget.value.trim();
+                const hours = v === '' ? null : parseEstimate(v);
+                if (v !== '' && hours === null) return; // partial input: not a wipe
+                void app.patchTask(triage!.id, { estimateHours: hours ?? undefined });
+              }} />
           </label>
         </div>
       </div>

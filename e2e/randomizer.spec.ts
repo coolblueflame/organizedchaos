@@ -71,14 +71,12 @@ test('completing the current task invites the next roll, closing the loop', asyn
   await expect(page.getByTestId('current-task-card')).toContainText(first);
   await page.getByTestId('current-complete').click();
 
-  // The card doesn't dead-end into idle — it offers the next roll.
+  // The card doesn't dead-end into idle — it offers the next roll, and the
+  // roll commits DIRECTLY into the current-task slot (2026-08-01 ask): no
+  // accept screen, the big button is right below for browsing.
   const invite = page.getByTestId('current-roll-next');
   await expect(invite).toContainText('that’s 1 today');
   await page.getByTestId('roll-next').click();
-  await expect(page.getByTestId('draw-card')).toContainText(other);
-  await page.getByTestId('draw-accept').click();
-
-  // Accepting a fresh draw disarms the invitation state behind it.
   await expect(page.getByTestId('current-task-card')).toContainText(other);
   await expect(page.getByTestId('current-roll-next')).toHaveCount(0);
 
@@ -174,7 +172,8 @@ test('scheduled hours keep an off-clock list out of the draw, with an override',
   const listRow = page.getByTestId(/^list-row-/).first();
   const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
   await setHours(page, listId, '09:00', '17:00');
-  await expect(listRow).toContainText('9:00–17:00');
+  // Symbol-only rows (2026-08-01): the window text lives in the tooltip.
+  await expect(listRow.locator('.window')).toHaveAttribute('title', /9:00–17:00/);
 
   // At 22:00 the global draw skips it, but offers to roll anyway
   await page.getByTestId('big-button').click();

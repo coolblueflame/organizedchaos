@@ -12,6 +12,8 @@
   } from '../domain/views';
   import GroupedTasks from './GroupedTasks.svelte';
   import { withoutArchived } from '../domain/archive';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { eligibleForDraw } from '../domain/randomizer';
   import { ritualExclusions } from '../domain/ritual';
   import { tasksBlockedByHours } from '../domain/schedule';
@@ -45,7 +47,8 @@
     const now = new Date();
     // Archived lists' tasks are out of every global view — that is what
     // archiving means. They stay reachable via search and the shelf itself.
-    let tasks = withoutArchived(app.state.tasks, app.state.lists);
+    let tasks = withoutLocked(
+      withoutArchived(app.state.tasks, app.state.lists), app.state.lists, lock.unlocked);
     if (availableOnly) {
       tasks = eligibleForDraw(tasks, now, {
         excludeIds: [

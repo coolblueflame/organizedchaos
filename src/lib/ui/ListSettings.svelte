@@ -11,6 +11,7 @@
   import { projectPriority, remainingEstimateHours } from '../domain/project';
   import { formatDuration } from '../domain/stats';
   import Glyph from './Glyph.svelte';
+  import { hasPin } from './lock.svelte';
 
   let { list, onclose }: { list: List; onclose: () => void } = $props();
 
@@ -158,6 +159,19 @@
       {list.archived ? 'revive from the archive' : 'archive list'}
     </button>
     <p class="hint">Archived: off the home screen, out of the dice — still searchable, nothing deleted.</p>
+  </section>
+
+  <section class="block">
+    {#if hasPin()}
+      <button class="shelve" data-testid="list-settings-lock"
+        onclick={() => { void app.setListLocked(list.id, !list.locked); onclose(); }}>
+        <span class="with-glyph"><Glyph name="locked" size={11} /> {list.locked ? 'unlock this list' : 'lock this list'}</span>
+      </button>
+      <p class="hint">Locked: contents hidden and out of the dice until the PIN is entered.
+        A privacy screen, not encryption.</p>
+    {:else}
+      <p class="hint"><Glyph name="locked" size={11} /> to lock lists behind a PIN, set one in Settings first.</p>
+    {/if}
   </section>
 
   <div class="actions">

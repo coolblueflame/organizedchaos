@@ -125,7 +125,9 @@ test('list settings: shows the name, cancels cleanly, saves weekday hours', asyn
   await page.getByTestId('hours-rule-0-from').fill('09:00');
   await page.getByTestId('hours-rule-0-to').fill('17:00');
   await page.getByTestId('list-settings-save').click();
-  await expect(page.getByTestId(`list-row-${listId}`)).toContainText('weekdays 9:00–17:00');
+  // Rows show a symbol only now (2026-08-01) — the window text lives in its tooltip.
+  await expect(page.getByTestId(`list-row-${listId}`).locator('.window'))
+    .toHaveAttribute('title', /weekdays 9:00–17:00/);
 });
 
 test('project deadline shows the remaining workload and marks the list', async ({ page }) => {

@@ -5,6 +5,9 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { keyboard } from './keyboardOpen.svelte';
+  import { lock } from './lock.svelte';
+  import LockGate from './LockGate.svelte';
   import { focusOnMount } from './focusOnMount';
   import { navigate } from './router.svelte';
   import {
@@ -188,6 +191,11 @@
     {/if}
   </header>
 
+  {#if list?.locked && !lock.unlocked}
+    <!-- The locked gate replaces the CONTENTS, not the screen: the title is
+         the user's own naming choice; what's inside is what the PIN guards. -->
+    <LockGate />
+  {:else}
   {#if workLeft > 0}
     <!-- The stats hero, list-sized: what finishing THIS list would cost
          (2026-07-30 ask — the per-project view of the same number). -->
@@ -209,8 +217,12 @@
 
   <!-- Also floating (2026-07-29 ask): a long list should never make you scroll
        to the bottom just to add to it. Same synchronous newTask, so the
-       keyboard comes up in the same tap. -->
-  <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>+</button>
+       keyboard comes up in the same tap. Hidden while the keyboard is up
+       (2026-08-01 ask) — fixed-position elements ride the visual viewport on
+       iOS and the button scooted up to cover the text being typed. -->
+  {#if !keyboard.open}
+    <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>+</button>
+  {/if}
 
   {#if completedHere.length > 0}
     <details class="done-shelf" data-testid="list-completed" bind:open={doneOpen}>
@@ -234,6 +246,7 @@
       </div>
       {/if}
     </details>
+  {/if}
   {/if}
 </main>
 

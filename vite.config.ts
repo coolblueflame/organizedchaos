@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'Organized Chaos',
         short_name: 'Chaos',
-        description: 'A todo list with a gambling problem',
+        description: 'A todo list that tempts fate',
         start_url: '/organizedchaos/',
         scope: '/organizedchaos/',
         display: 'standalone',

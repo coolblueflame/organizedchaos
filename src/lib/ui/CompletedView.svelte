@@ -4,6 +4,8 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { navigate } from './router.svelte';
   import { groupCompleted } from '../domain/views';
   import { appDayKey } from '../domain/time';
@@ -14,7 +16,7 @@
   let openId = $state<string | null>(null);
 
   const groups = $derived(
-    groupCompleted(app.state.tasks, app.state.settings.rolloverHour),
+    groupCompleted(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked), app.state.settings.rolloverHour),
   );
 
   /*
@@ -40,7 +42,7 @@
   const rendered = $derived(shown.reduce((n, g) => n + g.tasks.length, 0));
 
   // ── share today's wins ───────────────────────────────────────────────────
-  const wins = $derived(winsList(app.state.tasks, new Date(), app.state.settings.rolloverHour));
+  const wins = $derived(winsList(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked), new Date(), app.state.settings.rolloverHour));
   const winCount = $derived(wins === '' ? 0 : wins.split('\n').length);
   let copied = $state(false);
   let copyFailed = $state(false);

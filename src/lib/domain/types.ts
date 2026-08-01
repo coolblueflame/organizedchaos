@@ -65,6 +65,10 @@ export interface List extends Base {
    * deleting history feels wrong.
    */
   archived?: boolean;
+  /** Behind the PIN (2026-08-01): contents hidden and undrawable while the
+      app is locked. A privacy SCREEN, not encryption — the data itself is
+      stored exactly like everything else. */
+  locked?: boolean;
   /** Last sort mode used in this list's view (spec §6: remembered per list). */
   sortMode: SortMode;
   /**
@@ -232,6 +236,8 @@ export interface Settings {
   autoSelectNext: boolean;
   /** Last list used from quick add, so capture always lands where you left it. */
   quickAddListId?: string;
+  /** Salted SHA-256 of the lock PIN. Synced so one PIN unlocks every device. */
+  lockPin?: { salt: string; hash: string };
 }
 
 export const DEFAULT_SETTINGS: Settings =

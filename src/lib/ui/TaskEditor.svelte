@@ -20,6 +20,8 @@
   import Checklist from './Checklist.svelte';
   import type { RecurrenceMode } from '../domain/types';
   import Glyph from './Glyph.svelte';
+  import { autogrow } from './autogrow';
+  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
 
   let { task, oncollapse, compact = false }: {
     task: Task;
@@ -75,8 +77,12 @@
   }
 
   function setEstimate(value: string) {
-    const hours = parseFloat(value);
-    void app.patchTask(task.id, { estimateHours: hours > 0 ? hours : undefined });
+    // parseEstimate, not parseFloat: "45m" and "1h30m" are valid entries now.
+    // Mid-typing garbage ("4", then "45m") resolves on each keystroke; a
+    // cleared field clears the estimate.
+    const hours = value.trim() === '' ? null : parseEstimate(value);
+    if (value.trim() !== '' && hours === null) return; // don't wipe on partial input
+    void app.patchTask(task.id, { estimateHours: hours ?? undefined });
     touched();
   }
 
@@ -105,7 +111,10 @@
     void app.removeTask(task.id); // the store records the undo
   }
 
-  const fmt = (ts: number) => new Date(ts).toLocaleDateString();
+  // "Jan 1, 2026", not locale digits: all-numeric dates read ambiguously
+  // (which pair is the month?) — Ben's 2026-08-01 ask.
+  const fmt = (ts: number) =>
+    new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   // ── recurrence ─────────────────────────────────────────────────────────
   let recurOpen = $state(false);
@@ -113,8 +122,9 @@
   // ── daily ritual ──────────────────────────────────────────────────────────
   const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   let ritualOpen = $state(false);
-  /** The windows being edited (2026-07-29: a ritual can have several a day). */
-  let ritualWins = $state<Array<{ from: string; to: string; days: number[] }>>([]);
+  /** The windows being edited (2026-07-29: a ritual can have several a day).
+      `toTouched`: the user set the end themselves — stop auto-following the start. */
+  let ritualWins = $state<Array<{ from: string; to: string; days: number[]; toTouched?: boolean }>>([]);
   let ritualEach = $state(false);
 
   // Seed the form from the task each time it opens, not reactively: editing the
@@ -124,18 +134,45 @@
     const existing = untrack(() => ritualWindows(task));
     const each = untrack(() => task.ritualPerWindow === true);
     ritualWins = existing.length > 0
-      ? existing.map((w) => ({ from: w.from, to: w.to, days: [...w.days] }))
-      : [{ from: '12:00', to: '14:00', days: [...ALL_DAYS] }];
+      // Saved windows are the user's: never auto-adjust their ends.
+      ? existing.map((w) => ({ from: w.from, to: w.to, days: [...w.days], toTouched: true }))
+      : [{ from: nearestHour(), to: nearestHour(1), days: [...ALL_DAYS] }];
     ritualEach = each;
   });
 
+  /** "HH:MM" for the hour nearest to now, +offsetH — never with minutes to drag off. */
+  function nearestHour(offsetH = 0): string {
+    const d = new Date();
+    const h = (d.getHours() + (d.getMinutes() >= 30 ? 1 : 0) + offsetH) % 24;
+    return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  /** from + 1h, wrapping midnight; '' passes through untouched. */
+  function hourAfter(from: string): string {
+    const m = from.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return '';
+    return `${String((Number(m[1]) + 1) % 24).padStart(2, '0')}:${m[2]}`;
+  }
+
   function addRitualWindow() {
     // A fresh window borrows the last one's days — "drink water" repeats the
-    // same day pattern far more often than it varies it.
+    // same day pattern far more often than it varies it. Times seed to the
+    // nearest whole hour, one hour long (2026-08-01 ask): an empty time input
+    // opens the picker at the CURRENT minute, and dragging minutes back to
+    // ":00" on every window got old fast.
     const prev = ritualWins[ritualWins.length - 1];
+    const from = nearestHour();
     ritualWins = [...ritualWins, {
-      from: '', to: '', days: prev ? [...prev.days] : [...ALL_DAYS],
+      from, to: hourAfter(from), days: prev ? [...prev.days] : [...ALL_DAYS],
     }];
+  }
+
+  /** Picking a start re-seeds the end an hour later — until the user has
+      deliberately set an end of their own, which then stays theirs. */
+  function ritualFromChanged(i: number) {
+    const win = ritualWins[i];
+    if (!win) return;
+    if (!win.toTouched) win.to = hourAfter(win.from);
   }
 
   function dropRitualWindow(i: number) {
@@ -200,7 +237,7 @@
 
 <div class="editor">
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
-    rows="2" bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
+    rows="2" use:autogrow bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
   <Checklist {notes} taskId={task.id} onchange={notesChanged} allowAdd />
 
   <PrioritySelect value={task.priority}
@@ -238,9 +275,9 @@
         }} />
     </label>
     <label>
-      <span>estimate (h)</span>
-      <input type="number" data-testid="task-estimate-input" min="0.5" step="0.5"
-        value={task.estimateHours ?? ''} placeholder="1"
+      <span>estimate</span>
+      <input type="text" data-testid="task-estimate-input"
+        value={task.estimateHours ?? ''} placeholder={ESTIMATE_HINT}
         oninput={(e) => setEstimate(e.currentTarget.value)}
         onchange={(e) => setEstimate(e.currentTarget.value)} />
     </label>
@@ -281,10 +318,10 @@
           <div class="ritual-row" class:has-drop={ritualWins.length > 1}>
             <label><span>from</span>
               <input type="time" data-testid={i === 0 ? 'ritual-from' : `ritual-from-${i}`}
-                bind:value={win.from} /></label>
+                bind:value={win.from} onchange={() => ritualFromChanged(i)} /></label>
             <label><span>until</span>
               <input type="time" data-testid={i === 0 ? 'ritual-to' : `ritual-to-${i}`}
-                bind:value={win.to} /></label>
+                bind:value={win.to} onchange={() => (win.toTouched = true)} /></label>
             {#if ritualWins.length > 1}
               <button class="win-drop" data-testid="ritual-window-drop-{i}"
                 aria-label="remove this time" onclick={() => dropRitualWindow(i)}>✕</button>

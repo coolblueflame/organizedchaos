@@ -82,6 +82,17 @@
     }
   }
 
+  /** "≡ queue for today" — thought of something you must do TODAY, capture and
+      plan it in one motion (2026-08-01 ask). Sticky for the whole session:
+      the use case is a burst of morning must-dos, not a one-off. */
+  let queueToo = $state(false);
+
+  async function queueIfAsked(id: string | null): Promise<void> {
+    if (!queueToo || !id) return;
+    // The pristine sweep may have discarded it (unnamed) — queue only the real.
+    if (app.state.tasks.some((t) => t.id === id && !t.deleted)) await app.addToQueue(id);
+  }
+
   /** Commit this one and open the next; an empty one just ends the session. */
   async function addAnother(): Promise<void> {
     // Before the awaits, while the tap that triggered this still counts as a
@@ -93,8 +104,13 @@
       return;
     }
     added += 1;
+    const id = draftId;
     draftId = null;
+    // startDraft FIRST — an await in the null-draftId gap re-opens the
+    // async-draft race (a close() landing mid-await sees no draft and drops
+    // the typed name). Queuing the committed task can happen after.
     await startDraft();
+    await queueIfAsked(id);
   }
 
   /**
@@ -119,7 +135,10 @@
     await flushName(); // waits for any in-flight draft itself
     const id = draftId;
     draftId = null;
-    if (id) await app.discardIfPristine(id);
+    if (id) {
+      await app.discardIfPristine(id);
+      await queueIfAsked(id); // the final named task queues too, not just chained ones
+    }
     onclose();
   }
 
@@ -184,6 +203,11 @@
     </select>
   </label>
 
+  <label class="queue-too">
+    <input type="checkbox" data-testid="quick-add-queue" bind:checked={queueToo} />
+    <span>≡ also queue for today</span>
+  </label>
+
   <input
     class="name"
     data-testid="quick-add-name"
@@ -235,6 +259,12 @@
   .x { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 0.9rem; padding: 2px 6px; }
   @media (hover: hover) { .x:hover { color: var(--text); } }
   .target { display: flex; align-items: center; gap: 8px; }
+  .queue-too {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.78rem;
+  }
+  .queue-too input { width: 16px; height: 16px; accent-color: var(--acc-purple); }
+  .queue-too:has(input:checked) { color: var(--acc-purple); }
   .target-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
   select {
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
