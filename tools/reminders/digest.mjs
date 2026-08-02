@@ -16,9 +16,16 @@ export function localDayKey(date, timeZone) {
  * What the push should say, or null when there is nothing worth waking a
  * phone for. Deadlines are LOCAL date strings by the app's own convention;
  * tasks on archived lists are excluded exactly like the draw excludes them.
+ *
+ * LOCKED lists get a split treatment, and the split is the whole point: their
+ * deadlines still COUNT (a real obligation doesn't stop mattering because
+ * it's private) but their names are never spoken. A push lands on a lock
+ * screen in front of whoever is standing there — naming a task out of the
+ * one list guarded by a PIN would undo the feature from the outside.
  */
 export function buildDigest(tasks, lists, todayKey) {
   const archived = new Set(lists.filter((l) => l.archived === true).map((l) => l.id));
+  const locked = new Set(lists.filter((l) => l.locked === true).map((l) => l.id));
   const due = tasks.filter((t) =>
     !t.deleted && t.completedAt === undefined && t.deadline !== undefined &&
     t.deadline <= todayKey && !archived.has(t.listId));
@@ -26,16 +33,22 @@ export function buildDigest(tasks, lists, todayKey) {
 
   const overdue = due.filter((t) => t.deadline < todayKey);
   const today = due.filter((t) => t.deadline === todayKey);
-  // The single most pressing name makes the push concrete: oldest deadline
-  // first, so the longest-overdue thing leads.
-  const top = [...due].sort((a, b) => (a.deadline < b.deadline ? -1 : 1))[0];
+  // The single most pressing NAMEABLE task makes the push concrete: oldest
+  // deadline first, so the longest-overdue thing leads. All of them private?
+  // Then the counts stand alone rather than borrowing a name they shouldn't.
+  const top = due
+    .filter((t) => !locked.has(t.listId))
+    .sort((a, b) => (a.deadline < b.deadline ? -1 : 1))[0];
 
   const parts = [];
   if (overdue.length > 0) parts.push(`${overdue.length} overdue`);
   if (today.length > 0) parts.push(`${today.length} due today`);
+  const headline = parts.join(', ');
   return {
     title: overdue.length > 0 ? '🔥 the deadlines are circling' : '☀️ due today',
-    body: `${parts.join(', ')} — top of the pile: "${(top.name || 'untitled').slice(0, 60)}"`,
+    body: top
+      ? `${headline} — top of the pile: "${(top.name || 'untitled').slice(0, 60)}"`
+      : headline,
     tag: 'oc-daily-digest',
     counts: { overdue: overdue.length, today: today.length },
   };

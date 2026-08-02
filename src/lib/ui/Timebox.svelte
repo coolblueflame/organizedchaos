@@ -64,7 +64,13 @@
       // No prompt HERE: permission was requested when the box started (a real
       // gesture); a backgrounded app can't show a prompt at fire time anyway.
       if (Notification.permission !== 'granted') return;
-      const body = `"${task.name || 'your task'}" — time's up.`;
+      // An OS notification renders OUTSIDE the app, on a lock screen the PIN
+      // cannot gate — so a locked list's task is never named here, no matter
+      // what the app session's own lock state happens to be right now.
+      const inLockedList = app.state.lists.some((l) => l.id === task.listId && l.locked === true);
+      const body = inLockedList
+        ? "your timebox is up."
+        : `"${task.name || 'your task'}" — time's up.`;
       const reg = await navigator.serviceWorker?.getRegistration();
       // Via the service worker when possible: those survive a backgrounded tab.
       if (reg) await reg.showNotification('⏳ Timebox finished', { body, tag: 'timebox' });

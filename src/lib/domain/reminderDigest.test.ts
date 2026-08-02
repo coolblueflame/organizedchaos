@@ -43,6 +43,27 @@ describe('buildDigest', () => {
     const lists = [{ id: 'L1', archived: true }];
     expect(buildDigest([task({ deadline: '2026-07-01' })], lists, TODAY)).toBeNull();
   });
+
+  it('a locked list counts toward the numbers but never lends its name', () => {
+    // The push lands on a lock screen in front of whoever is standing there.
+    const lists = [{ id: 'SECRET', locked: true }, { id: 'L1' }];
+    const d = buildDigest([
+      task({ listId: 'SECRET', deadline: '2026-07-20', name: 'the private thing' }),
+      task({ listId: 'L1', deadline: '2026-07-28', name: 'ordinary errand' }),
+    ], lists, TODAY)!;
+    expect(d.counts).toEqual({ overdue: 2, today: 0 }); // still counted
+    expect(d.body).not.toContain('private thing'); // never named
+    expect(d.body).toContain('ordinary errand'); // the next one leads instead
+  });
+
+  it('when everything due is private, the counts stand alone', () => {
+    const lists = [{ id: 'SECRET', locked: true }];
+    const d = buildDigest([
+      task({ listId: 'SECRET', deadline: '2026-07-20', name: 'the private thing' }),
+    ], lists, TODAY)!;
+    expect(d.body).toBe('1 overdue');
+    expect(d.body).not.toContain('top of the pile');
+  });
 });
 
 describe('localDayKey', () => {
