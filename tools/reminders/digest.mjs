@@ -53,3 +53,25 @@ export function buildDigest(tasks, lists, todayKey) {
     counts: { overdue: overdue.length, today: today.length },
   };
 }
+
+/**
+ * The latency probe (2026-08-05): a push whose body states the moment it was
+ * sent, so the gap to when the phone actually buzzes can be read off rather
+ * than guessed at.
+ *
+ * The number this measures is the one the whole scheduled-alarm idea rests
+ * on. Scheduling to the second is easy and free; whether iOS *delivers* to
+ * the second is Apple's business, and a timer that rings whenever is not a
+ * timer. Sent at high urgency because that is what a real alarm would use —
+ * measuring a gentler push would flatter the result.
+ */
+export function buildPing(now, timeZone) {
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(now);
+  return {
+    title: '⏱ latency test',
+    body: `sent at ${clock} — check the clock now, the gap is the answer.`,
+    tag: `oc-latency-${now.getTime()}`, // unique: never collapses onto a previous probe
+  };
+}

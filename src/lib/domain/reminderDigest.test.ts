@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 // The digest lives in tools/ so the data repo's Action can run it with bare
 // node — tested from here so the app's gates still stand guard over it.
 // @ts-expect-error — plain .mjs module without type declarations
-import { buildDigest, localDayKey } from '../../../tools/reminders/digest.mjs';
+import { buildDigest, buildPing, localDayKey } from '../../../tools/reminders/digest.mjs';
 
 const TODAY = '2026-07-30';
 
@@ -63,6 +63,21 @@ describe('buildDigest', () => {
     ], lists, TODAY)!;
     expect(d.body).toBe('1 overdue');
     expect(d.body).not.toContain('top of the pile');
+  });
+});
+
+describe('buildPing', () => {
+  it('states the send time in local clock terms, to the second', () => {
+    // 2026-07-31T03:00Z is 21:00:00 the previous day in Regina.
+    const p = buildPing(new Date('2026-07-31T03:00:00Z'), 'America/Regina');
+    expect(p.body).toContain('21:00:00');
+    expect(p.title).toContain('latency');
+  });
+
+  it('tags each probe uniquely so one never replaces the last', () => {
+    const a = buildPing(new Date('2026-07-31T03:00:00Z'), 'America/Regina');
+    const b = buildPing(new Date('2026-07-31T03:05:00Z'), 'America/Regina');
+    expect(a.tag).not.toBe(b.tag);
   });
 });
 

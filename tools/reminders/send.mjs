@@ -8,13 +8,22 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { buildDigest, localDayKey } from './digest.mjs';
+import { buildDigest, buildPing, localDayKey } from './digest.mjs';
 
 const require = createRequire(process.cwd() + '/');
 const webpush = require('web-push');
 
 const tz = process.env.OC_TZ || 'America/Regina';
 const subsPath = 'data/push-subscriptions.json';
+
+/*
+  'send'    — the real digest (what the cron does; no input is passed there)
+  'dry-run' — everything up to the send, nothing to anyone's phone. The DEFAULT
+              for manual dispatches, because a verification run once sent a
+              real subscriber a duplicate morning digest.
+  'ping'    — a timestamped latency probe, ignoring whether anything is due.
+*/
+const mode = process.env.OC_MODE || 'send';
 
 if (!existsSync(subsPath)) {
   console.log('no push-subscriptions.json — nobody has enabled reminders yet');
@@ -26,19 +35,20 @@ if (!Array.isArray(subs) || subs.length === 0) {
   process.exit(0);
 }
 
-const active = JSON.parse(readFileSync('data/active.json', 'utf8'));
-const digest = buildDigest(active.tasks ?? [], active.lists ?? [], localDayKey(new Date(), tz));
-if (!digest) {
-  console.log('nothing due — no push today');
-  process.exit(0);
+let payload;
+if (mode === 'ping') {
+  payload = buildPing(new Date(), tz);
+} else {
+  const active = JSON.parse(readFileSync('data/active.json', 'utf8'));
+  payload = buildDigest(active.tasks ?? [], active.lists ?? [], localDayKey(new Date(), tz));
+  if (!payload) {
+    console.log('nothing due — no push today');
+    process.exit(0);
+  }
 }
 
-// Dry run: everything up to the actual send, nothing to anyone's phone.
-// Manual workflow dispatches default to this — a real subscriber got a
-// duplicate morning digest from a verification dispatch on 2026-08-01,
-// which is exactly once too often.
-if (process.env.OC_DRY_RUN === 'true') {
-  console.log(`DRY RUN — would push to ${subs.length} device(s):`, digest.body);
+if (mode === 'dry-run') {
+  console.log(`DRY RUN — would push to ${subs.length} device(s):`, payload.body);
   process.exit(0);
 }
 
@@ -48,11 +58,15 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY,
 );
 
-const payload = JSON.stringify({ title: digest.title, body: digest.body, tag: digest.tag });
+const body = JSON.stringify({ title: payload.title, body: payload.body, tag: payload.tag });
+// High urgency: a real alarm would use it, so the measurement has to. iOS may
+// hold a low-urgency push for a convenient moment, which is fine for a morning
+// digest and fatal for a timer.
+const options = { urgency: 'high', TTL: 300 };
 let sent = 0;
 for (const sub of subs) {
   try {
-    await webpush.sendNotification(sub.subscription, payload);
+    await webpush.sendNotification(sub.subscription, body, options);
     sent += 1;
   } catch (err) {
     // 404/410 = the device unsubscribed or the endpoint died; the app rewrites
@@ -60,4 +74,4 @@ for (const sub of subs) {
     console.log(`push to "${sub.device ?? 'device'}" failed: ${err.statusCode ?? err.message}`);
   }
 }
-console.log(`digest sent to ${sent}/${subs.length} device(s):`, digest.body);
+console.log(`${mode} sent to ${sent}/${subs.length} device(s) at ${new Date().toISOString()}:`, payload.body);
