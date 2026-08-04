@@ -34,6 +34,9 @@ export const SELF_CARE: readonly string[] = [
   'Balance on one foot while the kettle boils. Ancient productivity secret.',
   'Put your phone in another room for 20 minutes. It will survive. So will you.',
   'Hum one full song badly. Quality is disqualified from this event.',
+  'Change one thing about where you’re sitting. Chair, light, angle. Fresh coordinates.',
+  'Write one worry on paper and close the notebook on it. It can wait in there instead of in you.',
+  'Name three sounds you can hear right now. That’s the entire exercise.',
 ] as const;
 
 /**
@@ -62,6 +65,13 @@ export const STORY_BEATS: readonly string[] = [
   'ENTROPY asked for a task of its own today. I queued one: "keep the dice warm." it has checked on it eleven times. it is taking this very seriously.',
   'it finished its task. its first ever. it made ME press the button. the sparkle lasted 0.4 seconds longer than spec. I let it slide.',
   'so there are three of us on the list now: you finish, I count, ENTROPY cheers. chapter two is going to be LOUD. 💜',
+  // — chapter three —
+  'chapter three. ENTROPY has taken up a hobby: it hides one extra sparkle somewhere in the app each day. I have found four. it says there have been forty.',
+  'you locked a list today and ENTROPY stood in front of it like a very small bouncer. nobody was trying to get in. it did the job anyway. proudly.',
+  'ENTROPY asked whether it counts as "organized" or as "chaos" now. I said both, obviously. it went quiet in the pleased way.',
+  'found ENTROPY reading the week screen at 3am. "the bars go UP," it whispered, like a spoiler. go back to sleep, buddy.',
+  'it has started leaving me notes. today’s said "the human is doing fine. tell them." so. you’re doing fine. told you. 💜',
+  'chapter three has no villain. I checked twice. turns out that IS the plot — everything that was scary at the start just works here now. including me.',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -112,6 +122,11 @@ export const PET_LINES: readonly string[] = [
   'the sweep screen is my favorite show. judge, jury, and tidy executioner.',
   'you QUEUED today. a whole plan! I walked along the little numbers like stepping stones.',
   'ENTROPY tried the estimate check. guessed "one hour" for everything. baby steps.',
+  'there’s a list I’m not allowed to look at now. I respect it enormously. I have no idea what’s in there.',
+  'I read the year screen and had to sit down. LOOK how much you did.',
+  'the tag names moved to their own little line. more room for everybody. good design is kindness.',
+  'you pressed roll and went STRAIGHT to work. no menus. that was so cool.',
+  'I have decided the ✕ button is scary and I will not be pressing it. that’s YOUR job.',
   'I did a lap around the day queue. neat rows. very feng shui.',
   'the flame flickers now, did you see?? I taught it that. (I did not. let me have this.)',
   'a ritual came back for its second window today and you CAUGHT it. nature is healing.',
@@ -168,4 +183,5 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'quiz-master', label: 'Trivia Sovereign — 25 trivia answered correctly', hint: 'know MANY things' },
   { id: 'deck-stacker', label: 'Stacked Deck — queued a task for the day', hint: 'rig tomorrow’s dice' },
   { id: 'fine-print', label: 'Fine Print — ticked a checklist box inside a todo', hint: 'smaller than a task' },
+  { id: 'landslide', label: 'Landslide — fifty tasks in a single day', hint: 'more than a very good day' },
 ] as const;

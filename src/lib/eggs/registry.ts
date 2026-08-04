@@ -158,6 +158,7 @@ export const REGISTRY: EggDef[] = [
   unlockEgg('half-k', ['taskCompleted'], (c) => c.lifetimeCompletions >= 500),
   unlockEgg('kilotask', ['taskCompleted'], (c) => c.lifetimeCompletions >= 1000),
   unlockEgg('overachiever', ['taskCompleted'], (c) => c.completionsToday >= 20),
+  unlockEgg('landslide', ['taskCompleted'], (c) => c.completionsToday >= 50),
   unlockEgg('midnight-oil', ['taskCompleted'], (c) => {
     const h = c.now.getHours();
     return h >= 0 && h < 2;

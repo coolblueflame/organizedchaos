@@ -148,6 +148,16 @@ export const QUIPS: readonly string[] = [
   'The minimap shows nothing left in this zone. Clean clear.',
   'Fast travel unlocked: straight past that task forever.',
   'The credits aren’t rolling because you’re clearly not done being great.',
+  'Task deleted from reality. No save scumming it back.',
+  'The bar filled. The sound played. It was extremely satisfying.',
+  'You had one job. You did the one job. System working as designed.',
+  'Undo is available and you will not need it.',
+  'Filed under: handled.',
+  'That one had been on the list long enough to pay rent. Evicted.',
+  'The to-do became a did. Grammar has been served.',
+  'One less open loop. Your brain just got some RAM back.',
+  'Cleared without a guide. No walkthrough. Raw talent.',
+  'The pile blinked first.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */

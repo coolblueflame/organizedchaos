@@ -95,4 +95,15 @@ export const TRIVIA: readonly TriviaQ[] = [
   { q: 'The PS1’s famously wobbly textures come from…', choices: ['CRT ghosting', 'Compression artifacts', 'No sub-pixel vertex precision'], answer: 2, reveal: 'Integer snapping — the jitter is the console’s soul.' },
   { q: 'Properly stored honey lasts…', choices: ['~10 years', '~50 years', 'Basically forever'], answer: 2, reveal: 'Edible honey has been found in 3,000-year-old Egyptian tombs.' },
   { q: 'Bananas are botanically…', choices: ['Berries', 'Drupes', 'Nuts'], answer: 0, reveal: 'And strawberries aren’t berries. Botany runs on chaos.' },
+
+  { q: 'In Katamari Damacy, you roll up the world to rebuild…', choices: ['A city', 'The stars', 'A garden'], answer: 1, reveal: 'The King of All Cosmos broke them. You clean up. Classic parenting.' },
+  { q: 'Journey (2012) lets you meet other players and communicate only by…', choices: ['Text chat', 'Emotes menu', 'A wordless chirp'], answer: 2 },
+  { q: 'Which studio made Dark Souls?', choices: ['Platinum', 'FromSoftware', 'Atlus'], answer: 1 },
+  { q: 'Slay the Spire popularised which genre mashup?', choices: ['Deckbuilding roguelike', 'Farming shooter', 'Rhythm RPG'], answer: 0 },
+  { q: 'Splatoon’s multiplayer scores you on…', choices: ['Kills', 'Ground covered in ink', 'Time held'], answer: 1 },
+  { q: 'The first message sent over ARPANET was meant to be "LOGIN". It got as far as…', choices: ['"LO"', '"LOG"', '"L"'], answer: 0, reveal: 'The system crashed after two letters. A humble "lo" started the internet.' },
+  { q: 'Why is QWERTY laid out that way?', choices: ['Fastest possible typing', 'To separate common letter pairs', 'Alphabetical leftovers'], answer: 1 },
+  { q: 'Ada Lovelace is credited with writing the first…', choices: ['Compiler', 'Computer program', 'Operating system'], answer: 1, reveal: 'For a machine that was never built. Ahead of her time, literally.' },
+  { q: 'An axolotl can regrow…', choices: ['Limbs only', 'Limbs and organs', 'Limbs, organs, and parts of its brain'], answer: 2 },
+  { q: 'The "404" error number refers to…', choices: ['A room at CERN', 'Just a status code, no room', 'The 404th HTTP draft'], answer: 1, reveal: 'The room-404 story is a great myth. The code is simply 4xx = your side, 04 = not found.' },
 ] as const;

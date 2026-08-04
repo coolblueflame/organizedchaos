@@ -146,4 +146,13 @@ export const FACTS: readonly string[] = [
   'Newborn kangaroos are the size of a jellybean.',
   'The longest place name in the world has 85 letters and lives in New Zealand.',
   'Glass balls bounce higher than rubber balls of the same size.',
+  'Wombat droppings are cubes. The shape stops them rolling off the rocks they mark.',
+  'A mantis shrimp punches fast enough to boil a little water around its own claw.',
+  'Olympus Mons on Mars is so wide that standing on it, you couldn’t tell it was a mountain.',
+  'The first computer "bug" was a literal moth, taped into a 1947 logbook.',
+  'Sloths can take up to a month to digest one leaf. Deliberate is a lifestyle.',
+  'The dot over an i or j has a name: a tittle.',
+  'Venus has no moons, no seasons, and days longer than its years. Nothing there works.',
+  'Otters keep a favourite rock in a pocket of loose skin under the arm.',
+  'Bamboo can grow nearly a metre in a day. Some of it is audibly growing.',
 ] as const;
