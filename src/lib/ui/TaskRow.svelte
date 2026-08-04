@@ -18,12 +18,38 @@
   import { isLongSnooze } from '../domain/sweep';
   import { estimateOutcome } from '../domain/stats';
 
-  /** Svelte action: scroll the freshly opened editor into view. */
-  function revealEditor(node: HTMLElement) {
-    // Next frame: the editor needs a layout pass before its height is real.
-    requestAnimationFrame(() => {
-      node.scrollIntoView({ block: 'nearest', behavior: motionOk() ? 'smooth' : 'auto' });
+  /**
+   * Svelte action: bring the freshly opened editor into view.
+   *
+   * 'nearest' for an existing task — scroll the minimum, so expanding
+   * something mid-screen doesn't jump. 'start' for a task JUST ADDED, which
+   * wants the whole editor and as much room above the keyboard as possible.
+   */
+  function revealEditor(node: HTMLElement, mode: 'start' | 'nearest' = 'nearest') {
+    const scroll = () => node.scrollIntoView({
+      block: mode, behavior: motionOk() ? 'smooth' : 'auto',
     });
+    // Next frame: the editor needs a layout pass before its height is real.
+    requestAnimationFrame(scroll);
+
+    /*
+      A new task also opens the keyboard, and iOS scrolls the focused field to
+      sit just above it — which lands the row at the BOTTOM of what's left,
+      undoing the scroll we just did (reported 2026-08-04). The keyboard
+      arrives a beat later as a visualViewport resize, so re-assert the
+      position when it does. Short-lived: this is about the opening keyboard,
+      not about fighting the user's own scrolling forever after.
+    */
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (mode !== 'start' || !vv) return;
+    vv.addEventListener('resize', scroll);
+    const stop = setTimeout(() => vv.removeEventListener('resize', scroll), 1200);
+    return {
+      destroy() {
+        clearTimeout(stop);
+        vv.removeEventListener('resize', scroll);
+      },
+    };
   }
   import { motionOk } from './fx/particles';
   import { celebrateFromElement } from './fx/celebrate';
@@ -31,10 +57,12 @@
 
   let {
     task, expanded = false, ontoggle, onenter, showList = false, completedMode = false,
-    showCompletedAt = false,
+    showCompletedAt = false, revealAt = 'nearest',
   }: {
     task: Task;
     expanded?: boolean;
+    /** How to scroll this editor into view when it opens (see revealEditor). */
+    revealAt?: 'start' | 'nearest';
     ontoggle: () => void;
     /** Enter in the name field — the list view chains a new task (rapid entry). */
     onenter?: (currentName: string) => void;
@@ -333,7 +361,7 @@
     <!-- Bring the editor fully on screen when it opens near the bottom:
          block 'nearest' scrolls only as far as needed, so a mid-screen
          expansion doesn't jump at all. -->
-    <div use:revealEditor>
+    <div use:revealEditor={revealAt}>
       <TaskEditor {task} oncollapse={() => void collapse()} />
     </div>
   {/if}

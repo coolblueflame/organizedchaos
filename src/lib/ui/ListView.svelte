@@ -112,6 +112,18 @@
   }
 
   /**
+   * How the open editor gets scrolled into view. A task added from the button
+   * lands at the BOTTOM of a long list, so it wants the top of the screen and
+   * all the room above the keyboard (2026-08-04 ask); expanding a task you
+   * tapped should move as little as possible.
+   *
+   * The Enter-chain deliberately keeps 'nearest': during rapid entry the rows
+   * are already where you are looking, and yanking the view on every Enter
+   * would fight the flow that path exists for.
+   */
+  let revealAt = $state<'start' | 'nearest'>('nearest');
+
+  /**
    * Synchronous for the same reason the Enter-chain is: iOS opens the keyboard
    * only for a focus landed inside the tap's own event turn. The old version
    * awaited two round-trips first, so the editor appeared with a dead keyboard
@@ -119,6 +131,7 @@
    */
   function newTask() {
     const prev = editingTaskId;
+    revealAt = 'start';
     editingTaskId = app.addTaskEager(id).id;
     if (prev) void app.discardIfPristine(prev); // background; writes are serialized
   }
@@ -128,6 +141,7 @@
       void stopEditing();
       return;
     }
+    revealAt = 'nearest';
     const prev = editingTaskId;
     editingTaskId = taskId;
     // Deliberately opening a task counts as giving it the once-over.
@@ -146,6 +160,7 @@
       void stopEditing();
       return;
     }
+    revealAt = 'nearest';
     editingTaskId = app.addTaskEager(id).id;
   }
 
@@ -208,6 +223,7 @@
     groups={sortedGroups}
     mode={list?.sortMode ?? 'priority'}
     bind:editingTaskId
+    {revealAt}
     onenter={chainNext} />
   {#if groups.length === 0}
     <p class="empty">// nothing here yet</p>
@@ -222,6 +238,18 @@
        iOS and the button scooted up to cover the text being typed. -->
   {#if !keyboard.open}
     <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>+</button>
+  {/if}
+
+  {#if editingTaskId}
+    <!--
+      Scroll room, only while an editor is open. A task added from the button
+      is the LAST thing on the page, so asking the browser to put it at the top
+      of the screen was asking it to scroll past the end of the document — it
+      clamps, and the row stays at the bottom under the keyboard (2026-08-04
+      report). This gives the scroll somewhere to go; it costs nothing visible
+      because it is always below the fold.
+    -->
+    <div class="edit-scroll-room" aria-hidden="true"></div>
   {/if}
 
   {#if completedHere.length > 0}
@@ -257,6 +285,7 @@
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
+  .edit-scroll-room { height: 70vh; }
   .work-left {
     margin: -6px 0 12px; color: var(--dim); font-family: var(--font-mono);
     font-size: 0.7rem;

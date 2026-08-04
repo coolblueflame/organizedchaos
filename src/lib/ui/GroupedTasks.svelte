@@ -27,6 +27,7 @@
     editingTaskId = $bindable(),
     showList = false,
     onenter,
+    revealAt = 'nearest',
   }: {
     groups: TaskGroup[];
     /** Which attribute a drop assigns; 'custom' makes dragging REORDER
@@ -35,6 +36,8 @@
     editingTaskId: string | null;
     showList?: boolean;
     onenter?: (name: string) => void;
+    /** Applied to whichever row is open — see TaskRow.revealAt. */
+    revealAt?: 'start' | 'nearest';
   } = $props();
 
   // ── multi-select ─────────────────────────────────────────────────────────
@@ -322,6 +325,7 @@
           {showList}
           {onenter}
           expanded={editingTaskId === task.id}
+          {revealAt}
           ontoggle={() => {
             editingTaskId = editingTaskId === task.id ? null : task.id;
             if (editingTaskId) void app.markReviewed(task.id);

@@ -329,6 +329,27 @@ test('timebox counts down on the current task and can be cleared', async ({ page
   await expect(page.getByTestId('timebox-open')).toBeVisible();
 });
 
+test('a task added from the button lands at the TOP of the screen, not the bottom', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Long');
+  // Enough rows that the page genuinely scrolls, so "where did it land" is a
+  // real question rather than an artifact of a short list.
+  for (let i = 0; i < 14; i += 1) await addTask(page, `filler ${i}`);
+
+  const before = await page.evaluate(() => window.scrollY);
+  await page.getByTestId('new-task').click();
+
+  // The new row's editor is the open one; it should be near the top of the
+  // viewport, not just barely scrolled into view at the bottom.
+  const editor = page.getByTestId('task-name-input');
+  await expect(editor).toBeVisible();
+  await expect.poll(async () => {
+    const box = await editor.boundingBox();
+    return box ? Math.round(box.y) : 9999;
+  }, { message: 'new task should be scrolled to the top of the viewport' }).toBeLessThan(150);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+});
+
 test('a timebox alarm fires from another screen, not just the home card', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Boxed');
@@ -864,11 +885,16 @@ test('a scroll that starts on another task does not collapse the open editor', a
   await expect(page.getByTestId('task-name-input')).toBeFocused();
 
   // Press on the OTHER row and drag 60px — a scroll gesture, not a tap.
+  // Downward on purpose: the row can sit near the top of the viewport, and a
+  // drag to a NEGATIVE y is off-screen, which delivers no movement and reads
+  // as a tap. Direction is irrelevant to what this guards (the slop check is
+  // a distance), so use the one that always has room.
   const other = page.getByTestId(/^task-row-/).filter({ hasText: 'first' }).first();
   const box = (await other.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2, box.y - 60, { steps: 6 });
+  await page.mouse.move(from.x, from.y + 60, { steps: 6 });
   await page.mouse.up();
   await expect(page.getByTestId('task-name-input'), 'the editor survives a scroll').toHaveCount(1);
 
