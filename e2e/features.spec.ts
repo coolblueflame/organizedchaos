@@ -884,18 +884,25 @@ test('a scroll that starts on another task does not collapse the open editor', a
   await page.getByText('second', { exact: true }).click();
   await expect(page.getByTestId('task-name-input')).toBeFocused();
 
-  // Press on the OTHER row and drag 60px — a scroll gesture, not a tap.
-  // Downward on purpose: the row can sit near the top of the viewport, and a
-  // drag to a NEGATIVE y is off-screen, which delivers no movement and reads
-  // as a tap. Direction is irrelevant to what this guards (the slop check is
-  // a distance), so use the one that always has room.
+  /*
+    A FINGER drag on the other row, dispatched as touch-type pointer events.
+    That is faithful to the report, and it matters: a body drag only starts a
+    regroup for a MOUSE (see GroupedTasks' pointerType guard), so driving this
+    with page.mouse tested the desktop regroup path instead — and left its drag
+    ghost in the DOM, which then made the "first" lookup below ambiguous on a
+    slow enough machine. Touch exercises the protection that actually shields
+    the reported gesture.
+  */
   const other = page.getByTestId(/^task-row-/).filter({ hasText: 'first' }).first();
   const box = (await other.boundingBox())!;
-  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x, from.y + 60, { steps: 6 });
-  await page.mouse.up();
+  await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) throw new Error('nothing under the drag start point');
+    const base = { pointerId: 1, pointerType: 'touch', bubbles: true, cancelable: true };
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...base, clientX: x, clientY: y }));
+    el.dispatchEvent(new PointerEvent('pointermove', { ...base, clientX: x, clientY: y + 60 }));
+    el.dispatchEvent(new PointerEvent('pointerup', { ...base, clientX: x, clientY: y + 60 }));
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
   await expect(page.getByTestId('task-name-input'), 'the editor survives a scroll').toHaveCount(1);
 
   // A clean tap on the other row still switches to it. (Assert by VALUE — an
