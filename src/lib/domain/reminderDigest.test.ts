@@ -74,6 +74,11 @@ describe('buildPing', () => {
     expect(p.title).toContain('latency');
   });
 
+  it('carries the send instant so the receiver can measure the gap itself', () => {
+    const at = new Date('2026-07-31T03:00:00Z');
+    expect(buildPing(at, 'America/Regina').sentAt).toBe(at.getTime());
+  });
+
   it('tags each probe uniquely so one never replaces the last', () => {
     const a = buildPing(new Date('2026-07-31T03:00:00Z'), 'America/Regina');
     const b = buildPing(new Date('2026-07-31T03:05:00Z'), 'America/Regina');

@@ -58,7 +58,12 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY,
 );
 
-const body = JSON.stringify({ title: payload.title, body: payload.body, tag: payload.tag });
+const body = JSON.stringify({
+  title: payload.title, body: payload.body, tag: payload.tag,
+  // Only probes carry this; the service worker turns it into a measured
+  // delivery time on the notification itself.
+  ...(payload.sentAt ? { sentAt: payload.sentAt } : {}),
+});
 // High urgency: a real alarm would use it, so the measurement has to. iOS may
 // hold a low-urgency push for a convenient moment, which is fine for a morning
 // digest and fatal for a timer.

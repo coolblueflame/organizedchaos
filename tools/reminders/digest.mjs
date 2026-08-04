@@ -71,7 +71,11 @@ export function buildPing(now, timeZone) {
   }).format(now);
   return {
     title: '⏱ latency test',
-    body: `sent at ${clock} — check the clock now, the gap is the answer.`,
+    body: `sent at ${clock}`,
+    // The service worker subtracts this from its own clock on arrival and
+    // writes the answer into the notification, so the number survives being
+    // missed — it is still sitting there whenever the phone is next looked at.
+    sentAt: now.getTime(),
     tag: `oc-latency-${now.getTime()}`, // unique: never collapses onto a previous probe
   };
 }
