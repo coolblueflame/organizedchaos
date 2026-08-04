@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { shardOf } from '../src/lib/sync/files';
 
 /**
  * Full sync-protocol e2e against an in-memory fake of the GitHub Contents API,
@@ -52,6 +53,23 @@ function fileJson(repo: FakeRepo, path: string): unknown {
   return f ? JSON.parse(Buffer.from(f.content, 'base64').toString('utf8')) : null;
 }
 
+/** Open tasks live across the tasks-<n>.json shards now — union them. */
+function remoteTasks(repo: FakeRepo): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const path of repo.files.keys()) {
+    if (!path.startsWith('tasks-')) continue;
+    out.push(...((fileJson(repo, path) as { tasks?: Array<Record<string, unknown>> }).tasks ?? []));
+  }
+  return out;
+}
+
+function writeRemote(repo: FakeRepo, path: string, json: unknown) {
+  repo.files.set(path, {
+    content: Buffer.from(JSON.stringify(json)).toString('base64'),
+    sha: `ext-${++repo.seq}`,
+  });
+}
+
 async function reset(page: Page) {
   await page.goto('./');
   await page.evaluate(
@@ -88,9 +106,8 @@ test('local work pushes to the remote on connect', async ({ page }) => {
   await reset(page);
   await seedTask(page, 'first synced task');
   await connect(page);
-  const active = fileJson(repo, 'active.json') as { tasks: Array<{ name: string }> };
-  expect(active.tasks.map((t) => t.name)).toContain('first synced task');
-  expect(fileJson(repo, 'meta.json')).toEqual({ schema: 1 });
+  expect(remoteTasks(repo).map((t) => t.name)).toContain('first synced task');
+  expect(fileJson(repo, 'meta.json')).toEqual({ schema: 2 });
 });
 
 test('a wiped device rehydrates everything from the remote', async ({ page }) => {
@@ -122,17 +139,18 @@ test('remote changes from another device merge in on sync-now; disconnect keeps 
   await seedTask(page, 'mine');
   await connect(page);
 
-  // another device edits the remote: inject a task with a far-future updatedAt
-  const active = fileJson(repo, 'active.json') as { tasks: Array<Record<string, unknown>> };
-  active.tasks.push({
-    id: 'remote-task', listId: (active.tasks[0] as { listId: string }).listId,
+  // another device edits the remote: inject a task with a far-future updatedAt,
+  // written into the shard that device would have chosen for it.
+  const mine = remoteTasks(repo)[0] as { listId: string };
+  const remoteTask = {
+    id: 'remote-task', listId: mine.listId,
     name: 'from the other device', notes: '', priority: 'high', tagIds: [],
     inProgress: false, createdAt: 1, updatedAt: Date.now() + 1_000_000, deleted: false,
-  });
-  repo.files.set('active.json', {
-    content: Buffer.from(JSON.stringify(active)).toString('base64'),
-    sha: `ext-${++repo.seq}`,
-  });
+  };
+  const shardPath = `tasks-${shardOf(remoteTask.id, 16)}.json`;
+  const shard = (fileJson(repo, shardPath) as { schema: number; tasks: unknown[] });
+  shard.tasks.push(remoteTask);
+  writeRemote(repo, shardPath, shard);
 
   await page.getByTestId('settings-sync-now').click();
   await expect(page.getByTestId('settings-sync-status')).toContainText('idle');

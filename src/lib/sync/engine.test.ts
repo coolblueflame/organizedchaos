@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS, type Priority, type Task } from '../domain/types';
 import { ConflictError, type RemoteFile, type RemoteFileEntry } from './githubClient';
 import { SyncEngine } from './engine';
+import { shardOf } from './files';
 import type { RemoteSnapshot } from './files';
 
 let n = 0;
@@ -61,8 +62,14 @@ class FakeClient {
     this.files.set(path, { json, sha: `ext-${++this.shaSeq}` });
   }
 
+  /** Open tasks now live across the tasks-<n>.json shards, not in active.json. */
   activeTasks(): Task[] {
-    return ((this.files.get('active.json')?.json as { tasks: Task[] } | undefined)?.tasks) ?? [];
+    const out: Task[] = [];
+    for (const [path, f] of this.files) {
+      if (!path.startsWith('tasks-')) continue;
+      out.push(...(((f.json as { tasks?: Task[] }).tasks) ?? []));
+    }
+    return out;
   }
 }
 
@@ -269,19 +276,20 @@ describe('download caching', () => {
     expect(run.engine.status).toBe('idle');
   });
 
-  it('rewrites an orphaned logbook year empty instead of leaving it to haunt', async () => {
-    // A task completed in 2025 pushes a logbook-2025.json…
+  it('rewrites an orphaned logbook bucket empty instead of leaving it to haunt', async () => {
+    // A task completed in 2025 pushes its 2025 logbook bucket…
     const t = task({ priority: 'high', completedAt: new Date('2025-06-01').getTime() });
+    const bucket = `logbook-2025-${shardOf(t.id, 8)}.json`;
     local = snap({ tasks: [t] });
     await makeEngine().syncNow();
-    expect(client.files.has('logbook-2025.json')).toBe(true);
+    expect(client.files.has(bucket)).toBe(true);
 
     // …then it is uncompleted: the year bucket empties, and the remote file
     // must follow, or every future cycle re-unions the stale completed copy
     // (phantom remoteChanged forever) and a fresh device would resurrect it.
     local = snap({ tasks: [{ ...t, completedAt: undefined, updatedAt: t.updatedAt + 10 }] });
     await makeEngine().syncNow();
-    const logbook = client.files.get('logbook-2025.json')!.json as { tasks: unknown[] };
+    const logbook = client.files.get(bucket)!.json as { tasks: unknown[] };
     expect(logbook.tasks).toEqual([]);
 
     // And the system is at rest: one more cycle pushes nothing.

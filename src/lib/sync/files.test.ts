@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Priority, Task } from '../domain/types';
-import { fromFiles, SCHEMA_VERSION, SchemaTooNewError, toFiles, type RemoteSnapshot } from './files';
+import {
+  fromFiles, SCHEMA_VERSION, SchemaTooNewError, shardOf, toFiles, type RemoteSnapshot,
+} from './files';
 
 const now = new Date('2026-07-26T12:00:00');
 
@@ -37,14 +39,58 @@ describe('toFiles / fromFiles', () => {
     expect(back.settingsUpdatedAt).toBe(42);
   });
 
-  it('splits open tasks into active.json and completed into per-year logbooks', () => {
+  it('shards open tasks out of active.json and buckets the logbook by year', () => {
     const open = task({ priority: 'high' });
     const done26 = task({ priority: 'low', completedAt: new Date('2026-03-01T10:00:00').getTime() });
     const done25 = task({ priority: 'low', completedAt: new Date('2025-12-30T10:00:00').getTime() });
     const files = toFiles(snap({ tasks: [open, done26, done25] }), now) as Record<string, { tasks: Task[] }>;
-    expect(files['active.json']!.tasks.map((t) => t.id)).toEqual([open.id]);
-    expect(files['logbook-2026.json']!.tasks.map((t) => t.id)).toEqual([done26.id]);
-    expect(files['logbook-2025.json']!.tasks.map((t) => t.id)).toEqual([done25.id]);
+
+    // active.json carries no task rows at all any more — that is the point.
+    expect(files['active.json']!.tasks).toBeUndefined();
+    const openShard = `tasks-${shardOf(open.id, 16)}.json`;
+    expect(files[openShard]!.tasks.map((t) => t.id)).toEqual([open.id]);
+    expect(files[`logbook-2026-${shardOf(done26.id, 8)}.json`]!.tasks.map((t) => t.id)).toEqual([done26.id]);
+    expect(files[`logbook-2025-${shardOf(done25.id, 8)}.json`]!.tasks.map((t) => t.id)).toEqual([done25.id]);
+  });
+
+  it('every open shard is emitted, so a row leaving one is visible to others', () => {
+    const files = toFiles(snap({ tasks: [task({ priority: 'high' })] }), now);
+    const shards = Object.keys(files).filter((p) => p.startsWith('tasks-'));
+    expect(shards).toHaveLength(16);
+  });
+
+  it('one task changing rewrites ONE shard — the whole reason for sharding', () => {
+    // 200 tasks, then rename a single one: the payload that has to be pushed
+    // should be a sixteenth of the library, not all of it.
+    const many = Array.from({ length: 200 }, () => task({ priority: 'medium' }));
+    const before = toFiles(snap({ tasks: many }), now);
+    const edited = many.map((t, i) => (i === 7 ? { ...t, name: 'renamed', updatedAt: 5000 } : t));
+    const after = toFiles(snap({ tasks: edited }), now);
+
+    const changed = Object.keys(after).filter(
+      (p) => JSON.stringify(after[p]) !== JSON.stringify(before[p]),
+    );
+    expect(changed).toEqual([`tasks-${shardOf(many[7]!.id, 16)}.json`]);
+  });
+
+  it('reads a pre-shard remote, and dedupes a row caught mid-migration', () => {
+    const t = task({ priority: 'high' });
+    // v1 shape: open tasks inline in active.json, logbook unbucketed.
+    const legacy = fromFiles({
+      'active.json': { schema: 1, lists: [], tasks: [t], tags: [], templates: [] },
+    });
+    expect(legacy.tasks.map((x) => x.id)).toEqual([t.id]);
+
+    // Mid-migration: the same row present both inline and in its new shard.
+    // The newer copy wins and it appears exactly once.
+    const both = fromFiles({
+      'active.json': { schema: 2, lists: [], tasks: [t], tags: [], templates: [] },
+      [`tasks-${shardOf(t.id, 16)}.json`]: {
+        schema: 2, tasks: [{ ...t, name: 'newer', updatedAt: t.updatedAt + 10 }],
+      },
+    });
+    expect(both.tasks).toHaveLength(1);
+    expect(both.tasks[0]!.name).toBe('newer');
   });
 
   it('drops tombstones older than 90 days, keeps younger ones', () => {
