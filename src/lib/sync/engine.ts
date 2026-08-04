@@ -184,9 +184,15 @@ export class SyncEngine {
       tombstone-compacted away) simply drops out of `desired` — but the remote
       file still holds its final contents, and fromFiles faithfully re-unions
       them every cycle: a permanent phantom `remoteChanged`, and a resurrection
-      trap for any device bootstrapping after the tombstones compact. There is
-      no delete in the Contents flow, so an orphaned year is rewritten EMPTY —
-      same convergence, one extra tiny file.
+      trap for any device bootstrapping after the tombstones compact.
+
+      So an orphaned file is rewritten EMPTY. The Contents API does have a
+      DELETE (verified against the docs 2026-08-04 — an older comment here
+      claimed otherwise and was simply wrong), and this deliberately doesn't
+      use it: rewriting empty cannot destroy anything even if the "is it
+      orphaned" test is one day wrong, while a delete on a live shard would
+      take real rows with it. The cost of being safe is one tiny husk file per
+      retired path, which is a bargain against that.
     */
     for (const path of remoteFiles.keys()) {
       if (path.startsWith('logbook-') && !(path in desired)) {
