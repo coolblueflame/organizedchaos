@@ -400,6 +400,30 @@ test('a completed task records how long it took', async ({ page }) => {
   await expect(page.getByTestId('search-completed')).toContainText('⧗');
 });
 
+test('"already did this one" completes the draw without inventing a duration', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Chores');
+  await addTask(page, 'took out the bins');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('took out the bins');
+  await page.getByTestId('draw-already-did').click();
+
+  // It never became the current task, so no clock was ever started.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+
+  // It IS completed — and carries no tracked time. Going through accept
+  // would have written a couple of seconds that never happened, and that
+  // number feeds the estimate-vs-reality comparisons.
+  await page.getByTestId('search-entry').click();
+  await page.getByTestId('search-input').fill('bins');
+  const done = page.getByTestId('search-completed');
+  await expect(done).toContainText('took out the bins');
+  await expect(done, 'no invented duration').not.toContainText('⧗');
+});
+
 test('lists can be dragged into a new order, and it sticks', async ({ page }) => {
   await reset(page);
   for (const name of ['Alpha', 'Beta', 'Gamma']) {

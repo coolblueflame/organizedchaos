@@ -261,6 +261,23 @@
     redraw();
   }
 
+  /**
+   * "already did it" — record the completion WITHOUT accepting first.
+   *
+   * Going through accept would flag it in progress and start its clock, so
+   * finishing a second later wrote a ~3s tracked time that never happened
+   * (2026-08-05 report) — and that number feeds the estimate-vs-reality
+   * comparisons, so a lie there is worse than a blank. completeTask only
+   * records time for a task that was actually started, so this path stays
+   * silent about duration while still counting as a real completion:
+   * stats, streak, undo toast and all.
+   */
+  async function alreadyDidIt() {
+    if (!drawn || accepting) return;
+    await app.completeTask(drawn.id);
+    redraw();
+  }
+
   async function notTodayClick() {
     if (!drawn) return;
     await app.sendNotToday(drawn.id);
@@ -422,6 +439,10 @@
         <button data-testid="draw-not-now" disabled={accepting} onclick={notNowClick}>not now</button>
         <button data-testid="draw-not-today" disabled={accepting} onclick={notTodayClick}>not today</button>
       </div>
+      <button class="already" data-testid="draw-already-did"
+        disabled={accepting} onclick={() => void alreadyDidIt()}>
+        <Glyph name="check" size={11} /> already did this one
+      </button>
     </div>
   {:else}
     <section class="empty" data-testid="draw-empty">
@@ -631,6 +652,17 @@
   }
   @media (hover: hover) { .accept:hover { background: var(--acc-green); color: var(--bg0); } }
   .secondary { display: flex; gap: 10px; }
+  /* Its own row: it COMPLETES something, so it must not sit shoulder to
+     shoulder with the two skip buttons and get hit by muscle memory. */
+  .already {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: none; border: 1px solid var(--line); border-radius: 10px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem;
+    padding: 9px; cursor: pointer;
+  }
+  @media (hover: hover) {
+    .already:hover { color: var(--acc-green); border-color: var(--acc-green); }
+  }
   .secondary button {
     flex: 1; background: none; border: 1px solid var(--line); border-radius: 10px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem;
