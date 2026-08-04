@@ -237,7 +237,7 @@
 
 <div class="editor">
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
-    rows="2" use:autogrow bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
+    rows="2" use:autogrow={notes} bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
   <Checklist {notes} taskId={task.id} onchange={notesChanged} allowAdd />
 
   <PrioritySelect value={task.priority}
@@ -413,8 +413,12 @@
   }
   .notes {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--dim); font-size: 0.85rem; padding: 8px; outline: none; resize: vertical;
+    color: var(--dim); font-size: 0.85rem; padding: 8px; outline: none;
     font-family: var(--font-sans);
+    /* autogrow owns the height (always tall enough for the whole text, never
+       an inner scroller); a floor keeps an EMPTY field from collapsing to one
+       line, and manual resize would only fight the action. */
+    min-height: 3.4rem; resize: none;
   }
   .notes:focus { color: var(--text); border-color: var(--acc-blue); }
   .move { display: flex; align-items: center; gap: 8px; }

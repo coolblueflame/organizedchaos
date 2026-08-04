@@ -10,16 +10,18 @@
   import { navigate } from './router.svelte';
   import { listHealth, shortAge } from '../domain/listHealth';
   import {
-    averageActiveMs, burdenSeries, completionSeries, formatDuration, formatDurationLong,
-    formatElapsed,
-    totalEstimateHours,
+    averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, completionSeries,
+    formatDuration, formatDurationLong, formatElapsed, totalEstimateHours,
+    type BurdenWindow,
   } from '../domain/stats';
+  import { clock } from './clock.svelte';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
   import { estimateQueue } from '../domain/sweep';
   import BarChart from './charts/BarChart.svelte';
   import LineChart from './charts/LineChart.svelte';
 
   let granularity = $state<'day' | 'week' | 'month'>('day');
+  let burdenWindow = $state<BurdenWindow>('day');
   let showAssumption = $state(false);
 
   const BUCKETS = { day: 30, week: 12, month: 12 } as const;
@@ -41,6 +43,8 @@
     plainTasks.filter((t) => !t.deleted && t.completedAt === undefined).length,
   );
   const avgActive = $derived(averageActiveMs(plainTasks));
+  const burdenDelta = $derived(
+    burdenChange(plainTasks, burdenWindow, clock.now, app.state.settings.rolloverHour));
 
   const unconfirmedEstimates = $derived(estimateQueue(plainTasks, app.state.lists).length);
 
@@ -79,6 +83,26 @@
          nobody remembers yesterday's four-digit hour count (2026-07-30 ask). -->
     <span class="hero-num">{formatDurationLong(estimateHours)}</span>
     <span class="hero-exact" data-testid="stats-open-count">across {openCount.toLocaleString()} open todo{openCount === 1 ? '' : 's'}</span>
+    <!-- Which way the pile is moving, which the total alone never says
+         (2026-08-03 ask). Shrinking is the good direction, so it gets the
+         green and the plain word rather than a minus sign to decode. -->
+    <span class="delta-row" data-testid="stats-burden-delta">
+      <span class="delta" class:down={burdenDelta < 0} class:up={burdenDelta > 0}>
+        {#if Math.round(burdenDelta) === 0}
+          no change
+        {:else if burdenDelta < 0}
+          ▼ {formatDurationLong(-burdenDelta)} lighter
+        {:else}
+          ▲ {formatDurationLong(burdenDelta)} heavier
+        {/if}
+      </span>
+      <select data-testid="stats-burden-window" bind:value={burdenWindow}
+        aria-label="compare against">
+        {#each Object.entries(BURDEN_WINDOWS) as [key, w] (key)}
+          <option value={key}>{w.label}</option>
+        {/each}
+      </select>
+    </span>
     {#if unconfirmedEstimates > 0}
       <button class="est-check" data-testid="stats-est-check"
         onclick={() => navigate({ name: 'sweep', mode: 'estimates' })}>
@@ -212,7 +236,23 @@
   h2 { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; }
   .hero { display: flex; flex-direction: column; gap: 4px; }
   .hero-label { color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
-  .hero-num { color: var(--acc-purple); font-family: var(--font-mono); font-size: 2rem; font-weight: 700; }
+  /* One line, always: the long form can reach "2mo 1w 3d 5h" and wrapping it
+     mid-figure made the headline number hard to read (2026-08-03 ask).
+     clamp() shrinks it on narrow screens instead of breaking it. */
+  .hero-num {
+    color: var(--acc-purple); font-family: var(--font-mono); font-weight: 700;
+    font-size: clamp(1.15rem, 7vw, 2rem);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .delta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+  .delta { font-family: var(--font-mono); font-size: 0.78rem; color: var(--dim); }
+  .delta.down { color: var(--acc-green); }
+  .delta.up { color: var(--acc-orange); }
+  .delta-row select {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 2px 6px; max-width: 55vw;
+  }
   .hero-num.small { color: var(--acc-cyan); font-size: 1.5rem; }
   .info { background: none; border: none; color: var(--acc-blue); cursor: pointer; font-size: 0.8rem; padding: 0 2px; }
   .assumption { color: var(--dim); font-size: 0.8rem; margin: 4px 0 0; }

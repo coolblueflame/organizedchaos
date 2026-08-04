@@ -48,9 +48,19 @@ describe('listHealth', () => {
     expect(rows.map((r) => r.list.title)).toEqual(['Messy', 'Big', 'Tidy']);
   });
 
-  it('an empty list still appears, at rest', () => {
-    const rows = listHealth([list('Empty')], [], NOW);
-    expect(rows[0]).toMatchObject({ open: 0, untriaged: 0, medianAgeDays: 0 });
+  it('lists with nothing open drop out — the table is where to point a sweep', () => {
+    // Reversed deliberately on 2026-08-03: an empty list has no health to
+    // report, and its row was pure noise in a 77-list account.
+    expect(listHealth([list('Empty')], [], NOW)).toEqual([]);
+  });
+
+  it('the dice\'s own generated vessels never show up', () => {
+    // They hold a self-care draw until it is done; nobody triages one.
+    const vessel = { ...list('summoned by the dice'), generated: true };
+    const rows = listHealth([vessel], [
+      task(vessel.id, { needsReview: true }),
+    ], NOW);
+    expect(rows).toEqual([]);
   });
 });
 

@@ -329,6 +329,40 @@ test('timebox counts down on the current task and can be cleared', async ({ page
   await expect(page.getByTestId('timebox-open')).toBeVisible();
 });
 
+test('a timebox alarm fires from another screen, not just the home card', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Boxed');
+  await addTask(page, 'focus work');
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await page.getByTestId('draw-accept').click();
+
+  // Count the alarms the app raises, whichever screen is showing.
+  await page.evaluate(() => {
+    (window as unknown as { __alarms: number }).__alarms = 0;
+    const w = window as unknown as { Notification: unknown };
+    w.Notification = class {
+      static permission = 'granted';
+      constructor() { (window as unknown as { __alarms: number }).__alarms += 1; }
+    };
+  });
+
+  await page.getByTestId('timebox-open').click();
+  await page.getByTestId('timebox-5').click();
+
+  // Walk AWAY from the card that draws the countdown — this is the reported
+  // bug: the timer used to unmount with it and the alarm never came.
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-estimate')).toBeVisible();
+
+  // Jump past the deadline. The watcher sweeps every second.
+  await page.clock.install();
+  await page.clock.fastForward('06:00');
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __alarms: number }).__alarms))
+    .toBeGreaterThan(0);
+});
+
 test('a completed task records how long it took', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Timed');

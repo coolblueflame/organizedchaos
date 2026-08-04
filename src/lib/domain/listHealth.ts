@@ -27,7 +27,14 @@ export function listHealth(lists: List[], tasks: Task[], now: Date): ListHealthR
   }
 
   const rows = lists
-    .filter((l) => !l.deleted && l.archived !== true)
+    /*
+      Only lists you could actually point a sweep AT (2026-08-03 ask). A list
+      with nothing open has no health to report — its row was pure noise — and
+      the dice's own generated vessels are transient by design: they hold a
+      self-care draw for as long as it takes to do it, and nobody is ever going
+      to triage one.
+    */
+    .filter((l) => !l.deleted && l.archived !== true && l.generated !== true)
     .map((list) => {
       const mine = byList.get(list.id) ?? [];
       const ages = mine
@@ -42,8 +49,10 @@ export function listHealth(lists: List[], tasks: Task[], now: Date): ListHealthR
     });
 
   // Untriaged work first (that is the actionable number), then sheer size.
-  return rows.sort((a, b) => b.untriaged - a.untriaged || b.open - a.open
-    || a.list.title.localeCompare(b.list.title));
+  return rows
+    .filter((r) => r.open > 0)
+    .sort((a, b) => b.untriaged - a.untriaged || b.open - a.open
+      || a.list.title.localeCompare(b.list.title));
 }
 
 /** "3d" / "4mo" / "2y" — ages compressed for a table column. */

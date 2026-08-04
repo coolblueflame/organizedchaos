@@ -233,18 +233,45 @@ export function burdenSeries(
   const todayKey = appDayKey(now, rolloverHour);
   const keys: string[] = [];
   for (let i = sampleDays - 1; i >= 0; i--) keys.push(addDaysKey(todayKey, -i));
+  return keys.map((key) => ({ key, hours: burdenAt(tasks, key, rolloverHour) }));
+}
 
-  return keys.map((key) => {
-    // End of app-day `key` = rollover moment of the NEXT calendar day.
-    const [y, m, d] = addDaysKey(key, 1).split('-').map(Number);
-    const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
-    let hours = 0;
-    for (const t of tasks) {
-      if (t.createdAt > end) continue;
-      if (t.completedAt !== undefined && t.completedAt <= end) continue;
-      if (t.deleted && t.updatedAt <= end) continue;
-      hours += t.estimateHours ?? 1;
-    }
-    return { key, hours };
-  });
+/** Hours of open work standing at the END of app-day `key`. */
+export function burdenAt(tasks: Task[], key: string, rolloverHour: number): number {
+  // End of app-day `key` = rollover moment of the NEXT calendar day.
+  const [y, m, d] = addDaysKey(key, 1).split('-').map(Number);
+  const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
+  let hours = 0;
+  for (const t of tasks) {
+    if (t.createdAt > end) continue;
+    if (t.completedAt !== undefined && t.completedAt <= end) continue;
+    if (t.deleted && t.updatedAt <= end) continue;
+    hours += t.estimateHours ?? 1;
+  }
+  return hours;
+}
+
+export type BurdenWindow = 'day' | 'week' | 'month' | 'year';
+export const BURDEN_WINDOWS: Record<BurdenWindow, { days: number; label: string }> = {
+  day: { days: 1, label: 'since yesterday' },
+  week: { days: 7, label: 'since last week' },
+  month: { days: 30, label: 'since last month' },
+  year: { days: 365, label: 'since last year' },
+};
+
+/**
+ * How the pile has moved over a window: current open hours minus the hours
+ * standing at the end of that earlier app-day. NEGATIVE means the pile shrank
+ * — which is the direction worth celebrating, so the caller words it that way.
+ *
+ * Same reconstruction as the burden chart, so the number and the line agree.
+ */
+export function burdenChange(
+  tasks: Task[],
+  window: BurdenWindow,
+  now: Date,
+  rolloverHour: number,
+): number {
+  const thenKey = addDaysKey(appDayKey(now, rolloverHour), -BURDEN_WINDOWS[window].days);
+  return totalEstimateHours(tasks) - burdenAt(tasks, thenKey, rolloverHour);
 }

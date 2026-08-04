@@ -5,6 +5,7 @@
   import { nextRolloverTs } from './lib/domain/time';
   import { toast } from './lib/ui/toast.svelte';
   import { searchQuery } from './lib/ui/searchState.svelte';
+  import { checkTimeboxes } from './lib/ui/timeboxWatch.svelte';
 
   // Spawn-sweep triggers beyond init (spec §5): returning to the app, and the
   // 4am rollover while it stays open. The timer re-arms itself each rollover.
@@ -56,6 +57,28 @@
   // Screen visits feed the delight layer (throttled internally by the engine).
   $effect(() => {
     if (app.ready) app.fireEgg('screenVisited', { screen: router.current.name });
+  });
+
+  /*
+    The timebox alarm lives HERE, not on the current-task card that draws the
+    countdown: that card only exists on home, so walking to any other screen
+    used to unmount the timer and the alert never fired (2026-08-03 report).
+    The visibility hook is the catch-up — iOS freezes our timers while the app
+    is away, so a box that ran out in a pocket announces itself on return.
+  */
+  $effect(() => {
+    if (!app.ready) return;
+    const sweep = () => checkTimeboxes(
+      app.state.tasks, app.state.lists, () => app.fireEgg('timeboxFinished'),
+    );
+    const onVisible = () => { if (document.visibilityState === 'visible') sweep(); };
+    const id = setInterval(sweep, 1000);
+    document.addEventListener('visibilitychange', onVisible);
+    sweep();
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   });
 
   // Keyboard: Cmd/Ctrl+Z undoes the last consequential action long after its

@@ -17,6 +17,7 @@
   import Glyph from './Glyph.svelte';
   import TagPicker from './TagPicker.svelte';
   import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
+  import { autogrow } from './autogrow';
   import { withoutLocked } from '../domain/lock';
   import { lock } from './lock.svelte';
 
@@ -247,7 +248,7 @@
              describing, estimating and tagging ARE triage, and edits persist
              whatever verdict follows. -->
         <label class="field"><span>description</span>
-          <textarea data-testid="sweep-notes" rows="2"
+          <textarea data-testid="sweep-notes" rows="2" use:autogrow={current.notes}
             placeholder="what does this actually involve?"
             value={current.notes}
             oninput={(e) => void app.patchTask(current!.id, { notes: e.currentTarget.value })}></textarea>

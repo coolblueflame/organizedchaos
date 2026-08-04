@@ -97,5 +97,21 @@
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.85rem; }
-  .sub.on { color: var(--acc-green); border-color: var(--acc-green); }
+
+  /*
+    These carried NO styling at all and fell back to the browser's own button
+    chrome — a near-white face, which put pale accent text on pale grey and was
+    genuinely hard to read (reported 2026-08-03). Same idiom as the segmented
+    controls on Stats: a dark face, light text when off, accent when on.
+  */
+  .sub {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 5px 10px; cursor: pointer;
+  }
+  @media (hover: hover) { .sub:hover { border-color: var(--acc-cyan); } }
+  .sub.on {
+    color: var(--acc-green); border-color: var(--acc-green);
+    background: color-mix(in srgb, var(--acc-green) 12%, var(--bg2));
+  }
 </style>

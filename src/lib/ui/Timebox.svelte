@@ -11,8 +11,6 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import type { Task } from '../domain/types';
-  import { burstAt, motionOk } from './fx/particles';
-  import { haptic } from './fx/haptics';
   import { ensureNotificationPermission } from './notify';
   import Glyph from './Glyph.svelte';
 
@@ -23,7 +21,6 @@
   let picking = $state(false);
   let custom = $state('25');
   let now = $state(Date.now());
-  let alerted = $state(false);
 
   const endsAt = $derived(task.timeboxEndsAt);
   const remainingMs = $derived(endsAt ? endsAt - now : null);
@@ -35,72 +32,6 @@
     const id = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(id);
   });
-
-  // Reset the alert latch whenever a new box starts.
-  $effect(() => {
-    if (endsAt) alerted = false;
-  });
-
-  $effect(() => {
-    if (!expired || alerted) return;
-    alerted = true;
-    fireAlert();
-  });
-
-  function fireAlert() {
-    haptic('heavy');
-    try {
-      if (motionOk()) burstAt(window.innerWidth / 2, window.innerHeight / 3, { count: 30, power: 1.4 });
-    } catch { /* fx never block the alert */ }
-    void notify();
-    beep();
-    app.fireEgg('timeboxFinished');
-  }
-
-  /** OS-level notification when we're allowed one; silently skipped otherwise. */
-  async function notify() {
-    try {
-      if (!('Notification' in window)) return;
-      // No prompt HERE: permission was requested when the box started (a real
-      // gesture); a backgrounded app can't show a prompt at fire time anyway.
-      if (Notification.permission !== 'granted') return;
-      // An OS notification renders OUTSIDE the app, on a lock screen the PIN
-      // cannot gate — so a locked list's task is never named here, no matter
-      // what the app session's own lock state happens to be right now.
-      const inLockedList = app.state.lists.some((l) => l.id === task.listId && l.locked === true);
-      const body = inLockedList
-        ? "your timebox is up."
-        : `"${task.name || 'your task'}" — time's up.`;
-      const reg = await navigator.serviceWorker?.getRegistration();
-      // Via the service worker when possible: those survive a backgrounded tab.
-      if (reg) await reg.showNotification('⏳ Timebox finished', { body, tag: 'timebox' });
-      else new Notification('⏳ Timebox finished', { body });
-    } catch { /* notifications are a bonus, never a requirement */ }
-  }
-
-  /** A short chime built in code — no asset, works offline. */
-  function beep() {
-    try {
-      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      [880, 1320].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        osc.connect(gain);
-        const start = ctx.currentTime + i * 0.18;
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
-        osc.start(start);
-        osc.stop(start + 0.18);
-      });
-      setTimeout(() => void ctx.close(), 800);
-    } catch { /* muted device, autoplay policy — fine */ }
-  }
 
   function clock(ms: number): string {
     const total = Math.max(0, Math.round(ms / 1000));
