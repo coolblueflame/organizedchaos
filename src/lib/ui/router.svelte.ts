@@ -14,7 +14,7 @@ export type Route =
   | { name: 'completed' }
   | { name: 'randomizer'; listId?: string }
   | { name: 'inprogress' }
-  | { name: 'recurring' }
+  | { name: 'recurring'; tplId?: string }
   | { name: 'settings' }
   | { name: 'import' }
   | { name: 'stats' }
@@ -38,7 +38,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'completed') return { name: 'completed' };
   if (parts[0] === 'randomizer') return { name: 'randomizer', listId: parts[1] };
   if (parts[0] === 'inprogress') return { name: 'inprogress' };
-  if (parts[0] === 'recurring') return { name: 'recurring' };
+  if (parts[0] === 'recurring') return { name: 'recurring', tplId: parts[1] };
   if (parts[0] === 'settings') return { name: 'settings' };
   if (parts[0] === 'import') return { name: 'import' };
   if (parts[0] === 'stats') return { name: 'stats' };
@@ -61,7 +61,7 @@ function toHash(r: Route): string {
     case 'completed': return '#/completed';
     case 'randomizer': return r.listId ? `#/randomizer/${r.listId}` : '#/randomizer';
     case 'inprogress': return '#/inprogress';
-    case 'recurring': return '#/recurring';
+    case 'recurring': return r.tplId ? `#/recurring/${r.tplId}` : '#/recurring';
     case 'settings': return '#/settings';
     case 'import': return '#/import';
     case 'stats': return '#/stats';

@@ -142,7 +142,9 @@
   {:else if r.name === 'inprogress'}
     <InProgressView />
   {:else if r.name === 'recurring'}
-    <RecurringView />
+    {#key r.tplId}
+      <RecurringView revealId={r.tplId} />
+    {/key}
   {:else if r.name === 'settings'}
     <SettingsView />
   {:else if r.name === 'import'}

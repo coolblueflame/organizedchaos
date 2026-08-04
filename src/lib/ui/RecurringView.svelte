@@ -11,7 +11,28 @@
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import Glyph from './Glyph.svelte';
 
+  /** Arrived from a search hit (#/recurring/<id>): open that one on landing. */
+  let { revealId }: { revealId?: string } = $props();
+
   let editingId = $state<string | null>(null);
+
+  /*
+    One-shot, like the list screen's deep link: expand the template that was
+    searched for, then hand control back. Re-running on every render would
+    fight the user the moment they collapsed it.
+  */
+  let revealed: string | undefined;
+  $effect(() => {
+    if (!revealId || revealId === revealed) return;
+    revealed = revealId;
+    editingId = revealId;
+  });
+
+  /** Bring the opened row into view — a long recurring list can bury it. */
+  function revealRow(node: HTMLElement, isTarget: boolean) {
+    if (!isTarget) return;
+    requestAnimationFrame(() => node.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  }
 
   const templates = $derived(app.state.templates.filter((t) => !t.deleted));
 
@@ -63,7 +84,8 @@
 
   <section class="rows">
     {#each templates as tpl (tpl.id)}
-      <div class="row" data-testid="recurring-row-{tpl.id}">
+      <div class="row" data-testid="recurring-row-{tpl.id}"
+        use:revealRow={tpl.id === revealId}>
         <div class="line">
           <!-- The row itself opens the editor, same as the pencil: tapping the
                thing you want to change is the obvious gesture, and the pencil is

@@ -91,7 +91,7 @@
     <section class="rows" data-testid="search-recurring">
       {#each tplResults as tpl (tpl.id)}
         <button class="tpl-row" data-testid="search-tpl-{tpl.id}"
-          onclick={() => navigate({ name: 'recurring' })}>
+          onclick={() => navigate({ name: 'recurring', tplId: tpl.id })}>
           <span class="tpl-name">{tpl.name || 'untitled'}</span>
           <span class="tpl-cadence">↻ {describeRecurrence(tpl.mode, tpl.deadlineOffsetDays)}</span>
         </button>

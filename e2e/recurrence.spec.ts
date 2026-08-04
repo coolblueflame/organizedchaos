@@ -115,6 +115,10 @@ test('recurring rows surface the live copy, re-home it, and turn up in search', 
   await expect(page.getByTestId('search-recurring')).toContainText('water the ferns');
   await page.getByTestId(`search-tpl-${tplId}`).click();
   await expect(page.getByTestId(`recurring-row-${tplId}`)).toBeVisible();
+  // …and it lands ON that rule with its editor already open, rather than
+  // dumping you at the top of the screen to find it again (2026-08-05 ask).
+  await expect(page.getByTestId(`recurring-open-${tplId}`)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page).toHaveURL(new RegExp(`#/recurring/${tplId}$`));
 });
 
 test('editor shows the cadence summary on a recurring task', async ({ page }) => {
