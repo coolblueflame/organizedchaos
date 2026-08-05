@@ -298,10 +298,18 @@
     padding: 6px 10px;
   }
   .dice {
-    background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 4px 6px;
-    filter: grayscale(0.3);
+    background: none; border: none; cursor: pointer; padding: 4px 6px;
+    /*
+      color is LOAD-BEARING on a chrome-less button: buttons do not inherit
+      text color, and the UA default is black — which, on this background,
+      made the glyph invisible on every platform from the emoji sweep until
+      2026-08-06 (Ben requested this "missing" feature; the measurement read
+      rgb(0,0,0) on rgb(11,14,20)). The grayscale filter that used to sit
+      here was for muting the old EMOJI die and outlived it.
+    */
+    color: var(--acc-green);
   }
-  @media (hover: hover) { .dice:hover { filter: none; transform: scale(1.1); } }
+  @media (hover: hover) { .dice:hover { transform: scale(1.1); } }
   .sort {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;

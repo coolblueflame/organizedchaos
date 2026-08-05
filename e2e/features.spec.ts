@@ -379,6 +379,32 @@ test('a task added from the button lands at the TOP of the screen, not the botto
   expect(Math.round(settled.y), 'a tapped row is not yanked to the top').toBeGreaterThan(60);
 });
 
+test('the list-header dice is actually visible, not black-on-black', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Seen');
+  /*
+    Regression guard for a whole CLASS of bug: a chrome-less button
+    (background:none) never inherits text color — the UA default is black,
+    and on this app's near-black background the stroked glyph disappears.
+    The scoped-draw e2e kept passing the whole time, because invisible is
+    not unclickable: this one asserts CONTRAST, which is what eyes need.
+  */
+  const contrast = await page.evaluate(() => {
+    const lum = (css: string) => {
+      const [r, g, b] = css.match(/\d+/g)!.map(Number).map((v) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const el = document.querySelector('[data-testid="list-randomize"]')!;
+    const fg = lum(getComputedStyle(el).color);
+    const bg = lum(getComputedStyle(document.body).backgroundColor);
+    return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+  });
+  expect(contrast).toBeGreaterThan(3); // black-on-near-black measures ~1.1
+});
+
 test('selecting notes text with the mouse does not lift the card', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Deskwork');
