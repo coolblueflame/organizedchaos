@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEstimate } from './estimate';
+import { formatEstimate, parseEstimate } from './estimate';
 
 describe('parseEstimate', () => {
   it('keeps plain numbers as hours (the old behaviour)', () => {
@@ -29,5 +29,25 @@ describe('parseEstimate', () => {
     expect(parseEstimate('0m')).toBeNull();
     expect(parseEstimate('-2')).toBeNull();
     expect(parseEstimate('h')).toBeNull();
+  });
+});
+
+describe('formatEstimate', () => {
+  it('shows back what a person would have typed', () => {
+    expect(formatEstimate(0.75)).toBe('45m');
+    expect(formatEstimate(1.5)).toBe('1h 30m');
+    expect(formatEstimate(2)).toBe('2h');
+    expect(formatEstimate(0.5)).toBe('30m');
+  });
+
+  it('is empty for no estimate', () => {
+    expect(formatEstimate(undefined)).toBe('');
+    expect(formatEstimate(0)).toBe('');
+  });
+
+  it('round-trips through the parser', () => {
+    for (const h of [0.25, 0.5, 0.75, 1, 1.5, 2, 3.25, 8]) {
+      expect(parseEstimate(formatEstimate(h))).toBe(h);
+    }
   });
 });

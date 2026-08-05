@@ -400,6 +400,30 @@ test('a completed task records how long it took', async ({ page }) => {
   await expect(page.getByTestId('search-completed')).toContainText('⧗');
 });
 
+test('the estimate field lets you finish typing "45m" without rewriting it', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Est');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('paint the fence');
+
+  // Regression: every keystroke used to parse, save, and re-render the field
+  // from what was saved — so the "m" turned the text into "0.75" mid-word,
+  // and typing "45min" left "0.75in" behind.
+  const est = page.getByTestId('task-estimate-input');
+  await est.click();
+  await est.pressSequentially('45min', { delay: 40 });
+  await expect(est, 'the field keeps what was typed').toHaveValue('45min');
+
+  // Blurring tidies it into the canonical short form of the SAME value.
+  await page.getByTestId('task-notes-input').click();
+  await expect(est).toHaveValue('45m');
+
+  // And the stored value is right: 45 minutes of work on this list.
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
+  await expect(page.getByTestId('list-work-left')).toContainText('45m');
+});
+
 test('"already did this one" completes the draw without inventing a duration', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Chores');

@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
+  import EstimateField from './EstimateField.svelte';
   import { navigate } from './router.svelte';
   import { drawTask, eligibleForDraw } from '../domain/randomizer';
   import { effectivePriority, isEscalated } from '../domain/priority';
@@ -367,14 +367,8 @@
               oninput={(e) => void app.patchTask(triage!.id, { deadline: e.currentTarget.value || undefined })} />
           </label>
           <label><span>estimate</span>
-            <input type="text" placeholder={ESTIMATE_HINT} data-testid="triage-estimate"
-              value={triage.estimateHours ?? ''}
-              oninput={(e) => {
-                const v = e.currentTarget.value.trim();
-                const hours = v === '' ? null : parseEstimate(v);
-                if (v !== '' && hours === null) return; // partial input: not a wipe
-                void app.patchTask(triage!.id, { estimateHours: hours ?? undefined });
-              }} />
+            <EstimateField hours={triage.estimateHours} testid="triage-estimate"
+              onchange={(hours) => void app.patchTask(triage!.id, { estimateHours: hours })} />
           </label>
         </div>
       </div>

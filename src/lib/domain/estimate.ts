@@ -34,3 +34,20 @@ const round = (v: number) => Math.round(v * 100) / 100;
 
 /** The placeholder every estimate field shares, so the syntax teaches itself. */
 export const ESTIMATE_HINT = 'e.g. 2h or 45m';
+
+/**
+ * Hours back into the compact form a person would type: 0.75 → "45m",
+ * 1.5 → "1h 30m", 2 → "2h".
+ *
+ * The field shows THIS rather than the stored number, so typing "45m" and
+ * looking back at "45m" agrees with itself. Seeing "0.75" instead reads like
+ * the app misunderstood, even though it understood perfectly.
+ */
+export function formatEstimate(hours: number | undefined): string {
+  if (hours === undefined || !(hours > 0)) return '';
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  if (whole === 0) return `${minutes}m`;
+  if (minutes === 0) return `${whole}h`;
+  return `${whole}h ${minutes}m`;
+}

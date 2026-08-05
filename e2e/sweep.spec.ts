@@ -103,7 +103,8 @@ test('the estimate check: confirm the hour, type the truth, or skip', async ({ p
   await page.goto('#/');
   await page.getByTestId(/^list-row-/).first().click();
   await page.getByTestId(/^task-row-/).filter({ hasText: 'clean gutters' }).first().click();
-  await expect(page.getByTestId('task-estimate-input').last()).toHaveValue('2.5');
+  // Shown the way a person says it: 2.5 stored reads back as "2h 30m".
+  await expect(page.getByTestId('task-estimate-input').last()).toHaveValue('2h 30m');
 
   // The triage tab still shows its own queue (none here) and switching works.
   await page.goto('#/sweep');
@@ -251,6 +252,6 @@ test('the card is an editor: describe, estimate, and tag before the verdict', as
   await page.getByTestId(/^list-row-/).first().click();
   await page.getByText('bare imported task', { exact: true }).click();
   await expect(page.getByTestId('task-notes-input')).toHaveValue('call ahead, they close at 5');
-  await expect(page.getByTestId('task-estimate-input')).toHaveValue('2');
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('2h');
   await expect(page.getByRole('button', { name: /errands/ })).toBeVisible();
 });

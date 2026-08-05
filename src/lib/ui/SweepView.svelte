@@ -18,6 +18,7 @@
   import TagPicker from './TagPicker.svelte';
   import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
   import { autogrow } from './autogrow';
+  import EstimateField from './EstimateField.svelte';
   import { withoutLocked } from '../domain/lock';
   import { lock } from './lock.svelte';
 
@@ -254,14 +255,8 @@
             oninput={(e) => void app.patchTask(current!.id, { notes: e.currentTarget.value })}></textarea>
         </label>
         <label class="field est"><span>estimate</span>
-          <input type="text" placeholder={ESTIMATE_HINT} data-testid="sweep-estimate"
-            value={current.estimateHours ?? ''}
-            oninput={(e) => {
-              const v = e.currentTarget.value.trim();
-              const hours = v === '' ? null : parseEstimate(v);
-              if (v !== '' && hours === null) return; // partial input: not a wipe
-              void app.patchTask(current!.id, { estimateHours: hours ?? undefined });
-            }} />
+          <EstimateField hours={current.estimateHours} testid="sweep-estimate"
+            onchange={(hours) => void app.patchTask(current!.id, { estimateHours: hours })} />
         </label>
         <TagPicker selected={current.tagIds} ontoggle={toggleTag} />
 
@@ -397,14 +392,15 @@
   }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
-  .field textarea, .field input {
+  .field textarea {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
     width: 100%; min-width: 0;
   }
   .field textarea { font-family: inherit; resize: vertical; line-height: 1.45; }
-  .field textarea:focus, .field input:focus { border-color: var(--acc-blue); }
-  .field.est input { max-width: 130px; }
+  .field textarea:focus { border-color: var(--acc-blue); }
+  /* Layout, not appearance — the field dresses itself. */
+  .field.est :global(input) { max-width: 130px; }
   .priorities { display: flex; gap: 6px; margin-top: 4px; }
   .tier {
     flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;

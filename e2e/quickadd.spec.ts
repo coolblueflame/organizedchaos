@@ -91,7 +91,7 @@ test('escape closes it, and details set in the sheet are kept', async ({ page })
 
   await page.getByTestId(/^list-row-/).first().click();
   await page.getByText('detailed capture', { exact: true }).click();
-  await expect(page.getByTestId('task-estimate-input')).toHaveValue('2');
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('2h');
 });
 
 test('remembers the last list used and targets it next time', async ({ page }) => {

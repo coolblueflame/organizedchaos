@@ -78,7 +78,9 @@ test('the randomizer offers a fill-in prompt that clears the dot when done', asy
   await page.getByTestId(/^list-row-/).first().click();
   await expect(page.getByTestId(`needs-review-${id}`)).toHaveCount(0);
   await page.getByText('needs details').click();
-  await expect(page.getByTestId('task-estimate-input')).toHaveValue('3');
+  // "3" comes back as "3h": the field shows the compact form of what was
+  // stored, so an estimate reads the way a person would say it.
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('3h');
   await expect(page.getByTestId('task-notes-input'), 'the description written during triage')
     .toHaveValue('ring the shop first, they open at 9');
 });

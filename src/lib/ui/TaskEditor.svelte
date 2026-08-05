@@ -21,7 +21,7 @@
   import type { RecurrenceMode } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import { autogrow } from './autogrow';
-  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
+  import EstimateField from './EstimateField.svelte';
 
   let { task, oncollapse, compact = false }: {
     task: Task;
@@ -76,13 +76,9 @@
     touched();
   }
 
-  function setEstimate(value: string) {
-    // parseEstimate, not parseFloat: "45m" and "1h30m" are valid entries now.
-    // Mid-typing garbage ("4", then "45m") resolves on each keystroke; a
-    // cleared field clears the estimate.
-    const hours = value.trim() === '' ? null : parseEstimate(value);
-    if (value.trim() !== '' && hours === null) return; // don't wipe on partial input
-    void app.patchTask(task.id, { estimateHours: hours ?? undefined });
+  /** EstimateField has already parsed and guarded partial input. */
+  function setEstimate(hours: number | undefined) {
+    void app.patchTask(task.id, { estimateHours: hours });
     touched();
   }
 
@@ -276,10 +272,8 @@
     </label>
     <label>
       <span>estimate</span>
-      <input type="text" data-testid="task-estimate-input"
-        value={task.estimateHours ?? ''} placeholder={ESTIMATE_HINT}
-        oninput={(e) => setEstimate(e.currentTarget.value)}
-        onchange={(e) => setEstimate(e.currentTarget.value)} />
+      <EstimateField hours={task.estimateHours} testid="task-estimate-input"
+        onchange={setEstimate} />
     </label>
   </div>
 
