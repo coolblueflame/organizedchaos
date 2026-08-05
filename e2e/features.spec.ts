@@ -405,6 +405,125 @@ test('the list-header dice is actually visible, not black-on-black', async ({ pa
   expect(contrast).toBeGreaterThan(3); // black-on-near-black measures ~1.1
 });
 
+/** Insert open tasks straight into Dexie's store — 70 UI adds cost ~30s. */
+async function seedTasksDirect(page: Page, listId: string, rows: Array<{ id: string; name: string; priority: string }>) {
+  await page.evaluate(({ listId, rows }) => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open('organizedchaos');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('tasks', 'readwrite');
+      const store = tx.objectStore('tasks');
+      const now = Date.now();
+      for (const r of rows) {
+        store.put({
+          id: r.id, listId, name: r.name, notes: '', tagIds: [], priority: r.priority,
+          inProgress: false, createdAt: now, updatedAt: now, deleted: false,
+        });
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    };
+  }), { listId, rows });
+  await page.reload(); // direct IndexedDB fixtures need a reload to be seen
+  await page.getByTestId('new-list').waitFor();
+}
+
+test('a deep link reaches a task buried past the render budget', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Deep');
+  await page.getByTestId('back').click();
+  const listId = (await page.getByTestId(/^list-row-/).first().getAttribute('data-testid'))!
+    .replace('list-row-', '');
+
+  /*
+    70 medium fillers, and the target at SOMEDAY priority so its group renders
+    after all of them — index ≥ 70, past the 60-row budget. Before the budget
+    learned to grow toward the open editor, the deep link "expanded" a task
+    with no DOM: the card sat offscreen-unmounted until manual scrolling paged
+    it in (2026-08-06 report, via the fill-in card's jump).
+  */
+  // Comfortably past the 60-row budget (and a second page of it, for margin):
+  // an instrumented probe confirmed the budget holds at exactly 60 here
+  // without the growth effect — the target simply does not exist in the DOM.
+  await seedTasksDirect(page, listId, [
+    ...Array.from({ length: 140 }, (_, i) => ({ id: `filler-${i}`, name: `filler ${i}`, priority: 'medium' })),
+    { id: 'buried-target', name: 'the buried one', priority: 'someday' },
+  ]);
+
+  await page.goto(`./#/list/${listId}/task/buried-target`);
+  const title = page.getByTestId('task-name-input');
+  await expect(title).toBeVisible();
+  await expect(title).toHaveValue('the buried one');
+  await expect.poll(async () => {
+    const box = await title.boundingBox();
+    if (!box) return 'no box';
+    return box.y >= 0 && box.y < 150 ? 'at the top' : `y=${Math.round(box.y)}`;
+  }, { message: 'the jump lands with the title at the top, no scrolling needed' }).toBe('at the top');
+});
+
+test('removing a tag in tag view keeps the relocated card on screen', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Sorted');
+  await page.getByTestId('back').click();
+  const listId = (await page.getByTestId(/^list-row-/).first().getAttribute('data-testid'))!
+    .replace('list-row-', '');
+
+  /*
+    140 untagged fillers: past the fold and comfortably past the render
+    budget, so the relocated card only exists if the budget grows toward it. The tagged task sits at the top of tag view; removing
+    its tag drops it to the BOTTOM of untagged — which used to strand the
+    view where the card had been (2026-08-06 report). Now the budget grows to
+    keep the open editor mounted and the remounted editor reveals itself.
+  */
+  await seedTasksDirect(page, listId, Array.from({ length: 140 }, (_, i) =>
+    ({ id: `plain-${i}`, name: `plain ${i}`, priority: 'medium' })));
+  await page.getByTestId(/^list-row-/).first().click();
+  await addTask(page, 'the tagged one');
+  await page.getByText('the tagged one', { exact: true }).click();
+  await page.getByTestId('new-tag').click();
+  await page.getByTestId('new-tag-input').fill('zzlast');
+  await page.getByTestId('new-tag-input').press('Enter');
+  await page.getByTestId('new-tag-done').click();
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('sort-tag').click();
+  await page.getByText('the tagged one', { exact: true }).click();
+  await expect(page.getByTestId('task-name-input')).toHaveValue('the tagged one');
+
+  // Remove the tag from the open editor: the row relocates to untagged.
+  await page.getByTestId(/^tag-chip-/).filter({ hasText: 'zzlast' }).click();
+
+  // The editor is still mounted, still open, and ON SCREEN — not stranded.
+  const title = page.getByTestId('task-name-input');
+  await expect(title).toHaveValue('the tagged one');
+  await page.waitForTimeout(500); // let the reveal + intros settle
+  const box = (await title.boundingBox())!;
+  const viewH = page.viewportSize()!.height;
+  expect(box.y, 'the relocated card is inside the viewport').toBeGreaterThanOrEqual(0);
+  expect(box.y, 'the relocated card is inside the viewport').toBeLessThan(viewH - 40);
+});
+
+test('moving the open task to another list follows it there', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Origin');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Destination');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Origin' }).click();
+  await addTask(page, 'the traveller');
+  // Re-open it and move it via the editor's list select.
+  await page.getByText('the traveller', { exact: true }).click();
+  await page.getByTestId('task-move-list').last().selectOption({ label: 'Destination' });
+
+  // The card used to be swooped away, editor and all (2026-08-06 report).
+  // Now the screen follows: Destination's deep link, editor open, title on top.
+  await expect(page).toHaveURL(/#\/list\/.+\/task\/.+$/);
+  await expect(page.getByTestId('task-name-input')).toHaveValue('the traveller');
+  await expect(page.getByTestId('list-title')).toContainText('Destination');
+});
+
 test('selecting notes text with the mouse does not lift the card', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Deskwork');

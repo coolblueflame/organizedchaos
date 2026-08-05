@@ -34,6 +34,9 @@
   $effect(() => {
     if (!revealTaskId || revealTaskId === revealed) return;
     revealed = revealTaskId;
+    // A jump means TAKE ME THERE: title at the top, like the + button —
+    // not the minimal 'nearest' scroll meant for a task you tapped yourself.
+    revealAt = 'start';
     editingTaskId = revealTaskId;
     void app.markReviewed(revealTaskId);
   });
@@ -156,6 +159,24 @@
     revealAt = 'nearest';
     editingTaskId = app.addTaskEager(id).id;
   }
+
+  /*
+    FOLLOW THE MOVE (2026-08-06: "changing what todo list it's on just swooped
+    my card away entirely"). If the task you are editing leaves this list —
+    the editor's move select, or anything else that re-homes it — this screen
+    can no longer show it, so go where it went: its deep link in the new
+    list, which lands with the editor open and the title at the top. Scoped
+    to ListView on purpose — the sort views span every list, so a move never
+    strands you there.
+  */
+  $effect(() => {
+    if (!editingTaskId) return;
+    const open = app.state.tasks.find((t) => t.id === editingTaskId);
+    if (!open || open.deleted || open.listId === id) return;
+    const target = { name: 'list', id: open.listId, taskId: open.id } as const;
+    editingTaskId = null; // this screen's claim ends; the deep link re-opens it
+    navigate(target);
+  });
 
   // Leaving the screen with an untouched new task open discards it too.
   $effect(() => () => {

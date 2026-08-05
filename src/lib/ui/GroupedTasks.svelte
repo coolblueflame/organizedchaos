@@ -72,21 +72,44 @@
   // A deep-linked or programmatically-expanded task must actually RENDER:
   // if the expanded id sits beyond the current budget, grow to reach it
   // (grow-only, same contract as scrolling).
+
+
+  const total = $derived(groups.reduce((n, g) => n + g.tasks.length, 0));
+
   $effect(() => {
     if (!editingTaskId) return;
-    let at = 0;
+    let idx = 0;
     for (const g of groups) {
-      for (const t of g.tasks) {
-        if (t.id === editingTaskId) {
-          if (at >= budget) budget = at + PAGE;
-          return;
-        }
-        at += 1;
+      const at = g.tasks.findIndex((t) => t.id === editingTaskId);
+      if (at !== -1) {
+        idx += at;
+        if (idx >= budget) budget = idx + 1;
+        return;
       }
+      idx += g.tasks.length;
     }
   });
 
-  const total = $derived(groups.reduce((n, g) => n + g.tasks.length, 0));
+
+
+
+
+
+
+
+
+
+
+  /*
+    The open editor must exist to be seen. A deep link (#/list/<id>/task/<id>)
+    sets editingTaskId before a single row has mounted, but the budget only
+    mounts the first PAGE — a task buried past them was "expanded" in state
+    with no DOM to scroll to (2026-08-06 report: the jump landed with the card
+    offscreen; scrolling paged it in, already open). Growing the budget to
+    reach it keeps the budget-only-grows rule, and is a no-op whenever the
+    row is already mounted.
+  */
+
 
   /** Groups trimmed to the budget, in order, each still knowing its full self. */
   const shown = $derived.by(() => {
@@ -100,6 +123,7 @@
     return out;
   });
   const rendered = $derived(shown.reduce((n, g) => n + g.tasks.length, 0));
+
 
 
 

@@ -44,6 +44,18 @@
     requestAnimationFrame(scroll);
 
     /*
+      One re-assert after intro transitions settle, for BOTH modes. Whenever
+      the reveal coincides with the render budget growing (a deep link into a
+      buried task; a tag removal relocating the open card to the far end),
+      the freshly mounted rows above are mid slide-in (220ms) when the first
+      scroll computes — measured landing 220px short against their shrunken
+      heights. For a plain tap-expand whose neighbours were already laid out,
+      the second scroll is a no-op: the element is in view, 'nearest' moves
+      nothing. Too brief to fight scrolling the user starts themselves.
+    */
+    const settle = setTimeout(scroll, 320);
+
+    /*
       A new task also opens the keyboard, and iOS scrolls the focused field to
       sit just above it — which lands the row at the BOTTOM of what's left,
       undoing the scroll we just did (reported 2026-08-04). The keyboard
@@ -52,11 +64,12 @@
       not about fighting the user's own scrolling forever after.
     */
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
-    if (mode !== 'start' || !vv) return;
+    if (mode !== 'start' || !vv) return { destroy() { clearTimeout(settle); } };
     vv.addEventListener('resize', scroll);
     const stop = setTimeout(() => vv.removeEventListener('resize', scroll), 1200);
     return {
       destroy() {
+        clearTimeout(settle);
         clearTimeout(stop);
         vv.removeEventListener('resize', scroll);
       },
