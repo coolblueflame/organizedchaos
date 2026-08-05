@@ -17,18 +17,19 @@ const task = (over: Partial<Task> & { priority: Priority }): Task => ({
 const doneAt = (s: string) => task({ priority: 'low', completedAt: new Date(s).getTime() });
 
 describe('completionCounts', () => {
-  it('buckets by app-day, Monday weeks, calendar month/year', () => {
+  it('buckets by app-day, Sunday weeks, calendar month/year', () => {
     const tasks = [
       doneAt('2026-07-15T10:00:00'),  // today
       doneAt('2026-07-15T02:00:00'),  // 2am → belongs to the 14th, still this week
       doneAt('2026-07-13T09:00:00'),  // Monday — this week
-      doneAt('2026-07-12T09:00:00'),  // Sunday — LAST week
+      doneAt('2026-07-12T09:00:00'),  // Sunday — first day of THIS week now
+      doneAt('2026-07-11T09:00:00'),  // Saturday — LAST week
       doneAt('2026-07-01T09:00:00'),  // this month
       doneAt('2026-01-02T09:00:00'),  // this year
       doneAt('2025-06-01T09:00:00'),  // lifetime only
     ];
     const c = completionCounts(tasks, now, 4);
-    expect(c).toEqual({ today: 1, week: 3, month: 5, year: 6, lifetime: 7 });
+    expect(c).toEqual({ today: 1, week: 4, month: 6, year: 7, lifetime: 8 });
   });
 
   it('imported history stays out of the scoreboard but still feeds the graphs', () => {
@@ -57,11 +58,11 @@ describe('completionSeries', () => {
     expect(s[3]!.key).toBe('2026-07-15');
   });
 
-  it('weekly buckets start on Monday', () => {
-    const tasks = [doneAt('2026-07-13T10:00:00'), doneAt('2026-07-12T10:00:00')];
+  it('weekly buckets start on Sunday', () => {
+    const tasks = [doneAt('2026-07-12T10:00:00'), doneAt('2026-07-11T10:00:00')];
     const s = completionSeries(tasks, 'week', 2, now, 4);
-    expect(s[1]!.count).toBe(1); // this week: Mon 13th only
-    expect(s[0]!.count).toBe(1); // last week: Sun 12th
+    expect(s[1]!.count).toBe(1); // this week opens Sun the 12th
+    expect(s[0]!.count).toBe(1); // Sat the 11th closes LAST week
   });
 });
 

@@ -28,6 +28,7 @@
     showList = false,
     onenter,
     revealAt = 'nearest',
+    ontoggled,
   }: {
     groups: TaskGroup[];
     /** Which attribute a drop assigns; 'custom' makes dragging REORDER
@@ -38,6 +39,9 @@
     onenter?: (name: string) => void;
     /** Applied to whichever row is open — see TaskRow.revealAt. */
     revealAt?: 'start' | 'nearest';
+    /** A TAP toggled a row (never fired by programmatic opens like the add
+        button) — the parent uses it to put revealAt back to 'nearest'. */
+    ontoggled?: () => void;
   } = $props();
 
   // ── multi-select ─────────────────────────────────────────────────────────
@@ -172,6 +176,16 @@
   function onPointerDown(e: PointerEvent, task: Task, fromGrip = false) {
     if (!mode || e.button !== 0) return;
     if (!fromGrip && e.pointerType !== 'mouse') return;
+    /*
+      A mouse-drag that starts in an editing surface is SELECTING TEXT, not
+      picking up the card (2026-08-06 report: dragging across the notes field
+      lifted the row). [data-editing-root] covers the whole expanded editor in
+      one stroke; the input/textarea/select cases catch stray fields outside
+      one. Buttons are deliberately NOT excluded — the collapsed row body is a
+      button, and dragging it to regroup is a real desktop feature.
+    */
+    if (!fromGrip && (e.target as Element | null)?.closest(
+      'input, textarea, select, [contenteditable], [data-editing-root]')) return;
     if (fromGrip) e.preventDefault(); // no text selection or native drag image
     candidate = task;
     origin = { x: e.clientX, y: e.clientY };
@@ -329,6 +343,7 @@
           ontoggle={() => {
             editingTaskId = editingTaskId === task.id ? null : task.id;
             if (editingTaskId) void app.markReviewed(task.id);
+            ontoggled?.();
           }} />
       </div>
     {/each}

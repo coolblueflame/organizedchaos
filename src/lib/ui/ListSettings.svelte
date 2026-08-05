@@ -27,8 +27,10 @@
   let rules = $state<HoursRule[]>(hoursRules(list).map((r) => ({ ...r, days: [...r.days] })));
   let deleteArmed = $state(false);
 
+  // Sunday-first, matching every other day picker (2026-08-06 ask — this was
+  // the odd one out). Values are JS getDay numbers; storage is untouched.
   const DAYS: Array<[number, string]> =
-    [[1, 'M'], [2, 'T'], [3, 'W'], [4, 'T'], [5, 'F'], [6, 'S'], [0, 'S']];
+    [[0, 'S'], [1, 'M'], [2, 'T'], [3, 'W'], [4, 'T'], [5, 'F'], [6, 'S']];
 
   const hoursLeft = $derived(remainingEstimateHours(app.state.tasks, list.id));
   const projectTier = $derived(

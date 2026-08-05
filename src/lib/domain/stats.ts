@@ -14,12 +14,15 @@ const doneTasks = (tasks: Task[]) =>
 /** Counters only credit work finished IN this app, not imported history. */
 const scoredTasks = (tasks: Task[]) => doneTasks(tasks).filter((t) => !t.importedHistory);
 
-/** Monday-first start of the ISO week containing the given day key. */
+/**
+ * Sunday-first start of the week containing the given day key. Sunday rather
+ * than ISO-Monday since 2026-08-06: every day picker in the app leads with
+ * Sunday, and the week the charts count should be the week the pickers show.
+ */
 function weekStartKey(dayKey: string): string {
   const [y, m, d] = dayKey.split('-').map(Number);
   const date = new Date(y!, m! - 1, d!, 12);
-  const dow = (date.getDay() + 6) % 7; // Monday = 0
-  return addDaysKey(dayKey, -dow);
+  return addDaysKey(dayKey, -date.getDay()); // getDay: Sunday = 0
 }
 
 /**

@@ -19,7 +19,7 @@
     | 'notes' | 'blocked' | 'timebox' | 'period' | 'pause' | 'play'
     | 'dice' | 'moon' | 'bolt' | 'install' | 'upload' | 'award' | 'locked'
     | 'flame' | 'settings' | 'escalate' | 'grip'
-    | 'box' | 'box-checked' | 'box-all' | 'check';
+    | 'box' | 'box-checked' | 'box-all' | 'check' | 'plus';
 
   let { name, size = 11, title }: {
     name: GlyphName;
@@ -129,6 +129,11 @@
     <rect x="1.2" y="1.2" width="9.6" height="9.6" rx="2" />
   {:else if name === 'check'}
     <path d="M2.6 6.4 L5.1 8.9 L9.6 3.4" />
+  {:else if name === 'plus'}
+    <!-- Drawn, not typed: a "+" character's ink sits off-centre in most fonts,
+         which is exactly why the floating button looked lopsided (the rule:
+         never centre a typed mark by alignment). -->
+    <path d="M6 1.8 V10.2 M1.8 6 H10.2" />
   {:else if name === 'box-checked'}
     <rect x="1.2" y="1.2" width="9.6" height="9.6" rx="2" />
     <path d="M3.6 6.2 L5.3 8 L8.5 4.2" />

@@ -99,8 +99,9 @@ function describeDays(days: number[]): string {
   if (set.length === 7) return 'daily';
   if (set.join() === WEEKDAYS.join()) return 'weekdays';
   if (set.join() === WEEKEND.join()) return 'weekends';
-  // Mon-first display order
-  return [1, 2, 3, 4, 5, 6, 0].filter((d) => set.includes(d)).map((d) => DAY_LETTERS[d]).join('');
+  // Sunday-first, like every day picker (the review caught this renderer and
+  // recurrenceText's still saying Monday after the 2026-08-06 picker flip).
+  return [0, 1, 2, 3, 4, 5, 6].filter((d) => set.includes(d)).map((d) => DAY_LETTERS[d]).join('');
 }
 
 const trimTime = (hhmm: string) => hhmm.replace(/^0/, '');

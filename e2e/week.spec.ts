@@ -35,7 +35,7 @@ test('the week screen counts this week and lists the wins', async ({ page }) => 
   await page.getByTestId('stats-week-link').click();
 
   await expect(page.getByTestId('week-hero')).toContainText('2');
-  await expect(page.getByTestId('week-hero')).toContainText('done since Monday');
+  await expect(page.getByTestId('week-hero')).toContainText('done since Sunday');
   const wins = page.getByTestId('week-wins');
   await expect(wins).toContainText('ship the thing');
   await expect(wins).toContainText('water the ficus');

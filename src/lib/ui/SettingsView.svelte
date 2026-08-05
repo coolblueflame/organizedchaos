@@ -278,7 +278,7 @@
         onchange={(e) => setting({ autoSelectNext: e.currentTarget.checked })} /></label>
   </section>
 
-  <p class="about">organized chaos v{__APP_VERSION__} — a todo list that tempts fate</p>
+  <p class="about">organized chaos v{__APP_VERSION__} — a todo list that brings order through chance</p>
 </main>
 
 {#if howToOpen}

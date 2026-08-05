@@ -120,6 +120,12 @@
    * The Enter-chain deliberately keeps 'nearest': during rapid entry the rows
    * are already where you are looking, and yanking the view on every Enter
    * would fight the flow that path exists for.
+   *
+   * Reset on GroupedTasks' `ontoggled` — a TAP means you are browsing, not
+   * adding. The first version reset it in a local toggle() that NOTHING
+   * called (GroupedTasks toggles the bindable directly), so 'start' stuck
+   * for the rest of the visit and every later tap jump-scrolled to the top.
+   * The review fleet caught it with a live probe; the dead function is gone.
    */
   let revealAt = $state<'start' | 'nearest'>('nearest');
 
@@ -134,19 +140,6 @@
     revealAt = 'start';
     editingTaskId = app.addTaskEager(id).id;
     if (prev) void app.discardIfPristine(prev); // background; writes are serialized
-  }
-
-  function toggle(taskId: string) {
-    if (editingTaskId === taskId) {
-      void stopEditing();
-      return;
-    }
-    revealAt = 'nearest';
-    const prev = editingTaskId;
-    editingTaskId = taskId;
-    // Deliberately opening a task counts as giving it the once-over.
-    void app.markReviewed(taskId);
-    if (prev) void app.discardIfPristine(prev);
   }
 
   /** Enter commits and opens the next one; Enter on an empty name ends the chain. */
@@ -224,6 +217,7 @@
     mode={list?.sortMode ?? 'priority'}
     bind:editingTaskId
     {revealAt}
+    ontoggled={() => (revealAt = 'nearest')}
     onenter={chainNext} />
   {#if groups.length === 0}
     <p class="empty">// nothing here yet</p>
@@ -237,7 +231,9 @@
        (2026-08-01 ask) — fixed-position elements ride the visual viewport on
        iOS and the button scooted up to cover the text being typed. -->
   {#if !keyboard.open}
-    <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>+</button>
+    <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>
+      <Glyph name="plus" size={20} />
+    </button>
   {/if}
 
   {#if editingTaskId}

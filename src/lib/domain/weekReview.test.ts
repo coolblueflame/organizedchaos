@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Priority, Task } from './types';
 import { weekReview, weekWinsList } from './weekReview';
 
-// Thursday 2026-07-30 → app-week Mon 07-27 .. Sun 08-02; last week 07-20..26.
+// Thursday 2026-07-30 → app-week Sun 07-26 .. Sat 08-01; last week 07-19..25.
 const NOW = new Date('2026-07-30T15:00:00');
 const at = (iso: string) => new Date(iso).getTime();
 
@@ -14,7 +14,7 @@ const done = (over: Partial<Task> & { completedAt: number }): Task => ({
 });
 
 describe('weekReview', () => {
-  it('buckets Monday-first, splits this week from last, finds the best day', () => {
+  it('buckets Sunday-first, splits this week from last, finds the best day', () => {
     const r = weekReview([
       done({ completedAt: at('2026-07-27T10:00:00') }), // Mon
       done({ completedAt: at('2026-07-29T10:00:00') }), // Wed
@@ -24,13 +24,14 @@ describe('weekReview', () => {
     ], NOW, 4);
     expect(r.completions).toBe(3);
     expect(r.prevCompletions).toBe(2);
-    expect(r.daily).toEqual([1, 0, 2, 0, 0, 0, 0]);
+    expect(r.daily).toEqual([0, 1, 0, 2, 0, 0, 0]); // Sun..Sat: Mon 27th, Wed 29th ×2
     expect(r.bestDay).toEqual({ key: '2026-07-29', count: 2 });
   });
 
   it('respects the 4am rollover: a 2am finish belongs to the day before', () => {
-    // 02:00 on Monday the 27th is still app-Sunday the 26th → LAST week.
-    const r = weekReview([done({ completedAt: at('2026-07-27T02:00:00') })], NOW, 4);
+    // 02:00 on Sunday the 26th is still app-Saturday the 25th → LAST week,
+    // even though the wall clock already reads the first day of this one.
+    const r = weekReview([done({ completedAt: at('2026-07-26T02:00:00') })], NOW, 4);
     expect(r.completions).toBe(0);
     expect(r.prevCompletions).toBe(1);
   });

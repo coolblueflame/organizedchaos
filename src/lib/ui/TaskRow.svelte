@@ -26,7 +26,18 @@
    * wants the whole editor and as much room above the keyboard as possible.
    */
   function revealEditor(node: HTMLElement, mode: 'start' | 'nearest' = 'nearest') {
-    const scroll = () => node.scrollIntoView({
+    /*
+      This action sits on the EDITOR wrapper, but the row's title input lives
+      ABOVE it in the row root — so scrolling `node` itself to 'start' put the
+      editor at the top and the title off-screen (2026-08-06 report). The row
+      root carries data-editing-root exactly while the editor is open, which
+      makes it the reliable "whole row" handle. ('nearest' keeps the editor
+      node: scroll the minimum so a mid-screen expansion doesn't jump.)
+    */
+    const target = mode === 'start'
+      ? (node.closest<HTMLElement>('[data-editing-root]') ?? node)
+      : node;
+    const scroll = () => target.scrollIntoView({
       block: mode, behavior: motionOk() ? 'smooth' : 'auto',
     });
     // Next frame: the editor needs a layout pass before its height is real.

@@ -30,9 +30,10 @@
   let monthday = $state(init?.kind === 'monthly' ? init.dayOfMonth : 1);
   let offset = $state<string>(seed?.deadlineOffsetDays?.toString() ?? '');
 
-  // Mon-first display order; values are JS getDay numbers.
+  // Sunday-first display order, like every other day picker; values are JS
+  // getDay numbers, so storage is untouched.
   const WEEKDAYS: Array<[number, string]> =
-    [[1, 'mo'], [2, 'tu'], [3, 'we'], [4, 'th'], [5, 'fr'], [6, 'sa'], [0, 'su']];
+    [[0, 'su'], [1, 'mo'], [2, 'tu'], [3, 'we'], [4, 'th'], [5, 'fr'], [6, 'sa']];
 
   function toggleWeekday(d: number) {
     weekdays = weekdays.includes(d) ? weekdays.filter((x) => x !== d) : [...weekdays, d];

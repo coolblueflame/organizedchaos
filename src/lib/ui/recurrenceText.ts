@@ -16,8 +16,8 @@ export function describeRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: nu
       base = `${mode.interval} ${mode.interval === 1 ? mode.unit.slice(0, -1) : mode.unit} after completion`;
       break;
     case 'weekly': {
-      // Mon-first ordering for display
-      const order = [1, 2, 3, 4, 5, 6, 0];
+      // Sunday-first, matching the picker above it.
+      const order = [0, 1, 2, 3, 4, 5, 6];
       const days = order.filter((d) => mode.weekdays.includes(d)).map((d) => DAY_NAMES[d]);
       base = `every ${days.join(', ')}`;
       break;

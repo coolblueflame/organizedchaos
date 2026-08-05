@@ -339,15 +339,99 @@ test('a task added from the button lands at the TOP of the screen, not the botto
   const before = await page.evaluate(() => window.scrollY);
   await page.getByTestId('new-task').click();
 
-  // The new row's editor is the open one; it should be near the top of the
-  // viewport, not just barely scrolled into view at the bottom.
-  const editor = page.getByTestId('task-name-input');
-  await expect(editor).toBeVisible();
+  // The TITLE is what you type into, so the TITLE is what must sit at the
+  // top — on screen (y >= 0) and near it. The first version of this test
+  // asserted only y < 150, which a title scrolled OFF the top (negative y)
+  // also satisfies: that one-sided bound is exactly how the bug it was
+  // written for survived it (2026-08-06 report).
+  const title = page.getByTestId('task-name-input');
+  await expect(title).toBeVisible();
   await expect.poll(async () => {
-    const box = await editor.boundingBox();
-    return box ? Math.round(box.y) : 9999;
-  }, { message: 'new task should be scrolled to the top of the viewport' }).toBeLessThan(150);
+    const box = await title.boundingBox();
+    if (!box) return 'no box';
+    return box.y >= 0 && box.y < 150 ? 'at the top' : `y=${Math.round(box.y)}`;
+  }, { message: 'the new task title sits at the top of the viewport' }).toBe('at the top');
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+
+  /*
+    And the jump is ONE-SHOT. The reset used to live in a function nothing
+    called, so 'start' stuck for the rest of the visit and every later tap
+    jump-scrolled the tapped row to the top (caught by review with a live
+    probe: mid-screen row, y=406 → title at y=4). A tap must scroll only
+    the minimum.
+  */
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const midRow = page.getByText('filler 4', { exact: true });
+  const rowYBefore = (await midRow.boundingBox())!.y;
+  expect(rowYBefore).toBeGreaterThan(150); // genuinely mid-screen before the tap
+  await midRow.click();
+  await expect(page.getByTestId('task-name-input')).toBeVisible();
+  // Deliberately NOT a poll: proving "it does not move" needs the scroll to
+  // have already happened (or not). A poll-until-true samples BEFORE the
+  // requestAnimationFrame scroll and passes on the pre-scroll position —
+  // which is exactly how the first version of this assertion passed with the
+  // fix removed. Under automation motion is off, so the scroll is instant;
+  // 400ms is generous settle time.
+  await page.waitForTimeout(400);
+  const settled = (await page.getByTestId('task-name-input').boundingBox())!;
+  expect(Math.round(settled.y), 'a tapped row is not yanked to the top').toBeGreaterThan(60);
+});
+
+test('selecting notes text with the mouse does not lift the card', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Deskwork');
+  await addTask(page, 'write the report');
+  await addTask(page, 'file the report');
+
+  // Expand one and put some text in its notes.
+  await page.getByText('write the report', { exact: true }).click();
+  await page.getByTestId('task-notes-input').fill('a long description worth selecting');
+
+  /*
+    A mouse-drag ACROSS THE NOTES FIELD — the select-some-text gesture
+    (2026-08-06 report: it lifted the whole card). Synthetic mouse-type
+    PointerEvents, same as every drag spec here: a real mouse ride starves on
+    CI runners, and the handlers under test are pointer-event listeners.
+  */
+  const notes = page.getByTestId('task-notes-input');
+  const nb = (await notes.boundingBox())!;
+  // Down + move only — the pointer is still "held" when the assertion runs.
+  // (First draft dispatched pointerup in the same breath, and the drop clears
+  // the ghost either way: the assertion passed with the guard REMOVED, i.e.
+  // it proved nothing. The ghost only exists between move and up.)
+  await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y)!;
+    const base = { pointerId: 1, pointerType: 'mouse', button: 0, bubbles: true, cancelable: true };
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...base, clientX: x, clientY: y }));
+    window.dispatchEvent(new PointerEvent('pointermove', { ...base, clientX: x + 80, clientY: y }));
+  }, { x: nb.x + 10, y: nb.y + 10 });
+
+  await expect(page.locator('.ghost'), 'no drag ghost while selecting text').toHaveCount(0);
+  await expect(page.getByTestId('task-notes-input'), 'the editor survives').toBeVisible();
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, pointerType: 'mouse', bubbles: true }));
+  });
+
+  // TEETH the other way: the same gesture on a COLLAPSED row's body still
+  // starts the desktop drag-to-regroup — the guard must not over-exclude.
+  // Collapse first: the open editor pushes the second row below the fold, and
+  // elementFromPoint cannot see past the viewport's edge.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('task-notes-input')).toHaveCount(0);
+  const other = page.getByTestId(/^task-row-/).filter({ hasText: 'file the report' }).first();
+  const ob = (await other.boundingBox())!;
+  await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y)!;
+    const base = { pointerId: 2, pointerType: 'mouse', button: 0, bubbles: true, cancelable: true };
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...base, clientX: x, clientY: y }));
+    window.dispatchEvent(new PointerEvent('pointermove', { ...base, clientX: x, clientY: y + 60 }));
+  }, { x: ob.x + ob.width / 2, y: ob.y + ob.height / 2 });
+  await expect(page.locator('.ghost'), 'body-drag on a collapsed row still lifts').toHaveCount(1);
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 2, pointerType: 'mouse', bubbles: true }));
+  });
 });
 
 test('a timebox alarm fires from another screen, not just the home card', async ({ page }) => {

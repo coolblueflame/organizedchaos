@@ -22,7 +22,7 @@
     app.state.lists, lock.unlocked));
   const review = $derived(weekReview(plainTasks, clock.now, app.state.settings.rolloverHour));
 
-  const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const maxDay = $derived(Math.max(1, ...review.daily));
 
   const delta = $derived(review.completions - review.prevCompletions);
@@ -51,7 +51,7 @@
 
   <section class="panel hero" data-testid="week-hero">
     <span class="hero-num">{review.completions}</span>
-    <span class="hero-label">done since Monday</span>
+    <span class="hero-label">done since Sunday</span>
     {#if review.prevCompletions > 0 || review.completions > 0}
       <span class="delta" class:up={delta >= 0} data-testid="week-delta">
         {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} vs last week ({review.prevCompletions})

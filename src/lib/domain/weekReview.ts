@@ -1,6 +1,6 @@
 /**
  * The week in review (2026-07-30, from the approved idea shortlist): what this
- * app-week actually looked like, compared to the last one. Weeks start Monday
+ * app-week actually looked like, compared to the last one. Weeks start Sunday
  * and days roll at the app's rollover hour, matching completionCounts.
  */
 import { appDayKey } from './time';
@@ -8,9 +8,9 @@ import { estimateOutcome } from './stats';
 import { priorityRank, type Task } from './types';
 
 export interface WeekReview {
-  /** App-day keys, Monday first — index into `daily`. */
+  /** App-day keys, Sunday first — index into `daily`. */
   dayKeys: string[];
-  /** Completions per day, Mon..Sun of the current week. */
+  /** Completions per day, Sun..Sat of the current week. */
   daily: number[];
   completions: number;
   prevCompletions: number;
@@ -23,15 +23,15 @@ export interface WeekReview {
   topWins: Task[];
 }
 
-/** The Monday-started app-week day keys containing `now` (offsetWeeks back). */
+/** The Sunday-started app-week day keys containing `now` (offsetWeeks back). */
 function weekKeys(now: Date, rolloverHour: number, offsetWeeks: number): string[] {
   const todayKey = appDayKey(now, rolloverHour);
   const [y, m, d] = todayKey.split('-').map(Number);
   const anchor = new Date(y!, m! - 1, d!);
-  const mondayOffset = (anchor.getDay() + 6) % 7; // Mon=0 … Sun=6
+  const sundayOffset = anchor.getDay(); // Sun=0 … Sat=6
   const keys: string[] = [];
   for (let i = 0; i < 7; i += 1) {
-    const day = new Date(y!, m! - 1, d! - mondayOffset - offsetWeeks * 7 + i);
+    const day = new Date(y!, m! - 1, d! - sundayOffset - offsetWeeks * 7 + i);
     keys.push(
       `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`,
     );
