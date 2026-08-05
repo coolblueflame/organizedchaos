@@ -88,6 +88,10 @@
         the address bar (a monitor with an arrow), or use the <span class="mono">⋮</span>
         menu → <b>Install Organized Chaos</b>.</li>
       <li>Safari on macOS: <b>File</b> → <b>Add to Dock</b>.</li>
+      <li>Firefox can't install web apps from a manifest. On <b>Windows</b>,
+        Firefox 142+ can pin the tab to the taskbar ("Taskbar Tabs" — look for
+        the add-to-taskbar icon in the address bar); on a <b>Mac</b>, use
+        Safari's Add to Dock or Chrome's install button instead.</li>
       <li>Firefox doesn't install web apps; it'll keep working as a normal tab.</li>
     </ol>
   {/if}

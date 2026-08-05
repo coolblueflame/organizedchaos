@@ -353,7 +353,7 @@
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
-  <p class="tagline">// a todo list that brings order through chance</p>
+  <p class="tagline">// a todo list with loaded dice</p>
 
   <InstallBanner />
 

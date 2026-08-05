@@ -1,6 +1,6 @@
 # organized chaos
 
-**A todo list that brings order through chance.**
+**A todo list with loaded dice.**
 
 Organized Chaos is a minimalist, dark-IDE-themed todo app whose signature feature is the
 randomizer: one big button that looks at everything you could be doing, escalates priorities
