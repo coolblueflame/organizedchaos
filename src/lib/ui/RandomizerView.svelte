@@ -504,6 +504,11 @@
               <button class="filter-clear" data-testid="draw-filter-lists-all"
                 onclick={() => (omittedLists = [])}>all back on</button>
             {/if}
+            <!-- The one-list flow (2026-08-06 ask): all off, then tap the one
+                 you want back on — two taps to "just my Work list". -->
+            <button class="filter-clear" data-testid="draw-filter-lists-none"
+              onclick={() => (omittedLists = app.state.lists
+                .filter((l) => l.archived !== true).map((l) => l.id))}>all off</button>
           </div>
           <div class="filter-row chips">
             {#each shownLists as l (l.id)}

@@ -87,6 +87,31 @@ test('completing the current task invites the next roll, closing the loop', asyn
   await expect(page.getByTestId('current-task-idle')).toBeVisible();
 });
 
+test('"all off" plus one chip rolls from a single list', async ({ page }) => {
+  await seed(page, ['general noise']);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Work');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('only the work thing');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await page.getByTestId('draw-filters-toggle').click();
+  // Two taps to "just this list": everything off, then the one back on.
+  await page.getByTestId('draw-filter-lists-none').click();
+  await page.getByTestId(/^draw-filter-list-/).filter({ hasText: 'Work' }).click();
+  await expect(page.getByTestId('draw-card')).toContainText('only the work thing');
+  // And not by luck: repeated re-rolls never leave the list.
+  for (let i = 0; i < 3; i += 1) {
+    await page.getByTestId('draw-not-now').click();
+    const empty = await page.getByTestId('draw-empty').count();
+    if (empty) { await page.getByTestId('draw-reset-skips').click(); }
+    await expect(page.getByTestId('draw-card')).toContainText('only the work thing');
+  }
+});
+
 test('not now cycles to a different task; exhausting pool offers skip reset', async ({ page }) => {
   await seed(page, ['one', 'two']);
   await page.getByTestId('big-button').click();
