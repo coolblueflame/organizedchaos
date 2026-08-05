@@ -35,6 +35,12 @@ test('the how-to is reachable from settings and names the right platform', async
   await expect(page.getByTestId(steps)).toBeVisible();
   if (browserName === 'webkit') {
     await expect(page.getByTestId('install-steps-ios')).toContainText('Add to Home Screen');
+  } else {
+    // The desktop copy must SAY desktop things. Ben scanned for Dock/taskbar
+    // words on his Mac, found only "home screen" phrasing, and concluded the
+    // instructions didn't exist (2026-08-06) — they did, dressed as a phone's.
+    await expect(page.getByTestId('install-howto')).toContainText('install it as an app');
+    await expect(page.getByTestId('install-steps-desktop')).toContainText('Add to Dock');
   }
 
   await page.getByTestId('install-howto-close').click();

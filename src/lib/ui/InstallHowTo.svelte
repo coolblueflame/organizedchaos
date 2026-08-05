@@ -29,7 +29,7 @@
 
 <section class="sheet" data-testid="install-howto">
   <header>
-    <h2>add to your home screen</h2>
+    <h2>{install.platform === 'other' ? 'install it as an app' : 'add to your home screen'}</h2>
     <button class="x" data-testid="install-howto-close" onclick={onclose} aria-label="close">✕</button>
   </header>
 

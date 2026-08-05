@@ -108,13 +108,18 @@
       {#if install.installed}
         Running from your home screen — full screen, offline, and storage the browser
         is far less likely to clear.
+      {:else if install.platform === 'other'}
+        Install Organized Chaos as its own app — a Dock or taskbar icon, its own
+        window, no tab archaeology — and it works offline with sturdier storage.
       {:else}
         Add Organized Chaos to your home screen and it opens full screen, works offline,
         and gets sturdier storage for your tasks.
       {/if}
     </p>
     <button class="link" data-testid="install-howto-open" onclick={() => install.openHowTo()}>
-      {install.installed ? 'how installing works →' : 'how do I add it to my home screen? →'}
+      {install.installed ? 'how installing works →'
+        : install.platform === 'other' ? 'how do I install it on this computer? →'
+        : 'how do I add it to my home screen? →'}
     </button>
   </section>
 
