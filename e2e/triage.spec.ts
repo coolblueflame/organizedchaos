@@ -56,6 +56,25 @@ test('deliberately opening a task counts as the once-over', async ({ page }) => 
   await expect(page.getByTestId(`needs-review-${id}`)).toHaveCount(0);
 });
 
+test('the fill-in card can jump to the full editor when it lacks a field', async ({ page }) => {
+  await reset(page, 'triage');
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Triage');
+  await page.getByTestId('new-list-input').press('Enter');
+  const id = await addTask(page, 'needs the works');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-triage')).toContainText('needs the works');
+  await page.getByTestId('triage-open-details').click();
+
+  // Lands IN the list with this task's editor open — recurrence, rituals,
+  // timebox and the rest all live here. The deep link counts as reviewing.
+  await expect(page.getByTestId('task-name-input')).toHaveValue('needs the works');
+  await expect(page).toHaveURL(new RegExp(`/task/${id}$`));
+  await expect(page.getByTestId(`needs-review-${id}`)).toHaveCount(0);
+});
+
 test('the randomizer offers a fill-in prompt that clears the dot when done', async ({ page }) => {
   await reset(page, 'triage');
   await page.getByTestId('new-list').click();
@@ -70,6 +89,11 @@ test('the randomizer offers a fill-in prompt that clears the dot when done', asy
   await page.getByTestId('triage-estimate').fill('3');
   await page.getByTestId('triage-notes').fill('ring the shop first, they open at 9');
   await page.getByTestId('priority-high').click();
+  // Tags live on the card too now (2026-08-06 ask — a frequent triage edit).
+  await page.getByTestId('new-tag').click();
+  await page.getByTestId('new-tag-input').fill('phone-calls');
+  await page.getByTestId('new-tag-input').press('Enter');
+  await page.getByTestId('new-tag-done').click();
   await page.getByTestId('triage-done').click();
 
   // Falls through to a normal roll, and the task is triaged with its new values
@@ -81,6 +105,7 @@ test('the randomizer offers a fill-in prompt that clears the dot when done', asy
   // "3" comes back as "3h": the field shows the compact form of what was
   // stored, so an estimate reads the way a person would say it.
   await expect(page.getByTestId('task-estimate-input')).toHaveValue('3h');
+  await expect(page.getByTestId(/^tag-chip-/), 'the tag attached during triage').toContainText('phone-calls');
   await expect(page.getByTestId('task-notes-input'), 'the description written during triage')
     .toHaveValue('ring the shop first, they open at 9');
 });

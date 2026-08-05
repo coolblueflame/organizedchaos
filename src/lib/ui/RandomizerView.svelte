@@ -8,6 +8,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import EstimateField from './EstimateField.svelte';
+  import TagPicker from './TagPicker.svelte';
   import { navigate } from './router.svelte';
   import { drawTask, eligibleForDraw } from '../domain/randomizer';
   import { effectivePriority, isEscalated } from '../domain/priority';
@@ -113,6 +114,15 @@
   // Triage prompts: occasionally surface an untriaged task so the backlog gets
   // organized a bit at a time instead of in one grim pass. Once per visit.
   let triage = $state<Task | null>(null);
+
+  /** Same rule the sweep card and editor use: toggling adds or removes. */
+  function toggleTriageTag(tagId: string) {
+    if (!triage) return;
+    const tagIds = triage.tagIds.includes(tagId)
+      ? triage.tagIds.filter((id) => id !== tagId)
+      : [...triage.tagIds, tagId];
+    void app.patchTask(triage.id, { tagIds });
+  }
   let triageOffered = false;
 
   function maybeOfferTriage(): void {
@@ -371,6 +381,16 @@
               onchange={(hours) => void app.patchTask(triage!.id, { estimateHours: hours })} />
           </label>
         </div>
+        <!-- Tags inline (a frequent triage edit, 2026-08-06 ask), and the full
+             editor one tap away for everything the card doesn't carry —
+             recurrence, rituals, timebox, blocked-by. The deep link opens the
+             editor expanded and counts as reviewing, same as the current-task
+             card's jump. -->
+        <TagPicker selected={triage.tagIds} ontoggle={toggleTriageTag} />
+        <button class="triage-jump" data-testid="triage-open-details"
+          onclick={() => navigate({ name: 'list', id: triage!.listId, taskId: triage!.id })}>
+          ↗ open the full card
+        </button>
       </div>
     </section>
     <div class="actions">
@@ -601,6 +621,12 @@
     narrow screen in half squeezed it to a stub — the same failure the task
     editor had, fixed the same way.
   */
+  .triage-jump {
+    align-self: flex-end; background: none; border: none; cursor: pointer;
+    color: var(--acc-blue); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 2px 0;
+  }
+  @media (hover: hover) { .triage-jump:hover { text-decoration: underline; } }
   .triage-row { display: grid; grid-template-columns: 1fr; gap: 10px 12px; }
   @media (min-width: 440px) {
     .triage-row { grid-template-columns: 1fr 1fr; }
