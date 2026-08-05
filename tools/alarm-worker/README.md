@@ -36,19 +36,30 @@ notification states its own delivery time.
 
 ## Setup (Ben)
 
-1. **Create the Worker.** In the Cloudflare dashboard, Workers & Pages → Create
-   → Worker. Any name; the URL it gives you is what the app needs.
-2. **Bind the Durable Object.** Settings → Bindings → Durable Object, variable
-   name `TIMEBOX_ALARM`, class `TimeboxAlarm`. A migration declaring the new
-   class is required on first deploy — `wrangler` prompts for it.
-3. **Add three secrets** (Settings → Variables and Secrets):
-   - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` — the same pair the reminders
-     workflow uses, so pushes come from the identity the phone already trusts.
-     They live in the data repo's Action secrets.
-   - `ALARM_SECRET` — anything long and random. The app sends it as a bearer
-     token; without it the endpoint would let a stranger buzz your phone.
-4. **Paste the Worker URL and `ALARM_SECRET` into the app**, Settings → timebox
-   alarms.
+From this directory:
+
+```sh
+npm install
+npx wrangler login          # opens a browser once
+npx wrangler deploy         # creates the Worker and the Durable Object
+```
+
+`wrangler.toml` already declares the binding and the migration, so the deploy
+creates everything. Then three secrets:
+
+```sh
+npx wrangler secret put VAPID_PUBLIC_KEY    # same pair the reminders workflow
+npx wrangler secret put VAPID_PRIVATE_KEY   # uses — they live in the data
+                                            # repo's Action secrets
+npx wrangler secret put ALARM_SECRET        # anything long and random
+```
+
+The same VAPID pair matters: pushes then come from the identity your phone has
+already accepted. `ALARM_SECRET` is the bearer token the app sends — without
+it, a public URL would let a stranger buzz your phone.
+
+Finally, give me the Worker URL and the `ALARM_SECRET` and I will wire the app
+to it.
 
 Free plan is far more than enough: 100,000 requests/day against a few dozen.
 
@@ -71,11 +82,23 @@ there is never a window where a stale one could still fire.
 
 ## What is and is not verified
 
-Tested in the app's own suite: which alarms *should* exist for a given set of
-tasks, and the wording (`src/lib/domain/alarmPlan.ts`, 9 tests) — including
-that a locked list's task is never named, since this lands on a lock screen
-the PIN cannot gate.
+Tested in the app's own suite:
 
-**Not verified until deployed:** the push-sending call itself. It cannot run
-locally without real VAPID keys and a real subscription. Send one test timebox
-before trusting it with anything that matters.
+- which alarms *should* exist for a given set of tasks, and the wording
+  (`src/lib/domain/alarmPlan.ts`, 9 tests) — including that a locked list's
+  task is never named, since this lands on a lock screen the PIN cannot gate;
+- the Durable Object's own behaviour (`src/lib/domain/alarmWorker.test.ts`,
+  6 tests) against a fake that mimics the real storage API, schedule through
+  fire, cancel, and move.
+
+That second suite exists because reviewing this file before deploying it found
+two bugs, both of which would have failed **silently** — the alarm firing
+exactly on time and doing nothing:
+
+- the class constructor dropped `env`, where the VAPID keys live;
+- `storage.get(keys[])` returns a **Map**, and the code destructured it as if
+  it were an object, so every field read as `undefined`.
+
+**Still not verified until deployed:** the push-sending call itself, which
+needs real VAPID keys and a real subscription. Send one test timebox before
+trusting it with anything that matters.

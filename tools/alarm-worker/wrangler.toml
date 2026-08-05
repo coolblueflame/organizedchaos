@@ -1,0 +1,15 @@
+name = "organizedchaos-alarms"
+main = "worker.js"
+compatibility_date = "2026-08-05"
+
+[[durable_objects.bindings]]
+name = "TIMEBOX_ALARM"
+class_name = "TimeboxAlarm"
+
+# new_sqlite_classes, NOT new_classes: key-value-backed Durable Object
+# namespaces are no longer offered to accounts that do not already have one,
+# and the SQLite backend is what the free plan runs. Getting this wrong fails
+# at deploy rather than quietly, but it fails confusingly.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TimeboxAlarm"]
