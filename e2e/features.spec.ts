@@ -579,6 +579,37 @@ test('selecting notes text with the mouse does not lift the card', async ({ page
   });
 });
 
+test('cancelling a boxed task silences its alarm', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Boxed');
+  await addTask(page, 'abandoned work');
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await page.getByTestId('draw-accept').click();
+
+  await page.evaluate(() => {
+    (window as unknown as { __alarms: number }).__alarms = 0;
+    const w = window as unknown as { Notification: unknown };
+    w.Notification = class {
+      static permission = 'granted';
+      constructor() { (window as unknown as { __alarms: number }).__alarms += 1; }
+    };
+  });
+
+  await page.getByTestId('timebox-open').click();
+  await page.getByTestId('timebox-5').click();
+  // Put the task down — the ✕ on the card (2026-08-06 report: the alarm
+  // still fired later, for a task nobody was doing).
+  await page.getByTestId('current-clear').click();
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+
+  await page.clock.install();
+  await page.clock.fastForward('06:00');
+  await page.waitForTimeout(1500); // several watcher sweeps' worth
+  expect(await page.evaluate(() => (window as unknown as { __alarms: number }).__alarms),
+    'no alarm for a cancelled box').toBe(0);
+});
+
 test('a timebox alarm fires from another screen, not just the home card', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Boxed');

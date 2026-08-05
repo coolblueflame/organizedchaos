@@ -1035,6 +1035,15 @@ export class AppStore {
       startedAt,
       ...(minutes ? { timeboxEndsAt: Date.now() + minutes * 60_000 } : {}),
     });
+    // Displacement is a put-down for whoever was current: their box stops
+    // with their work, or its alarm would fire for a task nobody is doing.
+    const displaced = this.state.currentTask?.taskId;
+    if (displaced && displaced !== taskId) {
+      const d = this.state.tasks.find((x) => x.id === displaced);
+      if (d && !d.deleted && d.completedAt === undefined && d.timeboxEndsAt !== undefined) {
+        await this.patchTask(displaced, { timeboxEndsAt: undefined });
+      }
+    }
     const ref = { taskId, acceptedAt: Date.now() };
     const currentStamp = await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
@@ -1050,6 +1059,9 @@ export class AppStore {
   async sendNotToday(taskId: string): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === taskId);
     const priorSnooze = task?.notTodayUntil;
+    // Captured BEFORE any patch (the mirror mutates in place): snoozing a
+    // current task stops its box via clearCurrent, and undo puts it back.
+    const priorTimebox = task?.timeboxEndsAt;
     const priorCurrent = this.state.currentTask;
     const wasCurrent = priorCurrent?.taskId === taskId;
 
@@ -1060,7 +1072,10 @@ export class AppStore {
     this.fireEgg('drawSkipped');
 
     this.pushUndo(`Snoozed "${task?.name || 'task'}"`, async () => {
-      await this.patchTask(taskId, { notTodayUntil: priorSnooze });
+      await this.patchTask(taskId, {
+        notTodayUntil: priorSnooze,
+        ...(wasCurrent ? { timeboxEndsAt: priorTimebox } : {}),
+      });
       if (wasCurrent) {
         this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
         this.state.currentTask = priorCurrent;
@@ -1069,6 +1084,21 @@ export class AppStore {
   }
 
   async clearCurrent(): Promise<void> {
+    /*
+      Putting the task down stops its timebox — pauseWork's own principle:
+      the clock stops with the work. Without this, the card's ✕ left the box
+      ticking and the app-wide watcher (built precisely to fire on every
+      screen) faithfully alarmed for a task already walked away from
+      (2026-08-06 report). Guarded so completeTask's tail — which clears the
+      box itself first — costs no extra write here.
+    */
+    const prior = this.state.currentTask?.taskId;
+    if (prior) {
+      const t = this.state.tasks.find((x) => x.id === prior);
+      if (t && !t.deleted && t.completedAt === undefined && t.timeboxEndsAt !== undefined) {
+        await this.patchTask(prior, { timeboxEndsAt: undefined });
+      }
+    }
     const clearedStamp = await this.repo.setCurrentTask(null);
     this.state.currentTask = null;
     this.state.currentTaskUpdatedAt = clearedStamp;
