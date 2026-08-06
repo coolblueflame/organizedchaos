@@ -128,15 +128,29 @@ export const REGISTRY: EggDef[] = [
     cooldownMs: HOUR / 2, maxPerDay: 3,
     present: (c) => ({ kind: 'moment', moment: pick(MOMENTS, c.rng) }),
   },
-  // The slow-burn story: one beat per stage, days apart, only for engaged days.
+  // The slow-burn story: one beat per stage, days apart, only for engaged
+  // days. Retuned 2026-08-06 (Ben, 12 days / 235 completions / ONE beat):
+  // the flat weight-4 lottery paced the whole story across most of a year.
+  // Target: 2–3 beats in the first week so a new user learns something is
+  // coming, then at least one beat per week of regular use after that.
   ...STORY_BEATS.map((text, i): EggDef => ({
     id: `story-${i}`,
-    weight: 4,
+    // The first three beats are the hook and compete like headlines. Later
+    // beats start shy and lean on a pity clock: every silent day past the
+    // second adds real weight, so a busy week can't end without the story
+    // speaking (by day 6 it outweighs everything else in a typical roll).
+    weight: (c) => (i < 3
+      ? 34
+      : 8 + Math.min(88, Math.max(0, (c.daysSinceStoryBeat ?? 0) - 2) * 16)),
     triggers: ['appOpened', 'taskCompleted'],
     exactStoryStage: i,
+    // The per-id cooldown cannot space CONSECUTIVE beats (each stage is its
+    // own id) — the daysSinceStoryBeat gate below is what keeps two beats a
+    // real day apart now that hook weights make back-to-back wins likely.
     cooldownMs: 20 * HOUR,
     maxLifetime: 1,
-    condition: (c) => c.lifetimeCompletions >= 3,
+    condition: (c) => c.lifetimeCompletions >= 3
+      && (c.daysSinceStoryBeat === null || c.daysSinceStoryBeat >= 1),
     present: () => ({ kind: 'story', text, stage: i + 1 }),
   })),
   // Earned discoveries.

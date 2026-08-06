@@ -14,7 +14,21 @@ describe('registry shape', () => {
     const ids = REGISTRY.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const e of REGISTRY) {
-      expect(e.weight).toBeGreaterThan(0);
+      // Dynamic weights (the story's pity clock) must be sane at both ends
+      // of their input range; fixed weights just have to be positive.
+      if (typeof e.weight === 'function') {
+        const at = (days: number | null) => (e.weight as (c: unknown) => number)({
+          event: 'taskCompleted', completionsToday: 0, lifetimeCompletions: 0,
+          streakDays: 0, storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+          unlocks: [], daysSinceStoryBeat: days, now: new Date(), rng: Math.random,
+        });
+        expect(at(null)).toBeGreaterThan(0);
+        expect(at(0)).toBeGreaterThan(0);
+        expect(at(365)).toBeGreaterThan(0);
+        expect(at(365)).toBeLessThan(1000); // a pity clock, not a takeover
+      } else {
+        expect(e.weight).toBeGreaterThan(0);
+      }
       expect(e.triggers.length).toBeGreaterThan(0);
     }
   });
@@ -45,7 +59,7 @@ describe('registry shape', () => {
       const p = e.present({
         event: 'taskCompleted', completionsToday: 0, lifetimeCompletions: 0,
         streakDays: 0, storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
-        unlocks: [], now: new Date(), rng: Math.random,
+        unlocks: [], daysSinceStoryBeat: null, now: new Date(), rng: Math.random,
       });
       expect(p.kind).toBe('unlock');
       if (p.kind === 'unlock') expect(ids).toContain(p.unlockId);

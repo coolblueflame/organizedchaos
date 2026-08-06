@@ -26,6 +26,12 @@ export interface EggContext {
   triviaTotal: number;
   /** Already-earned unlock ids — lets unlock entries stay eligible until granted. */
   unlocks: string[];
+  /**
+   * Whole days since the last story beat was shown on this device, or null
+   * before the first one. Feeds the story's pity clock: the longer the story
+   * has been silent, the harder its next beat leans on the lottery.
+   */
+  daysSinceStoryBeat: number | null;
   now: Date;
   rng: () => number;
 }
@@ -46,8 +52,12 @@ export type Presentation =
 
 export interface EggDef {
   id: string;
-  /** Relative weight within the eligible set for one roll. */
-  weight: number;
+  /**
+   * Relative weight within the eligible set for one roll. A function makes
+   * it context-dependent — the story's pity clock is the reason this exists
+   * (a fixed weight either spams early users or starves patient ones).
+   */
+  weight: number | ((ctx: EggContext) => number);
   /**
    * Earned, deterministic entries (unlocks): once the condition is true they
    * fire on the very next matching event, skipping the chance roll and the
@@ -221,6 +231,13 @@ export class EggEngine {
     const day = appDayKey(now, this.rolloverHour);
     if (event === 'taskCompleted') this.touchStreak(day);
 
+    // When did a story beat last show? Derived from the seen map (each beat
+    // is its own entry), so it syncs and survives restarts for free.
+    let lastStoryAt = 0;
+    for (const [id, row] of Object.entries(this.state.seen)) {
+      if (id.startsWith('story-') && row.lastAt > lastStoryAt) lastStoryAt = row.lastAt;
+    }
+
     const ctx: EggContext = {
       event,
       screen: partial.screen,
@@ -231,6 +248,9 @@ export class EggEngine {
       triviaCorrect: this.state.trivia.correct,
       triviaTotal: this.state.trivia.total,
       unlocks: [...this.state.unlocks],
+      daysSinceStoryBeat: lastStoryAt === 0
+        ? null
+        : Math.floor((now.getTime() - lastStoryAt) / 86_400_000),
       now,
       rng: this.rng,
     };
@@ -270,11 +290,12 @@ export class EggEngine {
       pool = eligible;
     }
 
-    const total = pool.reduce((s, e) => s + e.weight, 0);
+    const weightOf = (e: EggDef) => (typeof e.weight === 'function' ? e.weight(ctx) : e.weight);
+    const total = pool.reduce((s, e) => s + weightOf(e), 0);
     let roll = this.rng() * total;
     let chosen = pool[pool.length - 1]!;
     for (const egg of pool) {
-      roll -= egg.weight;
+      roll -= weightOf(egg);
       if (roll <= 0) { chosen = egg; break; }
     }
 

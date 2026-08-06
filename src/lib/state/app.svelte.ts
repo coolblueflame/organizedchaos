@@ -160,7 +160,7 @@ export class AppStore {
           completionsToday: counts.today, lifetimeCompletions: counts.lifetime,
           streakDays: this.eggs.streakDays, storyStage: this.eggs.storyStage,
           triviaCorrect: this.eggs.triviaStats.correct, triviaTotal: this.eggs.triviaStats.total,
-          unlocks: this.eggs.unlocks, now: new Date(), rng: Math.random,
+          unlocks: this.eggs.unlocks, daysSinceStoryBeat: null, now: new Date(), rng: Math.random,
         }));
       }
       return;
