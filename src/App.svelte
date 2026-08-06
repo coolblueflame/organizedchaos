@@ -1,7 +1,7 @@
 <!-- Router shell: boot splash until the store hydrates, then the active screen. -->
 <script lang="ts">
   import { app } from './lib/state/app.svelte';
-  import { liveRoute, navigate, router } from './lib/ui/router.svelte';
+  import { liveRoute, navigate, parentOf, router } from './lib/ui/router.svelte';
   import { nextRolloverTs } from './lib/domain/time';
   import { toast } from './lib/ui/toast.svelte';
   import { searchQuery } from './lib/ui/searchState.svelte';
@@ -124,6 +124,27 @@
         // route is still the OLD screen (hashchange is async).
         if (liveRoute().name !== 'search') searchQuery.beginFresh();
         navigate({ name: 'search' });
+        return;
+      }
+
+      // Escape = one layer up, and only ONE layer per press (2026-08-05 ask).
+      // This runs LAST in the bubble (window, after every element and
+      // document listener), so anything nearer the user — an open editor
+      // (dismiss.ts), quick add, a settings sheet — closes itself first and
+      // consumes the press via preventDefault/stopPropagation. Only a press
+      // nothing else wanted walks the route toward home.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        if (typing) {
+          // A bare focused field with no layer above it: Escape just puts
+          // the focus down (the field's own handlers already ran).
+          (e.target as HTMLElement).blur();
+          return;
+        }
+        const parent = parentOf(liveRoute());
+        if (parent) {
+          e.preventDefault();
+          navigate(parent);
+        }
       }
     };
     window.addEventListener('keydown', onKey);

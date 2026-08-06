@@ -74,6 +74,20 @@ function toHash(r: Route): string {
   }
 }
 
+/**
+ * One Escape = one step toward home (2026-08-05 ask). Mirrors where each
+ * screen's ‹ button points, so the key and the button never disagree:
+ * import's ‹ returns to settings; every other screen's ‹ (tags included —
+ * checked, not assumed) goes home, which itself has nowhere further up.
+ */
+export function parentOf(route: Route): Route | null {
+  switch (route.name) {
+    case 'home': return null;
+    case 'import': return { name: 'settings' };
+    default: return { name: 'home' };
+  }
+}
+
 class Router {
   current: Route = $state({ name: 'home' });
 

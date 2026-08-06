@@ -46,6 +46,10 @@ export function closeOnOutsideOrEscape(isOpen: () => boolean, close: () => void)
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || !isOpen()) return;
+    // Consumed: Escape means "one layer per press", and the app-level
+    // fallback (App.svelte navigates a layer up) checks defaultPrevented to
+    // know this press already closed something.
+    e.preventDefault();
     flushFocus();
     close();
   };

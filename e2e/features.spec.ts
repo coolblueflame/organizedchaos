@@ -1510,6 +1510,43 @@ test('a ritual already done today still completes again from the current card', 
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
 
+test('Escape peels one layer per press: editor, then screen, then nothing past home', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Layers');
+  await addTask(page, 'deep thing');
+
+  // Editor open but focus resting on the body (a scroll put it down) — the
+  // sharpest case: the field's typing guard can't mask a double-peel here,
+  // only dismiss.ts consuming the press keeps the screen still.
+  await page.getByText('deep thing', { exact: true }).click();
+  await expect(page.getByTestId('task-name-input')).toBeVisible();
+  await page.getByTestId('task-name-input').blur();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
+  // Settle first: "did NOT navigate" read too early is always true — an
+  // un-consumed press closes AND navigates, and the assertion must land
+  // after that second half would have.
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('new-task')).toBeVisible(); // still on the list
+
+  // Nothing left to close: the next press leaves for home.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('new-list')).toBeVisible();
+
+  // Home has no further up — settle, then confirm nothing moved.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  await expect(page.getByTestId('new-list')).toBeVisible();
+
+  // Import's ‹ points at settings, so Escape does too — then home.
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-import').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('settings-legend')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('new-list')).toBeVisible();
+});
+
 test('a new list files under Unsorted, and says so while you type', async ({ page }) => {
   await reset(page);
   await page.getByTestId('new-list').click();
