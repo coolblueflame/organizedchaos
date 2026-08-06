@@ -245,6 +245,13 @@ export interface Settings {
    */
   alarmWorkerUrl?: string;
   alarmWorkerSecret?: string;
+  /**
+   * Self-hosters only: overrides the app's built-in VAPID public key when
+   * subscribing to push. Subscriptions are cryptographically bound to this
+   * key, so it must match the private key on YOUR reminder workflow / alarm
+   * Worker — and changing it means re-enabling reminders on every device.
+   */
+  vapidPublicKey?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings =

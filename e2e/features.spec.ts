@@ -1399,3 +1399,38 @@ test('"now" filters the priority screen to what is actually available', async ({
   await page.getByTestId('sort-priority').click();
   await expect(page.getByTestId('sort-available-now')).toContainText('● now');
 });
+
+test('settings: sections read in the agreed order and the alarm secret is write-only', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('settings-link').click();
+  await expect(page.locator('main h2').first()).toHaveText('this device');
+
+  const heads = await page.locator('main h2').allTextContents();
+  const idx = (t: string) => heads.indexOf(t);
+  expect(idx('what the symbols mean')).toBe(idx('sync') - 1);
+  expect(idx('locked lists')).toBe(idx('sync') + 1);
+  expect(heads[heads.length - 1]).toBe('backup & data');
+
+  // The alarm pane only exists where push does — guard, then bite.
+  if (await page.getByTestId('settings-alarms').isVisible()) {
+    expect(idx('timebox alarms')).toBe(idx('morning reminders') + 1);
+
+    // Write-only: saving a secret must leave the input EMPTY — the stored
+    // value may never ride back into the DOM where devtools could read it.
+    const secret = page.getByTestId('alarm-secret');
+    await secret.fill('a-very-secret-bearer-token');
+    await secret.blur();
+    await expect(secret).toHaveValue('');
+    await expect(secret).toHaveAttribute('placeholder', /saved ✓/);
+
+    // Survives reload as "saved", still without surfacing the value.
+    await page.reload();
+    const after = page.getByTestId('alarm-secret');
+    await expect(after).toHaveAttribute('placeholder', /saved ✓/);
+    await expect(after).toHaveValue('');
+
+    // And it can be forgotten.
+    await page.getByTestId('alarm-secret-clear').click();
+    await expect(after).toHaveAttribute('placeholder', /ALARM_SECRET/);
+  }
+});

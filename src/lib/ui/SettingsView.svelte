@@ -63,7 +63,7 @@
     reminderBusy = true;
     reminderError = '';
     try {
-      const sub = await subscribePush();
+      const sub = await subscribePush(app.state.settings.vapidPublicKey?.trim() || undefined);
       await app.saveReminderSubscription(sub, deviceLabel(), true);
       remindersOn = true;
     } catch (err) {
@@ -123,6 +123,38 @@
     </button>
   </section>
 
+  <section class="group" data-testid="settings-legend">
+    <h2>what the symbols mean</h2>
+    <details class="legend">
+      <summary>the full legend</summary>
+      <h3>on tasks</h3>
+      <ul>
+        <li><span class="l-prio max"></span><span class="l-prio high"></span><span class="l-prio medium"></span><span class="l-prio low"></span><span class="l-prio someday"></span>
+          priority: magenta MAX · orange high · green medium · blue low · grey someday</li>
+        <li><span class="l-badge">NEW</span> not triaged yet — open it or set any field</li>
+        <li><Glyph name="escalate" size={11} /> a deadline has escalated its effective priority</li>
+        <li><Glyph name="play" size={11} /> in progress — the clock may be running</li>
+        <li><Glyph name="blocked" size={11} /> waiting on another task; the randomizer skips it</li>
+        <li><Glyph name="moon" size={11} /> snoozed — out of the draw until it wakes</li>
+        <li><Glyph name="period" size={11} /> daily ritual: magenta = window open now · green = done today · grey = waiting</li>
+        <li><Glyph name="timebox" size={11} /> starts a countdown when accepted</li>
+        <li><Glyph name="notes" size={11} /> has a description — expand to read it</li>
+        <li><Glyph name="box-checked" size={11} /> n/m — a checklist inside, ticked so far</li>
+        <li><span class="l-text">⧗</span> time actually tracked on it</li>
+        <li><span class="l-text">#N</span> its place in today's queue</li>
+        <li>coloured words at the row's end are its tags (first three, then +n)</li>
+      </ul>
+      <h3>on lists</h3>
+      <ul>
+        <li><Glyph name="dice" size={11} /> inside its eligible hours — the randomizer draws from it</li>
+        <li><Glyph name="moon" size={11} /> outside its hours — asleep until its window</li>
+        <li><Glyph name="bolt" size={11} /> MAX-priority tasks get through even while asleep</li>
+        <li>the thin bar under a list = how much of the heaviest list's load it carries</li>
+        <li><span class="l-text">✦</span> summoned by the dice — a list the app itself made</li>
+      </ul>
+    </details>
+  </section>
+
   <section class="group">
     <h2>sync</h2>
     {#if app.syncStatus === 'disabled'}
@@ -156,67 +188,6 @@
       </div>
     {/if}
   </section>
-
-  {#if pushSupported()}
-    <section class="group" data-testid="settings-reminders">
-      <h2>morning reminders</h2>
-      <p class="hint">
-        A daily push when deadlines are due or overdue — sent each morning by
-        your own data repo's free CI. No server anywhere.
-      </p>
-      {#if app.syncStatus === 'disabled'}
-        <p class="hint">connect sync above first — reminders ride on the same repo.</p>
-      {:else if remindersOn === null}
-        <p class="hint">checking this device…</p>
-      {:else if remindersOn}
-        <p class="status">this device is registered ✓</p>
-        <button data-testid="reminders-disable" disabled={reminderBusy} onclick={() => void disableReminders()}>
-          turn off on this device
-        </button>
-      {:else}
-        <button class="primary" data-testid="reminders-enable" disabled={reminderBusy}
-          onclick={() => void enableReminders()}>
-          enable on this device
-        </button>
-      {/if}
-      {#if reminderError}<p class="error">{reminderError}</p>{/if}
-    </section>
-  {/if}
-
-  <section class="group">
-    <h2>backup & data</h2>
-    <button data-testid="settings-export" onclick={exportBackup} class="with-glyph"><Glyph name="install" size={11} /> export everything as JSON</button>
-    <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })} class="with-glyph"><Glyph name="upload" size={11} /> import from Things</button>
-    <button data-testid="settings-tags" onclick={() => navigate({ name: 'tags' })}>manage tags</button>
-    <p class="hint">device storage:
-      {#if app.persistentStorage === 'granted'}persistent ✓ (the browser won't evict your data)
-      {:else if app.persistentStorage === 'denied'}best-effort — install to the home screen to lock it in
-      {:else if app.persistentStorage === 'unsupported'}best-effort (browser doesn't support persistence)
-      {:else}checking…{/if}
-    </p>
-    <p class="hint">offline:
-      {#if offlineReady}ready ✓ — the app opens and works without a connection; changes sync when you're back online
-      {:else}not cached yet on this device — open it once online (or install it) first{/if}
-    </p>
-  </section>
-
-  {#if pushSupported()}
-    <section class="group" data-testid="settings-alarms">
-      <h2>timebox alarms</h2>
-      <p class="hint">A tiny scheduler (your own Cloudflare Worker — see
-        <code>tools/alarm-worker</code>) pushes the alarm at the exact second,
-        even with the phone locked in a pocket. Leave empty and timeboxes work
-        exactly as they always have.</p>
-      <label><span>worker url</span>
-        <input data-testid="alarm-url" placeholder="https://…workers.dev"
-          value={app.state.settings.alarmWorkerUrl ?? ''}
-          onchange={(e) => setting({ alarmWorkerUrl: e.currentTarget.value.trim() || undefined })} /></label>
-      <label><span>alarm secret</span>
-        <input data-testid="alarm-secret" type="password" placeholder="the ALARM_SECRET you set"
-          value={app.state.settings.alarmWorkerSecret ?? ''}
-          onchange={(e) => setting({ alarmWorkerSecret: e.currentTarget.value.trim() || undefined })} /></label>
-    </section>
-  {/if}
 
   <section class="group" data-testid="settings-privacy">
     <h2>locked lists</h2>
@@ -253,37 +224,70 @@
     {/if}
   </section>
 
-  <section class="group" data-testid="settings-legend">
-    <h2>what the symbols mean</h2>
-    <details class="legend">
-      <summary>the full legend</summary>
-      <h3>on tasks</h3>
-      <ul>
-        <li><span class="l-prio max"></span><span class="l-prio high"></span><span class="l-prio medium"></span><span class="l-prio low"></span><span class="l-prio someday"></span>
-          priority: magenta MAX · orange high · green medium · blue low · grey someday</li>
-        <li><span class="l-badge">NEW</span> not triaged yet — open it or set any field</li>
-        <li><Glyph name="escalate" size={11} /> a deadline has escalated its effective priority</li>
-        <li><Glyph name="play" size={11} /> in progress — the clock may be running</li>
-        <li><Glyph name="blocked" size={11} /> waiting on another task; the randomizer skips it</li>
-        <li><Glyph name="moon" size={11} /> snoozed — out of the draw until it wakes</li>
-        <li><Glyph name="period" size={11} /> daily ritual: magenta = window open now · green = done today · grey = waiting</li>
-        <li><Glyph name="timebox" size={11} /> starts a countdown when accepted</li>
-        <li><Glyph name="notes" size={11} /> has a description — expand to read it</li>
-        <li><Glyph name="box-checked" size={11} /> n/m — a checklist inside, ticked so far</li>
-        <li><span class="l-text">⧗</span> time actually tracked on it</li>
-        <li><span class="l-text">#N</span> its place in today's queue</li>
-        <li>coloured words at the row's end are its tags (first three, then +n)</li>
-      </ul>
-      <h3>on lists</h3>
-      <ul>
-        <li><Glyph name="dice" size={11} /> inside its eligible hours — the randomizer draws from it</li>
-        <li><Glyph name="moon" size={11} /> outside its hours — asleep until its window</li>
-        <li><Glyph name="bolt" size={11} /> MAX-priority tasks get through even while asleep</li>
-        <li>the thin bar under a list = how much of the heaviest list's load it carries</li>
-        <li><span class="l-text">✦</span> summoned by the dice — a list the app itself made</li>
-      </ul>
-    </details>
-  </section>
+  {#if pushSupported()}
+    <section class="group" data-testid="settings-reminders">
+      <h2>morning reminders</h2>
+      <p class="hint">
+        A daily push when deadlines are due or overdue — sent each morning by
+        your own data repo's free CI. No server anywhere.
+      </p>
+      {#if app.syncStatus === 'disabled'}
+        <p class="hint">connect sync above first — reminders ride on the same repo.</p>
+      {:else if remindersOn === null}
+        <p class="hint">checking this device…</p>
+      {:else if remindersOn}
+        <p class="status">this device is registered ✓</p>
+        <button data-testid="reminders-disable" disabled={reminderBusy} onclick={() => void disableReminders()}>
+          turn off on this device
+        </button>
+      {:else}
+        <button class="primary" data-testid="reminders-enable" disabled={reminderBusy}
+          onclick={() => void enableReminders()}>
+          enable on this device
+        </button>
+      {/if}
+      {#if reminderError}<p class="error">{reminderError}</p>{/if}
+      <details>
+        <summary class="hint">self-hosting? use your own push key</summary>
+        <p class="hint">Push subscriptions are tied to a VAPID key pair. Empty,
+          the app's built-in public key is used. Running your own reminder
+          workflow or alarm Worker means minting your own pair — paste its
+          public half here, then re-enable reminders on each device.</p>
+        <input data-testid="vapid-override" placeholder="B… (87 characters)"
+          value={app.state.settings.vapidPublicKey ?? ''}
+          onchange={(e) => setting({ vapidPublicKey: e.currentTarget.value.trim() || undefined })} />
+      </details>
+    </section>
+
+    <section class="group" data-testid="settings-alarms">
+      <h2>timebox alarms</h2>
+      <p class="hint">A tiny scheduler that pushes your timebox alarm at the
+        exact second, even with your phone locked in a pocket. Leave this empty
+        and timeboxes still work whenever the app is open. See
+        <a href="https://github.com/coolblueflame/organizedchaos/tree/main/tools/alarm-worker"
+          target="_blank" rel="noopener noreferrer">the GitHub repo</a>
+        for setup instructions — a free Cloudflare account is all it takes.</p>
+      <label><span>worker url</span>
+        <input data-testid="alarm-url" placeholder="https://…workers.dev"
+          value={app.state.settings.alarmWorkerUrl ?? ''}
+          onchange={(e) => setting({ alarmWorkerUrl: e.currentTarget.value.trim() || undefined })} /></label>
+      <label><span>alarm secret</span>
+        <!-- Write-only on purpose: the input never carries the stored secret,
+             so flipping its type in devtools (or a shoulder-surfer during a
+             screen share) reads nothing back out. -->
+        <input data-testid="alarm-secret" type="password" autocomplete="off"
+          placeholder={app.state.settings.alarmWorkerSecret ? 'saved ✓ — paste a new one to replace' : 'the ALARM_SECRET on your Worker'}
+          onchange={(e) => {
+            const v = e.currentTarget.value.trim();
+            if (v) setting({ alarmWorkerSecret: v });
+            e.currentTarget.value = '';
+          }} /></label>
+      {#if app.state.settings.alarmWorkerSecret}
+        <button class="link" data-testid="alarm-secret-clear"
+          onclick={() => setting({ alarmWorkerSecret: undefined })}>forget the saved secret</button>
+      {/if}
+    </section>
+  {/if}
 
   <section class="group">
     <h2>tuning</h2>
@@ -299,6 +303,23 @@
     <label class="toggle"><span>auto-select the next task when you complete the current one</span>
       <input type="checkbox" data-testid="settings-autoselect" checked={app.state.settings.autoSelectNext}
         onchange={(e) => setting({ autoSelectNext: e.currentTarget.checked })} /></label>
+  </section>
+
+  <section class="group">
+    <h2>backup & data</h2>
+    <button data-testid="settings-export" onclick={exportBackup} class="with-glyph"><Glyph name="install" size={11} /> export everything as JSON</button>
+    <button data-testid="settings-import" onclick={() => navigate({ name: 'import' })} class="with-glyph"><Glyph name="upload" size={11} /> import from Things</button>
+    <button data-testid="settings-tags" onclick={() => navigate({ name: 'tags' })}>manage tags</button>
+    <p class="hint">device storage:
+      {#if app.persistentStorage === 'granted'}persistent ✓ (the browser won't evict your data)
+      {:else if app.persistentStorage === 'denied'}best-effort — install to the home screen to lock it in
+      {:else if app.persistentStorage === 'unsupported'}best-effort (browser doesn't support persistence)
+      {:else}checking…{/if}
+    </p>
+    <p class="hint">offline:
+      {#if offlineReady}ready ✓ — the app opens and works without a connection; changes sync when you're back online
+      {:else}not cached yet on this device — open it once online (or install it) first{/if}
+    </p>
   </section>
 
   <p class="about">organized chaos v{__APP_VERSION__} — a todo list with loaded dice</p>
@@ -345,6 +366,7 @@
     text-transform: uppercase; letter-spacing: 0.1em; margin: 0;
   }
   .hint, .status { color: var(--dim); font-size: 0.8rem; margin: 0; line-height: 1.5; }
+  .hint a { color: var(--acc-blue); }
   .status b.idle { color: var(--acc-green); }
   .status b.syncing { color: var(--acc-cyan); }
   .status b.error { color: var(--acc-magenta); }

@@ -16,8 +16,8 @@ export const VAPID_PUBLIC_KEY =
   'BAKBna8PAb-a0spGjjSJ3kWJ_J6AT_cm48fnWggS1NcCmOIASbCyJFR6vG7F-h0W17KNo8OMV0lVL8lldmIW8LU';
 
 /** PushManager wants the key as raw bytes, not base64url. */
-function applicationServerKey(): Uint8Array {
-  const raw = atob(VAPID_PUBLIC_KEY.replace(/-/g, '+').replace(/_/g, '/'));
+function applicationServerKey(key: string): Uint8Array {
+  const raw = atob(key.replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
@@ -32,14 +32,18 @@ export async function currentPushSubscription(): Promise<PushSubscription | null
   return (await reg?.pushManager.getSubscription()) ?? null;
 }
 
-/** Ask permission (must be inside a user gesture) and subscribe this device. */
-export async function subscribePush(): Promise<PushSubscription> {
+/**
+ * Ask permission (must be inside a user gesture) and subscribe this device.
+ * Self-hosters pass their own public key (Settings → morning reminders);
+ * everyone else gets the built-in pair.
+ */
+export async function subscribePush(publicKey: string = VAPID_PUBLIC_KEY): Promise<PushSubscription> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('notification permission was not granted');
   const reg = await navigator.serviceWorker.ready;
   return reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: applicationServerKey() as BufferSource,
+    applicationServerKey: applicationServerKey(publicKey) as BufferSource,
   });
 }
 

@@ -34,34 +34,66 @@ measured in hours rather than minutes, Low Power Mode, and poor signal. Fire a
 probe any time with the `ping` mode of the reminders workflow — the
 notification states its own delivery time.
 
-## Setup (Ben)
+## Setup
 
-From this directory:
+You will end up with: a free Cloudflare account running this Worker, a key
+pair of your own, and two values pasted into the app's Settings. Budget
+fifteen minutes. The free plan is far more than enough — 100,000
+requests/day against the few dozen this uses.
+
+**1. Make a Cloudflare account.** Sign up at
+<https://dash.cloudflare.com/sign-up> (free plan; no domain or credit card
+needed). Workers and Durable Objects are included.
+
+**2. Deploy the Worker.** Clone this repo, then from this directory:
 
 ```sh
 npm install
-npx wrangler login          # opens a browser once
+npx wrangler login          # opens a browser once, authorizes the CLI
 npx wrangler deploy         # creates the Worker and the Durable Object
 ```
 
 `wrangler.toml` already declares the binding and the migration, so the deploy
-creates everything. Then three secrets:
+creates everything. Note the URL it prints
+(`https://organizedchaos-alarms.<your-subdomain>.workers.dev`).
+
+**3. Mint your keys.** Web push proves the sender's identity with a VAPID
+key pair; the pair is yours, generated locally:
 
 ```sh
-npx wrangler secret put VAPID_PUBLIC_KEY    # same pair the reminders workflow
-npx wrangler secret put VAPID_PRIVATE_KEY   # uses — they live in the data
-                                            # repo's Action secrets
-npx wrangler secret put ALARM_SECRET        # anything long and random
+npx web-push generate-vapid-keys    # prints a public and a private key
+openssl rand -base64 32             # and one long random ALARM_SECRET
 ```
 
-The same VAPID pair matters: pushes then come from the identity your phone has
-already accepted. `ALARM_SECRET` is the bearer token the app sends — without
-it, a public URL would let a stranger buzz your phone.
+**4. Give them to the Worker** (each command prompts for its value):
 
-Finally, give me the Worker URL and the `ALARM_SECRET` and I will wire the app
-to it.
+```sh
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler secret put ALARM_SECRET
+```
 
-Free plan is far more than enough: 100,000 requests/day against a few dozen.
+`ALARM_SECRET` is the bearer token the app will send — without it, a public
+URL would let a stranger buzz your phone. The private key never goes
+anywhere else.
+
+**5. Point the app at it.** In Organized Chaos on the device that should
+ring:
+
+- Settings → **morning reminders** → *self-hosting? use your own push key* →
+  paste the **public** key, then enable (or disable and re-enable)
+  reminders on that device. Push subscriptions are cryptographically bound
+  to the key they were created under, so this step is what lets *your*
+  Worker send to *your* phone.
+- Settings → **timebox alarms** → paste the Worker URL and the
+  `ALARM_SECRET`. These sync, so entering them once is enough.
+
+**6. Trust, then verify.** Start a short timebox, lock the phone, put it in
+a pocket. The push should land within a second of the box expiring.
+
+The same key pair can also power the morning digest — a scheduled GitHub
+Action in your own sync repo running `tools/reminders/send.mjs` with the
+pair in its Action secrets (see `tools/reminders/`).
 
 ## The contract
 
