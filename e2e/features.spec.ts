@@ -1510,6 +1510,34 @@ test('a ritual already done today still completes again from the current card', 
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
 
+test('the way back stays on screen: headers stick through a deep scroll', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Long Haul');
+  await page.getByTestId('back').click();
+  const listId = (await page.getByTestId(/^list-row-/).first().getAttribute('data-testid'))!
+    .replace('list-row-', '');
+  await seedTasksDirect(page, listId, Array.from({ length: 80 }, (_, i) => ({
+    id: `stick-${i}`, name: `errand ${i}`, priority: 'medium',
+  })));
+  await page.goto(`./#/list/${listId}`);
+  await page.reload(); // IndexedDB fixtures need a real reload to load
+
+  await expect(page.getByText('errand 0', { exact: true })).toBeVisible();
+  // wheel() dispatches and returns — WAIT for the scroll to actually land,
+  // or the position reads below happen at scrollY 0 and prove nothing
+  // (toBeVisible cannot help here either: offscreen elements count as
+  // "visible" to Playwright).
+  await page.mouse.wheel(0, 4000);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(2000);
+  // Deep in the list, the ‹ is still pinned inside the viewport's top band…
+  const box = (await page.getByTestId('back').boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeLessThan(80);
+  // …and it still works from down here.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('new-list')).toBeVisible();
+});
+
 test('Escape peels one layer per press: editor, then screen, then nothing past home', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Layers');

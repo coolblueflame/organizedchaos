@@ -62,6 +62,30 @@ body {
 }
 
 /*
+ * Screen headers stick (2026-08-06 experiment, Ben's pick over a home
+ * button): deep in a long list the ‹ is the only visible way back, so it
+ * stays on screen. `main > header` is every route screen and nothing else —
+ * sheets (quick add, list settings, the how-tos) use section headers and
+ * keep their own behaviour; home has no header at all.
+ *
+ * The negative margin + padding pair covers the notch strip: body pays the
+ * safe-area inset as padding, and a sticky bar that didn't reclaim it would
+ * float below the status bar with scrolled rows peeking through above it.
+ * z-index sits over row content and under every overlay (bulk bar 120,
+ * sheets 200+).
+ */
+main > header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bg0);
+  margin-top: calc(-1 * env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+/*
  * iOS zooms the whole page in whenever a focused field's text is smaller than
  * 16px, then leaves you scrolled sideways. The app's type scale is deliberately
  * smaller than that, so on touch devices the fields — and only the fields —
