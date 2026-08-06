@@ -1434,3 +1434,41 @@ test('settings: sections read in the agreed order and the alarm secret is write-
     await expect(after).toHaveAttribute('placeholder', /ALARM_SECRET/);
   }
 });
+
+test('redo brings back what undo took, until a fresh action forks history', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Redoable');
+  await addTask(page, 'flip me');
+  await addTask(page, 'bystander');
+
+  const flip = page.getByTestId(/^task-row-/).filter({ hasText: 'flip me' }).first();
+  const flipId = (await flip.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${flipId}`).click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+
+  // Take it back…
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
+
+  // …then change your mind again…
+  await page.keyboard.press('Control+Shift+z');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+
+  // …and the redo re-armed the undo: one more Cmd+Z restores it once more.
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(2);
+
+  // A fresh action forks history: complete the OTHER task, after which redo
+  // must NOT resurrect the undone completion of the first.
+  const by = page.getByTestId(/^task-row-/).filter({ hasText: 'bystander' }).first();
+  const byId = (await by.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${byId}`).click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+
+  await page.keyboard.press('Control+Shift+z');
+  // Settle-then-assert (a poll passes before a wrong redo lands): a redo that
+  // wrongly fired would complete "flip me" too and drop the count to 0.
+  await page.waitForTimeout(350);
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+  await expect(page.getByText('flip me', { exact: true })).toBeVisible();
+});

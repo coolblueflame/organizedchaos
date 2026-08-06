@@ -373,7 +373,7 @@ export class AppStore {
     // Undo armed BEFORE the mutation (the mirror clears synchronously inside
     // writeQueue, so a Cmd+Z can land while the disk write is still in flight —
     // the same ordering completeTask had to learn three times).
-    this.pushUndo('Cleared the queue', () => this.writeQueue(prior));
+    this.pushUndo('Cleared the queue', () => this.writeQueue(prior), () => this.writeQueue([]));
     await this.writeQueue([]);
   }
 
@@ -452,6 +452,25 @@ export class AppStore {
     const openIds = this.state.tasks
       .filter((t) => t.listId === id && t.completedAt === undefined)
       .map((t) => t.id);
+    const title = this.state.lists.find((l) => l.id === id)?.title;
+    await this.deleteListSilently(id, openIds);
+    this.pushUndo(`Deleted list "${title || 'list'}"`,
+      () => this.restoreList(id, openIds),
+      // The captured openIds bound what a redo may take — but filtered to
+      // what is STILL open when it runs: a completion that synced in from
+      // another device between the undo and the redo is history, and history
+      // survives list deletion (spec §6). Without the filter, the redo's
+      // tombstone would out-stamp the remote completion and erase it
+      // everywhere.
+      () => this.deleteListSilently(id, openIds.filter((tid) => {
+        const t = this.state.tasks.find((x) => x.id === tid);
+        return t !== undefined && !t.deleted && t.completedAt === undefined;
+      })));
+    return openIds;
+  }
+
+  /** The deletion itself, shared by the action and its redo. */
+  private async deleteListSilently(id: string, openIds: string[]): Promise<void> {
     // Silent per task — the list-level undo puts the whole thing back at once.
     for (const taskId of openIds) await this.removeTask(taskId, { silent: true });
     const list = this.state.lists.find((l) => l.id === id);
@@ -459,8 +478,6 @@ export class AppStore {
     await this.repo.softDelete('lists', id);
     this.state.lists = this.state.lists.filter((l) => l.id !== id);
     this.requestSync();
-    this.pushUndo(`Deleted list "${list?.title || 'list'}"`, () => this.restoreList(id, openIds));
-    return openIds;
   }
 
   /**
@@ -537,8 +554,17 @@ export class AppStore {
       const have = new Set(prior);
       const added = taskIds.filter((id) => !have.has(id)).length;
       if (added === 0) return;
-      // Armed before the write — see clearQueue.
-      this.pushUndo(`Queued ${added} task${added === 1 ? '' : 's'}`, () => this.writeQueue(prior));
+      // Armed before the write — see clearQueue. The redo appends via the
+      // SILENT primitive, not addManyToQueue: that method ends by firing the
+      // queuePlanned delight event, and a redo re-establishes state, never
+      // ceremony (three reviewers caught this one independently).
+      this.pushUndo(`Queued ${added} task${added === 1 ? '' : 's'}`,
+        () => this.writeQueue(prior),
+        () => {
+          const have = new Set(this.state.queueIds);
+          const fresh = taskIds.filter((id) => !have.has(id));
+          return this.writeQueue([...this.state.queueIds, ...fresh]);
+        });
       await this.addManyToQueue(taskIds);
       return;
     }
@@ -548,28 +574,36 @@ export class AppStore {
       .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority, tagIds: [...t.tagIds] }));
     if (before.length === 0) return;
 
-    // Collect each item's real inverse as we go. For completions that means
-    // lifting the entry completeTask just pushed rather than writing our own:
-    // it alone knows to restore the in-progress flag, the elapsed clock, the
-    // current-task slot and any recurrence it armed.
+    // Collect each item's real inverse — and its forward, for redo — as we
+    // go. For completions that means lifting the entry completeTask just
+    // pushed rather than writing our own: it alone knows to restore the
+    // in-progress flag, the elapsed clock, the current-task slot and any
+    // recurrence it armed.
     const inverse: Array<() => Promise<void>> = [];
+    const forward: Array<() => Promise<void>> = [];
     for (const snap of before) {
       if (action === 'complete') {
         const priorTop = undoStack.latest?.id;
         await this.completeTask(snap.id, { bulk: true });
         if (undoStack.latest && undoStack.latest.id !== priorTop) {
           const taken = undoStack.takeLatest();
-          if (taken) inverse.push(taken.run);
+          if (taken) {
+            inverse.push(taken.run);
+            if (taken.redo) forward.push(taken.redo);
+          }
         }
       } else if (action === 'delete') {
         await this.removeTask(snap.id, { silent: true });
         inverse.push(() => this.restoreTask(snap.id));
+        forward.push(() => this.removeTask(snap.id, { silent: true }));
       } else if (action === 'move' && value) {
         await this.patchTask(snap.id, { listId: value });
         inverse.push(() => this.patchTask(snap.id, { listId: snap.listId }));
+        forward.push(() => this.patchTask(snap.id, { listId: value }));
       } else if (action === 'priority' && value) {
         await this.patchTask(snap.id, { priority: value as Task['priority'] });
         inverse.push(() => this.patchTask(snap.id, { priority: snap.priority }));
+        forward.push(() => this.patchTask(snap.id, { priority: value as Task['priority'] }));
       } else if (action === 'tag' && value) {
         // Adding, never replacing — the point is to label a batch, not to wipe
         // whatever labels its members already carry. A task that already has it
@@ -577,6 +611,7 @@ export class AppStore {
         if (!snap.tagIds.includes(value)) {
           await this.patchTask(snap.id, { tagIds: [...snap.tagIds, value] });
           inverse.push(() => this.patchTask(snap.id, { tagIds: snap.tagIds }));
+          forward.push(() => this.patchTask(snap.id, { tagIds: [...snap.tagIds, value] }));
         }
       }
     }
@@ -593,7 +628,12 @@ export class AppStore {
     this.pushUndo(`${verb} ${touched} task${touched === 1 ? '' : 's'}`, async () => {
       // Reverse order, so overlapping effects unwind the way they were applied.
       for (const run of [...inverse].reverse()) await run();
-    });
+    },
+    // Only when every item contributed a forward — a batch that redoes
+    // some of its members would be worse than one that honestly can't.
+    forward.length === inverse.length
+      ? async () => { for (const run of forward) await run(); }
+      : undefined);
   }
 
   /** Move a task to another list (the move control on the task editor). */
@@ -710,6 +750,18 @@ export class AppStore {
         activeAccumulatedMs: priorAccumulated,
         timeboxEndsAt: priorTimebox,
       });
+    }, async () => {
+      // Resurrect the SAME history record (the undo only tombstoned it) and
+      // re-stamp the day — identical state to the original completion.
+      await this.restoreTask(record.id);
+      await this.patchTask(task.id, {
+        ...(perWindow ? { ritualDoneSlots: newSlots } : {}),
+        ...(dayComplete ? { ritualDoneDay: day } : {}),
+        inProgress: false,
+        startedAt: undefined,
+        activeAccumulatedMs: undefined,
+        timeboxEndsAt: undefined,
+      });
     });
 
     if (this.state.currentTask?.taskId === task.id) await this.clearCurrent();
@@ -814,6 +866,37 @@ export class AppStore {
         this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
         this.state.currentTask = priorCurrent;
       }
+    }, async () => {
+      // Redo = the same state changes the completion made, re-derived from
+      // the captured snapshot (the undo restored the priors, so the teaching
+      // formulas below start from exactly where they started the first time).
+      await this.patchTask(id, {
+        completedAt: finishedAt,
+        inProgress: false,
+        startedAt: undefined,
+        timeboxEndsAt: undefined,
+        ...(tracked && tracked > 0 ? { activeMs: tracked } : {}),
+      });
+      if (before?.recurrenceId) {
+        const tpl = this.state.templates.find((t) => t.id === before.recurrenceId && !t.deleted);
+        if (tpl) {
+          const teach: Partial<RecurrenceTemplate> = {};
+          if (tracked !== undefined && tracked > 0) {
+            const n = tpl.completedInstances ?? 0;
+            const mean = tpl.avgActiveMs ?? 0;
+            teach.avgActiveMs = Math.round((mean * n + tracked) / (n + 1));
+            teach.completedInstances = n + 1;
+          }
+          // Re-armed from NOW, not the original moment: "come back X after
+          // done" counts from when the task most recently became done.
+          if (!tpl.paused) {
+            const next = scheduleAfterCompletion(tpl, new Date());
+            if (next !== null) teach.nextSpawnAt = next;
+          }
+          if (Object.keys(teach).length > 0) await this.updateRecurring(tpl.id, teach);
+        }
+      }
+      if (wasCurrent) await this.clearCurrent();
     });
 
     await this.patchTask(id, {
@@ -917,7 +1000,9 @@ export class AppStore {
     this.state.tasks = this.state.tasks.filter((t) => t.id !== id);
     this.requestSync();
     if (!opts.silent) {
-      this.pushUndo(`Deleted "${task?.name || 'task'}"`, () => this.restoreTask(id));
+      this.pushUndo(`Deleted "${task?.name || 'task'}"`, () => this.restoreTask(id),
+        // Silent: the entry shuttling between the stacks IS the undo record.
+        () => this.removeTask(id, { silent: true }));
     }
   }
 
@@ -1009,15 +1094,44 @@ export class AppStore {
 
   // ── undo ─────────────────────────────────────────────────────────────────
 
-  /** Record a reversible action and surface it as a tappable toast. */
-  private pushUndo(label: string, run: () => Promise<void>): void {
-    const entry = undoStack.push(label, run);
-    toast.show(label, () => void undoStack.undoEntry(entry));
+  /**
+   * Record a reversible action and surface it as a tappable toast.
+   *
+   * `redo` re-applies the action's STATE changes after an undo — never its
+   * ceremony (delight events, unlock grants, auto-draws happened once, when
+   * the user really did the thing). Sites that can't express one simply
+   * aren't redoable, and the stack breaks the redo chain there instead of
+   * skipping them.
+   */
+  private pushUndo(label: string, run: () => Promise<void>, redo?: () => Promise<void>): void {
+    const entry = undoStack.push(label, run, redo);
+    toast.show(label, () => void undoStack.undoEntry(entry).catch(() => {
+      toast.show('Undo failed — nothing was lost, try again', () => {});
+    }));
   }
 
-  /** Cmd/Ctrl+Z. Returns what was undone, for the confirmation toast. */
+  /**
+   * Cmd/Ctrl+Z. Returns what was undone, for the confirmation toast.
+   * A failed undo re-arms itself (the stack put the entry back) — the toast
+   * here is the only signal the user gets, so it must not be skipped.
+   */
   async undoLast(): Promise<string | null> {
-    return undoStack.undo();
+    try {
+      return await undoStack.undo();
+    } catch {
+      toast.show('Undo failed — nothing was lost, try again', () => {});
+      return null;
+    }
+  }
+
+  /** Cmd/Ctrl+Shift+Z. Returns what was redone, for the confirmation toast. */
+  async redoLast(): Promise<string | null> {
+    try {
+      return await undoStack.redo();
+    } catch {
+      toast.show('Redo failed — nothing was lost, try again', () => {});
+      return null;
+    }
   }
 
   // ── draw lifecycle (spec §4) ─────────────────────────────────────────────
@@ -1080,6 +1194,13 @@ export class AppStore {
         this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
         this.state.currentTask = priorCurrent;
       }
+    }, async () => {
+      // The horizon is recomputed at redo time — "until the next rollover"
+      // means the next one from NOW, not from when the snooze first happened.
+      await this.patchTask(taskId, {
+        notTodayUntil: nextRolloverTs(Date.now(), this.state.settings.rolloverHour),
+      });
+      if (wasCurrent) await this.clearCurrent();
     });
   }
 
@@ -1499,7 +1620,12 @@ export class AppStore {
     await this.repo.softDelete('tags', id);
     this.state.tags = this.state.tags.filter((t) => t.id !== id);
     this.requestSync();
-    this.pushUndo(`Deleted tag "${tag?.name || 'tag'}"`, () => this.restoreTag(id, tag));
+    this.pushUndo(`Deleted tag "${tag?.name || 'tag'}"`, () => this.restoreTag(id, tag),
+      async () => {
+        await this.repo.softDelete('tags', id);
+        this.state.tags = this.state.tags.filter((t) => t.id !== id);
+        this.requestSync();
+      });
   }
 
   private async restoreTag(id: string, trashed: Tag | undefined): Promise<void> {
@@ -1531,6 +1657,10 @@ export class AppStore {
       : `Deleted ${trashed.length} tags`;
     this.pushUndo(label, async () => {
       for (const tag of trashed) await this.restoreTag(tag.id, tag);
+    }, async () => {
+      for (const tag of trashed) await this.repo.softDelete('tags', tag.id);
+      this.state.tags = this.state.tags.filter((t) => !gone.has(t.id));
+      this.requestSync();
     });
   }
 
@@ -1549,14 +1679,19 @@ export class AppStore {
     const target = this.state.tags.find((t) => t.id === targetId);
     if (!source || !target) return 0;
 
+    // Both directions captured up front: `before` is what undo restores,
+    // `after` is what the merge writes now and what a redo writes again.
     const affected = this.state.tasks
       .filter((t) => t.tagIds.includes(sourceId))
-      .map((t) => ({ id: t.id, before: [...t.tagIds] }));
+      .map((t) => {
+        const before = [...t.tagIds];
+        const after = before.filter((tagId) => tagId !== sourceId);
+        if (!after.includes(targetId)) after.push(targetId);
+        return { id: t.id, before, after };
+      });
 
-    for (const { id, before } of affected) {
-      const next = before.filter((tagId) => tagId !== sourceId);
-      if (!next.includes(targetId)) next.push(targetId);
-      await this.patchTask(id, { tagIds: next });
+    for (const { id, after } of affected) {
+      await this.patchTask(id, { tagIds: after });
     }
     await this.repo.softDelete('tags', sourceId);
     this.state.tags = this.state.tags.filter((t) => t.id !== sourceId);
@@ -1565,6 +1700,11 @@ export class AppStore {
     this.pushUndo(`Merged "${source.name}" into "${target.name}"`, async () => {
       for (const { id, before } of affected) await this.patchTask(id, { tagIds: before });
       await this.restoreTag(sourceId, source);
+    }, async () => {
+      for (const { id, after } of affected) await this.patchTask(id, { tagIds: after });
+      await this.repo.softDelete('tags', sourceId);
+      this.state.tags = this.state.tags.filter((t) => t.id !== sourceId);
+      this.requestSync();
     });
     this.grantUnlockAndShow('gardener');
     return affected.length;

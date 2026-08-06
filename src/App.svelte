@@ -86,7 +86,8 @@
   });
 
   // Keyboard: Cmd/Ctrl+Z undoes the last consequential action long after its
-  // toast is gone; "/" and Cmd/Ctrl+K jump to search.
+  // toast is gone, Shift+Z (or Ctrl+Y, the Windows habit) redoes it; "/" and
+  // Cmd/Ctrl+K jump to search.
   $effect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -97,6 +98,18 @@
         e.preventDefault();
         void app.undoLast().then((label) => {
           if (label) toast.show(`Undid: ${label}`, () => {});
+        });
+        return;
+      }
+
+      const wantsRedo =
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && e.shiftKey) ||
+        (e.ctrlKey && e.key.toLowerCase() === 'y');
+      if (wantsRedo) {
+        if (typing) return; // ditto — fields keep their native redo
+        e.preventDefault();
+        void app.redoLast().then((label) => {
+          if (label) toast.show(`Redid: ${label}`, () => {});
         });
         return;
       }
