@@ -947,6 +947,12 @@ test('the completed screen renders history a page at a time', async ({ page }) =
 
 test('the rituals screen shows the day at a glance and ticks off from there', async ({ page }) => {
   await reset(page);
+  // Pin mid-afternoon FIRST (the wall-clock rule): the "all-day" window
+  // below is 00:00–23:59, and windows are to-EXCLUSIVE — for the final
+  // minute of every real day the ritual is not due, and CI collected that
+  // sixty-second bet at 23:59:50Z. The poke re-reads the mocked clock.
+  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
   await makeList(page, 'Life');
   await addTask(page, 'eat lunch');
   const row = page.getByTestId(/^task-row-/).first();
