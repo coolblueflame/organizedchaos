@@ -1472,3 +1472,40 @@ test('redo brings back what undo took, until a fresh action forks history', asyn
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
   await expect(page.getByText('flip me', { exact: true })).toBeVisible();
 });
+
+test('a ritual already done today still completes again from the current card', async ({ page }) => {
+  await reset(page);
+  // Pinned mid-afternoon — the all-day window below is to-exclusive, and the
+  // last minute of a real day once cost CI a sixty-second bet (see the
+  // day-at-a-glance test). The poke re-reads the mocked clock.
+  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  await makeList(page, 'Life');
+  await addTask(page, 'walk the dog');
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByText('walk the dog', { exact: true }).click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-collapse').click();
+
+  // Done for the day, the ordinary way. The row stays — rituals never leave.
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toBeVisible();
+
+  // Life happens twice: re-accept the done ritual as the current task…
+  await page.getByText('walk the dog', { exact: true }).click();
+  await page.getByTestId('task-make-current').click();
+  await expect(page.getByTestId('current-task-card')).toContainText('walk the dog');
+
+  // …and completing it must actually complete — this stranded the card
+  // (confetti, no effect) when the already-credited day was an early return.
+  await page.getByTestId('current-complete').click();
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+
+  // Both efforts are history: two completed records, one credited day.
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
+});

@@ -111,11 +111,17 @@ describe('per-window rituals', () => {
     );
     expect(records).toHaveLength(2);
 
-    // Nothing owed: a third tick is a no-op.
+    // Nothing owed any more — but a third completion is still real work that
+    // really happened: it writes its record and leaves the day's marks alone.
+    // (It used to be a silent no-op, which stranded an already-done ritual
+    // re-accepted as the current task — Ben's 2026-08-05 report.)
     await store.completeTask(t.id);
+    row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.ritualDoneSlots).toEqual(['2026-07-29#0', '2026-07-29#1']);
+    expect(row.ritualDoneDay).toBe('2026-07-29');
     expect(store.state.tasks.filter(
       (x) => x.name === 'drink water' && x.completedAt !== undefined,
-    )).toHaveLength(2);
+    )).toHaveLength(3);
   });
 
   it("undo restores ritualDoneDay to what it WAS, not to today's mutated value", async () => {

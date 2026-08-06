@@ -682,9 +682,14 @@ export class AppStore {
     const day = appDayKey(now, this.state.settings.rolloverHour);
     const perWindow = isPerWindow(task);
     // Which mark this completion writes. Per-window rituals credit the active
-    // (or next) unmarked window; -1 / already-done means nothing is owed.
+    // (or next) unmarked window; -1 / already-done means no day-mark is owed.
     const credit = perWindow ? creditWindowIndex(task, now, this.state.settings.rolloverHour) : -1;
-    if (perWindow ? credit === -1 : task.ritualDoneDay === day) return;
+    // An already-done-today ritual can still be completed AGAIN (Ben really
+    // did one twice, 2026-08-05): the day keeps its existing marks, but the
+    // record is written and the work is put down like any completion. This
+    // used to be an early return — which left a re-accepted done ritual
+    // stranded as the current task, confetti and all, uncompletable.
+    const owed = perWindow ? credit !== -1 : task.ritualDoneDay !== day;
 
     // Time counts the same way it does anywhere else: only a stretch that was
     // actually being tracked when it finished. It belongs to the record, not to
@@ -720,12 +725,15 @@ export class AppStore {
     const priorSlots = task.ritualDoneSlots ? [...task.ritualDoneSlots] : undefined;
     // Per-window: append today's credited slot (dropping stale days — only
     // today's marks ever matter again); the day is "done" once every window is.
-    const newSlots = perWindow
+    // Nothing owed = the marks stay exactly as they are.
+    const newSlots = perWindow && owed
       ? [...(priorSlots ?? []).filter((s) => s.startsWith(`${day}#`)), ritualSlot(day, credit)]
       : undefined;
-    const dayComplete = !perWindow || newSlots!.length >= ritualWindows(task).length;
-    await this.patchTask(task.id, {
-      ...(perWindow ? { ritualDoneSlots: newSlots } : {}),
+    const dayComplete = owed && (!perWindow || newSlots!.length >= ritualWindows(task).length);
+    // The forward patch, shared by the completion and its redo; `unstamp` is
+    // its exact inverse, shared by the undo.
+    const stamp: Partial<Task> = {
+      ...(newSlots ? { ritualDoneSlots: newSlots } : {}),
       // Once-a-day rituals live on ritualDoneDay as always; a per-window ritual
       // sets it only when its LAST window lands (which also keeps a not-yet-
       // updated device reading the day as done).
@@ -736,32 +744,27 @@ export class AppStore {
       // The countdown dies with the completion — a done ritual whose timebox
       // kept ticking would fire its alarm over a finished job.
       timeboxEndsAt: undefined,
-    });
+    };
+    const unstamp: Partial<Task> = {
+      ritualDoneDay: priorDoneDay,
+      ritualDoneSlots: priorSlots,
+      inProgress: wasInProgress,
+      startedAt: priorStartedAt,
+      activeAccumulatedMs: priorAccumulated,
+      timeboxEndsAt: priorTimebox,
+    };
+    await this.patchTask(task.id, stamp);
 
     const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
     const ritualTiming = ritualOutcome ? ` · ${ritualOutcome.actual} — ${ritualOutcome.verdict}` : '';
     this.pushUndo(`Completed "${task.name || 'task'}"${ritualTiming}`, async () => {
       await this.removeTask(record.id, { silent: true });
-      await this.patchTask(task.id, {
-        ritualDoneDay: priorDoneDay,
-        ritualDoneSlots: priorSlots,
-        inProgress: wasInProgress,
-        startedAt: priorStartedAt,
-        activeAccumulatedMs: priorAccumulated,
-        timeboxEndsAt: priorTimebox,
-      });
+      await this.patchTask(task.id, unstamp);
     }, async () => {
       // Resurrect the SAME history record (the undo only tombstoned it) and
       // re-stamp the day — identical state to the original completion.
       await this.restoreTask(record.id);
-      await this.patchTask(task.id, {
-        ...(perWindow ? { ritualDoneSlots: newSlots } : {}),
-        ...(dayComplete ? { ritualDoneDay: day } : {}),
-        inProgress: false,
-        startedAt: undefined,
-        activeAccumulatedMs: undefined,
-        timeboxEndsAt: undefined,
-      });
+      await this.patchTask(task.id, stamp);
     });
 
     if (this.state.currentTask?.taskId === task.id) await this.clearCurrent();
