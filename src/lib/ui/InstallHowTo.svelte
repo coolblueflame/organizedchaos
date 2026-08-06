@@ -115,6 +115,13 @@
     background: var(--bg1); border: 1px solid var(--line);
     border-radius: 14px 14px 0 0; padding: 16px 18px calc(22px + env(safe-area-inset-bottom));
   }
+  /* Desktop: a dialog, not a thumb-reach sheet — floats centered (Ben's ask). */
+  @media (hover: hover) and (pointer: fine) {
+    .sheet {
+      bottom: auto; top: 50%; transform: translate(-50%, -50%);
+      border-radius: 14px; padding-bottom: 22px;
+    }
+  }
   header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   h2 {
     flex: 1; margin: 0; color: var(--acc-cyan);
