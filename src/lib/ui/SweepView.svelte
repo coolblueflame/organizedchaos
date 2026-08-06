@@ -129,7 +129,9 @@
     creatingList = false;
     newListTitle = '';
     if (!title) return;
-    const list = await app.addList(title);
+    // Same rule as the home screen's + (2026-08-05): a list invented mid-sweep
+    // is unsorted until deliberately filed.
+    const list = await app.addList(title, 'Unsorted');
     await moveTo(list.id);
   }
 

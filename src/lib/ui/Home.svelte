@@ -319,7 +319,12 @@
   async function createList() {
     const title = newListTitle.trim();
     if (!title) { newListOpen = false; return; }
-    const list = await app.addList(title);
+    // New lists file under "Unsorted" (2026-08-05 ask) rather than the
+    // ungrouped bucket at the TOP — the input sits at the bottom of the
+    // screen, and the list should land where the typing happened, not
+    // teleport above everything the user has deliberately arranged.
+    // Filing it properly later is one drag, same as ever.
+    const list = await app.addList(title, 'Unsorted');
     newListTitle = '';
     newListOpen = false;
     navigate({ name: 'list', id: list.id });
@@ -456,6 +461,12 @@
     {/if}
 
     {#if newListOpen}
+      <!-- The header cue says where this will file — the group the list
+           lands in the moment the name is committed. Once a real Unsorted
+           section exists its own header is the cue, so no duplicate. -->
+      {#if !grouped.some(([g]) => g === 'Unsorted')}
+        <h2 class="group-header" data-testid="new-list-destined">Unsorted</h2>
+      {/if}
       <input class="inline-edit new-list-input" data-testid="new-list-input"
         bind:this={newListInput} bind:value={newListTitle} placeholder="list name"
         onblur={createList}

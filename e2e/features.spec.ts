@@ -1510,6 +1510,26 @@ test('a ritual already done today still completes again from the current card', 
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
 
+test('a new list files under Unsorted, and says so while you type', async ({ page }) => {
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  // The cue names the destination before the list even exists…
+  await expect(page.getByTestId('new-list-destined')).toHaveText('Unsorted');
+  await page.getByTestId('new-list-input').fill('Fresh Finds');
+  await page.keyboard.press('Enter');
+
+  // …and back home, the list really lives there — not in the ungrouped
+  // bucket at the top of everything the user arranged.
+  await page.getByTestId('back').click();
+  const row = page.getByTestId(/^list-row-/).filter({ hasText: 'Fresh Finds' }).first();
+  await expect(row).toHaveAttribute('data-list-group', 'Unsorted');
+
+  // With a real Unsorted section on screen, the cue stands down — its header
+  // is the cue now, and two would be noise.
+  await page.getByTestId('new-list').click();
+  await expect(page.getByTestId('new-list-destined')).toHaveCount(0);
+});
+
 test('the move-to picker reads in home order and never offers an archived list', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Beta');
