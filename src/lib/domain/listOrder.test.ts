@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveAcross, moveWithin, reorderPatches, sameGrouping, sortLists } from './listOrder';
+import { moveAcross, moveWithin, pickerListGroups, reorderPatches, sameGrouping, sortLists } from './listOrder';
 import type { List } from './types';
 
 const list = (id: string, order?: number): List => ({
@@ -100,5 +100,38 @@ describe('moveAcross', () => {
   it('sameGrouping tells an idle drag from a real one', () => {
     expect(sameGrouping(groups(), groups())).toBe(true);
     expect(sameGrouping(groups(), moveAcross(groups(), 'w1', 'Home', 0))).toBe(false);
+  });
+});
+
+describe('pickerListGroups', () => {
+  const themed = (id: string, over: Partial<List>): List => ({ ...list(id), ...over });
+
+  it('reads like the home screen: ungrouped first, groups alphabetical, drag order within', () => {
+    const out = pickerListGroups([
+      themed('z1', { areaGroup: 'Zoo' }),
+      themed('loose', {}),
+      themed('a2', { areaGroup: 'Art', order: 1 }),
+      themed('a1', { areaGroup: 'Art', order: 0 }),
+    ]);
+    expect(out.map((g) => g.group)).toEqual(['', 'Art', 'Zoo']);
+    expect(out[1]!.lists.map((l) => l.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('offers neither archived lists nor dice-made vessels nor tombstones', () => {
+    const out = pickerListGroups([
+      themed('live', {}),
+      themed('shelved', { archived: true }),
+      themed('vessel', { generated: true }),
+      themed('gone', { deleted: true }),
+    ]);
+    expect(out.flatMap((g) => g.lists.map((l) => l.id))).toEqual(['live']);
+  });
+
+  it('a group whose lists are all archived vanishes entirely', () => {
+    const out = pickerListGroups([
+      themed('a', { areaGroup: 'Dust', archived: true }),
+      themed('b', {}),
+    ]);
+    expect(out.map((g) => g.group)).toEqual(['']);
   });
 });

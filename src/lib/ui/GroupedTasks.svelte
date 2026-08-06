@@ -18,7 +18,7 @@
   import Glyph from './Glyph.svelte';
   import { revealOnApproach } from './lazyReveal';
   import { createDragScroller } from './dragScroll';
-  import { moveWithin } from '../domain/listOrder';
+  import { moveWithin, pickerListGroups } from '../domain/listOrder';
   import { flip } from 'svelte/animate';
   import { motionOk as motionOkFlip } from './fx/particles';
 
@@ -408,7 +408,15 @@
     <select data-testid="bulk-move" bind:value={bulkList}
       onchange={() => bulkList && void runBulk('move', bulkList)}>
       <option value="">→ move to…</option>
-      {#each app.state.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+      {#each pickerListGroups(app.state.lists) as g (g.group)}
+        {#if g.group === ''}
+          {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+        {:else}
+          <optgroup label={g.group}>
+            {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+          </optgroup>
+        {/if}
+      {/each}
     </select>
     <!-- Enter commits: one estimate lands on every selected task and clears
          their NEW badges — an estimate is triage (2026-08-05 ask). -->

@@ -6,6 +6,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { app } from '../state/app.svelte';
+  import { pickerListGroups } from '../domain/listOrder';
   import { describeRitualTask, isRitualTask, ritualWindows } from '../domain/ritual';
   import { ALL_DAYS } from '../domain/schedule';
   import { navigate } from './router.svelte';
@@ -29,6 +30,9 @@
     /** Quick add supplies its own buttons — hide the row-editor's own controls. */
     compact?: boolean;
   } = $props();
+
+  /** The move-to choices, grouped and ordered the way the home screen reads. */
+  const listGroups = $derived(pickerListGroups(app.state.lists));
 
   // The name field lives in TaskRow (the row title IS the input). This editor
   // owns notes only. Draft copy is intentional: it holds text while typing and
@@ -245,9 +249,24 @@
     <span>list</span>
     <select data-testid="task-move-list" value={task.listId}
       onchange={(e) => { void app.moveTask(task.id, e.currentTarget.value); touched(); }}>
-      {#each app.state.lists as l (l.id)}
-        <option value={l.id}>{l.title}</option>
+      {#each listGroups as g (g.group)}
+        {#if g.group === ''}
+          {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+        {:else}
+          <optgroup label={g.group}>
+            {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+          </optgroup>
+        {/if}
       {/each}
+      <!-- A task can live somewhere the picker no longer offers (an archived
+           list, a dice-made vessel) — its home must still display, or the
+           select silently claims the wrong list. Not a move target for
+           OTHER tasks; for this one it is simply the truth. -->
+      {#if !listGroups.some((g) => g.lists.some((l) => l.id === task.listId))}
+        <option value={task.listId}>
+          {app.state.lists.find((l) => l.id === task.listId)?.title ?? 'its current list'}
+        </option>
+      {/if}
     </select>
   </label>
 

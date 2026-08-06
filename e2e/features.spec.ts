@@ -1510,6 +1510,37 @@ test('a ritual already done today still completes again from the current card', 
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
 
+test('the move-to picker reads in home order and never offers an archived list', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Beta');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Alpha');
+  await page.getByTestId('back').click();
+  await makeList(page, 'Cold Storage');
+  await addTask(page, 'stashed');
+  await page.getByTestId('back').click();
+
+  // Archive Cold Storage from its settings sheet.
+  const cold = page.getByTestId(/^list-row-/).filter({ hasText: 'Cold Storage' }).first();
+  const coldId = (await cold.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${coldId}`).click();
+  await page.getByTestId('list-settings-archive').click();
+
+  // In a list, select a task and read the bulk-move dropdown: ungrouped
+  // lists keep their home order (creation sequence — Beta then Alpha, NOT
+  // alphabetized within the bucket) and the archived list is simply gone.
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Beta' }).first().click();
+  await addTask(page, 'movable');
+  const row = page.getByTestId(/^task-row-/).first();
+  const tid = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`select-${tid}`).click();
+
+  const options = await page.getByTestId('bulk-move').locator('option').allTextContents();
+  expect(options).toContain('Alpha');
+  expect(options).not.toContain('Cold Storage');
+  expect(options.indexOf('Beta')).toBeLessThan(options.indexOf('Alpha'));
+});
+
 test('bulk estimate: one value lands on the whole selection and clears NEW', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Music');

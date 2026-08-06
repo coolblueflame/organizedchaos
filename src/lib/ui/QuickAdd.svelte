@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { pickerListGroups } from '../domain/listOrder';
   import type { Task } from '../domain/types';
   import TaskEditor from './TaskEditor.svelte';
   import Glyph from './Glyph.svelte';
@@ -23,6 +24,8 @@
 
   // svelte-ignore state_referenced_locally
   let listId = $state(initialListId);
+  /** The into-list choices, grouped and ordered the way the home screen reads. */
+  const listGroups = $derived(pickerListGroups(app.state.lists));
   let draftId = $state<string | null>(null);
   let nameDraft = $state('');
   let nameEl = $state<HTMLInputElement | null>(null);
@@ -197,9 +200,22 @@
     <span class="target-label">into</span>
     <select data-testid="quick-add-list" value={listId}
       onchange={(e) => void changeList(e.currentTarget.value)}>
-      {#each app.state.lists as l (l.id)}
-        <option value={l.id}>{l.title}</option>
+      {#each listGroups as g (g.group)}
+        {#if g.group === ''}
+          {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+        {:else}
+          <optgroup label={g.group}>
+            {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+          </optgroup>
+        {/if}
       {/each}
+      <!-- The sticky target can point at a list that was archived since —
+           keep it displayable until the user picks somewhere live. -->
+      {#if listId && !listGroups.some((g) => g.lists.some((l) => l.id === listId))}
+        <option value={listId}>
+          {app.state.lists.find((l) => l.id === listId)?.title ?? 'its last list'}
+        </option>
+      {/if}
     </select>
   </label>
 

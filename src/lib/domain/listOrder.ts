@@ -56,6 +56,26 @@ export function moveWithin(ids: string[], id: string, toIndex: number): string[]
   return out;
 }
 
+/**
+ * The lists a picker should offer, in the home screen's order: ungrouped
+ * first, then groups alphabetically, each internally in its dragged order —
+ * so a select reads the way the home screen looks (2026-08-05 ask; the raw
+ * storage order was effectively random at 64 lists). Archived lists are not
+ * move targets (also his ask), and dice-made vessels file themselves.
+ */
+export function pickerListGroups(lists: List[]): Array<{ group: string; lists: List[] }> {
+  const buckets = new Map<string, List[]>();
+  for (const l of lists.filter((x) => !x.deleted && x.archived !== true && x.generated !== true)) {
+    const key = l.areaGroup?.trim() ?? '';
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(l);
+    buckets.set(key, bucket);
+  }
+  return [...buckets.entries()]
+    .map(([group, ls]) => ({ group, lists: sortLists(ls) }))
+    .sort((a, b) => (a.group === '' ? -1 : b.group === '' ? 1 : a.group.localeCompare(b.group)));
+}
+
 /** Group name → the ids in that group, in display order. '' is the ungrouped bucket. */
 export type GroupedIds = Map<string, string[]>;
 

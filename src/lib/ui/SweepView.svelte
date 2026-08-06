@@ -12,6 +12,7 @@
   import { focusOnMount } from './focusOnMount';
   import { navigate, router } from './router.svelte';
   import { estimateQueue, SNOOZE_PRESETS, sweepQueue } from '../domain/sweep';
+  import { pickerListGroups } from '../domain/listOrder';
   import type { Task } from '../domain/types';
   import { PRIORITIES, type Priority } from '../domain/types';
   import Glyph from './Glyph.svelte';
@@ -95,8 +96,12 @@
   let creatingList = $state(false);
   let newListTitle = $state('');
 
-  const destinations = $derived(
-    app.state.lists.filter((l) => l.archived !== true && l.id !== current?.listId),
+  // Home-screen order with headers (pickerListGroups), minus wherever the
+  // card already lives — a move to the same list is not a move.
+  const destinationGroups = $derived(
+    pickerListGroups(app.state.lists)
+      .map((g) => ({ ...g, lists: g.lists.filter((l) => l.id !== current?.listId) }))
+      .filter((g) => g.lists.length > 0),
   );
 
   /** Re-files WITHOUT advancing — moving is one of several edits a card
@@ -299,8 +304,14 @@
           <select class="move" data-testid="sweep-move" bind:value={moveSelect}
             onchange={(e) => void onMovePick(e.currentTarget.value)}>
             <option value="">move to…</option>
-            {#each destinations as l (l.id)}
-              <option value={l.id}>{l.title}</option>
+            {#each destinationGroups as g (g.group)}
+              {#if g.group === ''}
+                {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+              {:else}
+                <optgroup label={g.group}>
+                  {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+                </optgroup>
+              {/if}
             {/each}
             <option value="__new__">+ new list…</option>
           </select>
