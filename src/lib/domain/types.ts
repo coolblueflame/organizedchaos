@@ -192,10 +192,24 @@ export interface Tag extends Base {
 export type RecurrenceMode =
   /** "Come back X after completion" — spec §5. */
   | { kind: 'afterCompletion'; interval: number; unit: 'days' | 'weeks' | 'months' }
-  /** Fixed weekly cadence; weekday numbers follow JS Date#getDay (0=Sunday … 6=Saturday). */
-  | { kind: 'weekly'; weekdays: number[] }
-  /** Fixed monthly cadence; 1–31, clamped to the month's length when it overshoots. */
-  | { kind: 'monthly'; dayOfMonth: number };
+  /**
+   * Fixed weekly cadence; weekday numbers follow JS Date#getDay (0=Sunday …
+   * 6=Saturday). `everyWeeks` stretches it to every-2nd/3rd/… week
+   * (2026-08-06 ask); `anchorMs` marks a moment inside an ON week, since
+   * "every 2 weeks" is meaningless without saying WHICH weeks. Both are
+   * written only when everyWeeks > 1 — a plain weekly template keeps its
+   * exact old shape, so unchanged rows stay canonical-stable in sync and
+   * old app code degrades to plain weekly rather than misreading.
+   */
+  | { kind: 'weekly'; weekdays: number[]; everyWeeks?: number; anchorMs?: number }
+  /**
+   * Fixed monthly cadence; 1–31, clamped to the month's length when it
+   * overshoots. `days` (2026-08-06 ask) supersedes dayOfMonth when present
+   * and may include 'last' for the true month end; dayOfMonth is still
+   * written (first numeric day, or 31 when only 'last' — which clamps to
+   * roughly the same days) so old readers degrade gracefully.
+   */
+  | { kind: 'monthly'; dayOfMonth: number; days?: Array<number | 'last'> };
 
 export interface RecurrenceTemplate extends Base {
   listId: string;

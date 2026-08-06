@@ -27,7 +27,26 @@
   let interval = $state(init?.kind === 'afterCompletion' ? init.interval : 3);
   let unit = $state<'days' | 'weeks' | 'months'>(init?.kind === 'afterCompletion' ? init.unit : 'days');
   let weekdays = $state<number[]>(init?.kind === 'weekly' ? [...init.weekdays] : []);
-  let monthday = $state(init?.kind === 'monthly' ? init.dayOfMonth : 1);
+  /** 1 = plain weekly; 2+ = every Nth week (2026-08-06 ask). */
+  let everyWeeks = $state(init?.kind === 'weekly' ? (init.everyWeeks ?? 1) : 1);
+  /**
+   * The saved phase — WHICH weeks are on. It must survive a reopen-save
+   * untouched (review catch: stamping Date.now() on every save meant an
+   * off-week tweak of the deadline offset silently shifted every future
+   * spawn, and a Saturday edit of a biweekly-Monday rule deferred it
+   * forever). A fresh anchor is minted only when the cadence itself changes.
+   */
+  const initialAnchor = init?.kind === 'weekly' ? init.anchorMs : undefined;
+  const initialEvery = init?.kind === 'weekly' ? (init.everyWeeks ?? 1) : 1;
+  /** True when saving will start counting weeks from now (new/changed cadence). */
+  const willReAnchor = $derived(
+    everyWeeks > 1 && (initialAnchor === undefined || everyWeeks !== initialEvery),
+  );
+  let monthday = $state<number | ''>(init?.kind === 'monthly' && !init.days?.length ? init.dayOfMonth : '');
+  /** Extra month days beyond the input — chips; 'last' is the true month end. */
+  let monthdays = $state<Array<number | 'last'>>(
+    init?.kind === 'monthly' && init.days?.length ? [...init.days] : [],
+  );
   let offset = $state<string>(seed?.deadlineOffsetDays?.toString() ?? '');
 
   // Sunday-first display order, like every other day picker; values are JS
@@ -39,18 +58,66 @@
     weekdays = weekdays.includes(d) ? weekdays.filter((x) => x !== d) : [...weekdays, d];
   }
 
+  /** The input counts as a day the moment it holds a valid number — no
+   *  "+ add" needed for the everyday single-date case. */
+  const pendingDay = $derived(
+    typeof monthday === 'number' && monthday >= 1 && monthday <= 31 ? monthday : null,
+  );
+  /** Everything the monthly save would commit, deduped, numerics first. */
+  const allMonthdays = $derived.by(() => {
+    const nums = new Set(monthdays.filter((d): d is number => d !== 'last'));
+    if (pendingDay !== null) nums.add(pendingDay);
+    const out: Array<number | 'last'> = [...nums].sort((a, b) => a - b);
+    if (monthdays.includes('last')) out.push('last');
+    return out;
+  });
+
+  function addMonthday() {
+    if (pendingDay === null) return;
+    if (!monthdays.includes(pendingDay)) monthdays = [...monthdays, pendingDay];
+    monthday = '';
+  }
+
+  function dropMonthday(d: number | 'last') {
+    monthdays = monthdays.filter((x) => x !== d);
+  }
+
+  function toggleLastDay() {
+    monthdays = monthdays.includes('last')
+      ? monthdays.filter((x) => x !== 'last')
+      : [...monthdays, 'last'];
+  }
+
   const valid = $derived(
     kind === 'afterCompletion' ? interval >= 1 :
     kind === 'weekly' ? weekdays.length > 0 :
-    monthday >= 1 && monthday <= 31,
+    allMonthdays.length > 0,
   );
 
   function save() {
     if (!valid) return;
     const mode: RecurrenceMode =
       kind === 'afterCompletion' ? { kind, interval, unit } :
-      kind === 'weekly' ? { kind, weekdays: [...weekdays].sort() } :
-      { kind, dayOfMonth: monthday };
+      kind === 'weekly' ? {
+        kind,
+        weekdays: [...weekdays].sort(),
+        // Written only when they carry information: a plain weekly template
+        // keeps its exact old shape (canonical-stable in sync, readable by
+        // old code). The anchor pins WHICH weeks are on — kept across saves,
+        // minted fresh only when the cadence itself is new or changed.
+        ...(everyWeeks > 1
+          ? { everyWeeks, anchorMs: willReAnchor ? Date.now() : initialAnchor! }
+          : {}),
+      } :
+      {
+        kind: 'monthly' as const,
+        // Old readers only see dayOfMonth: the first numeric day, or 31 when
+        // it is only "last" (31 clamps to the month end — close enough).
+        dayOfMonth: allMonthdays.find((d): d is number => d !== 'last') ?? 31,
+        ...(allMonthdays.length > 1 || allMonthdays.includes('last')
+          ? { days: allMonthdays }
+          : {}),
+      };
     const off = parseInt(offset, 10);
     // 0 is a real answer — "due the day it appears" — only blank/negative mean unset.
     onsave(mode, Number.isFinite(off) && off >= 0 ? off : undefined);
@@ -85,12 +152,36 @@
           data-testid="recur-weekday-{d}" onclick={() => toggleWeekday(d)}>{label}</button>
       {/each}
     </div>
+    <div class="line">
+      <span>repeats</span>
+      <select data-testid="recur-every-weeks" bind:value={everyWeeks}>
+        <option value={1}>every week</option>
+        <option value={2}>every 2 weeks</option>
+        <option value={3}>every 3 weeks</option>
+        <option value={4}>every 4 weeks</option>
+      </select>
+      <!-- Only when saving really restarts the count — an untouched reopen
+           keeps its phase and must not claim otherwise. -->
+      {#if willReAnchor}<em>counting from this week</em>{/if}
+    </div>
   {:else}
     <div class="line">
       <span>on day</span>
       <input type="number" min="1" max="31" data-testid="recur-monthday" bind:value={monthday} />
-      <span>of each month <em>(clamped in short months)</em></span>
+      <button class="add" data-testid="recur-monthday-add" disabled={pendingDay === null}
+        onclick={addMonthday}>+ another</button>
+      <button class="day last" class:on={monthdays.includes('last')}
+        data-testid="recur-last-day" onclick={toggleLastDay}>last day</button>
     </div>
+    {#if monthdays.filter((d) => d !== 'last').length > 0}
+      <div class="line chips" data-testid="recur-monthday-chips">
+        {#each monthdays.filter((d) => d !== 'last') as d (d)}
+          <button class="chip" data-testid="recur-monthday-drop-{d}" onclick={() => dropMonthday(d)}
+            title="remove">{d} ✕</button>
+        {/each}
+      </div>
+    {/if}
+    <div class="line"><em>(days past a short month clamp to its end)</em></div>
   {/if}
 
   <div class="line">
@@ -140,6 +231,19 @@
     padding: 7px 0; cursor: pointer; text-transform: uppercase;
   }
   .day.on { color: var(--acc-green); border-color: var(--acc-green); }
+  .day.last { flex: none; padding: 7px 10px; text-transform: none; }
+  .add {
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 6px 8px; cursor: pointer;
+  }
+  .add:disabled { opacity: 0.4; cursor: default; }
+  .chips { gap: 5px; }
+  .chip {
+    background: var(--bg1); border: 1px solid var(--acc-green); border-radius: 6px;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 5px 8px; cursor: pointer;
+  }
   .actions { display: flex; align-items: center; gap: 8px; }
   .spacer { flex: 1; }
   .actions button {

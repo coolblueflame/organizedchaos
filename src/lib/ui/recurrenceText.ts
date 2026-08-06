@@ -19,12 +19,20 @@ export function describeRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: nu
       // Sunday-first, matching the picker above it.
       const order = [0, 1, 2, 3, 4, 5, 6];
       const days = order.filter((d) => mode.weekdays.includes(d)).map((d) => DAY_NAMES[d]);
-      base = `every ${days.join(', ')}`;
+      const every = mode.everyWeeks ?? 1;
+      base = every > 1
+        ? `every ${every} weeks on ${days.join(', ')}`
+        : `every ${days.join(', ')}`;
       break;
     }
-    case 'monthly':
-      base = `monthly on the ${ordinal(mode.dayOfMonth)}`;
+    case 'monthly': {
+      const wanted = mode.days?.length ? mode.days : [mode.dayOfMonth];
+      const spoken = wanted.map((d) => (d === 'last' ? 'last day' : ordinal(d)));
+      base = spoken.length === 1
+        ? `monthly on the ${spoken[0]}`
+        : `monthly on the ${spoken.slice(0, -1).join(', ')} and ${spoken[spoken.length - 1]}`;
       break;
+    }
   }
   // !== undefined, not truthy: 0 is "due the day it appears" and must show.
   if (deadlineOffsetDays === undefined) return base;

@@ -140,3 +140,74 @@ test('editor shows the cadence summary on a recurring task', async ({ page }) =>
   await page.getByTestId('recur-save').click();
   await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the 1st · due same day');
 });
+
+test('every-2-weeks and multi-day monthly round-trip through the editor', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Cadence');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('deep clean');
+  await page.getByTestId('task-recur-row').click();
+
+  // Every second Monday.
+  await page.getByTestId('recur-mode-weekly').click();
+  await page.getByTestId('recur-weekday-1').click();
+  await page.getByTestId('recur-every-weeks').selectOption('2');
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId('task-recur-row')).toContainText('every 2 weeks on Mon');
+
+  // Reopening keeps the choice — the select survives the round trip.
+  await page.getByTestId('task-recur-row').click();
+  await expect(page.getByTestId('recur-every-weeks')).toHaveValue('2');
+
+  // Switch to monthly: the 15th AND the true last day.
+  await page.getByTestId('recur-mode-monthly').click();
+  await page.getByTestId('recur-monthday').fill('15');
+  await page.getByTestId('recur-last-day').click();
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the 15th and last day');
+
+  // Round-trip again, drop the 15th via its chip: only "last day" remains.
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-monthday-drop-15').click();
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the last day');
+});
+
+test('an untouched reopen-save keeps a fortnight rule on ITS weeks', async ({ page }) => {
+  // Pinned: Wed Aug 12 2026 — anchor week Aug 9–15 is ON, its Monday is
+  // already past, so the first spawn is Mon Aug 24 (Aug 17 sits in the
+  // off week).
+  await page.clock.install({ time: new Date('2026-08-12T10:00:00') });
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Cycles');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('fortnight chore');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-weekly').click();
+  await page.getByTestId('recur-weekday-1').click();
+  await page.getByTestId('recur-every-weeks').selectOption('2');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('recurring-link').click();
+  const row = page.getByTestId(/^recurring-row-/).first();
+  await expect(row).toContainText('every 2 weeks on Mon');
+  await expect(row).toContainText('next: 8/24');
+  const id = (await row.getAttribute('data-testid'))!.replace('recurring-row-', '');
+
+  // Six days on — Tue Aug 18, the OFF week. Reopen the editor and save
+  // without changing a thing: the phase must hold. (The review-caught bug
+  // re-anchored on every save, flipping the on-weeks — this exact flow
+  // showed "next: 8/31" and every later spawn a week off.)
+  await page.clock.setFixedTime(new Date('2026-08-18T10:00:00'));
+  await page.getByTestId(`recurring-edit-${id}`).click();
+  await page.getByTestId('recur-save').click();
+  // "Still 8/24" is a NEGATIVE (the save must not change it) — settle past
+  // the async re-arm before asserting, or the read lands on the stale row.
+  await expect(page.getByTestId('recur-save')).toHaveCount(0); // editor closed = save done
+  await page.waitForTimeout(300);
+  await expect(row).toContainText('next: 8/24');
+});

@@ -35,25 +35,62 @@ export function scheduleAfterCompletion(tpl: RecurrenceTemplate, completedAt: Da
   return d.getTime();
 }
 
+/**
+ * Local midnight of the Sunday starting the week of `d`'s APP day —
+ * Sunday-first like every picker, and rollover-aware like every other piece
+ * of day math here (review catch: bucketing the anchor by raw calendar date
+ * put a Sunday-00:30 save in the wrong week — the user's clock said Sunday,
+ * the app's day model still said Saturday).
+ */
+function weekStartOfAppDay(d: Date, rolloverHour: number): Date {
+  const [y, m, day] = appDayKey(d, rolloverHour).split('-').map(Number);
+  const x = new Date(y!, m! - 1, day!);
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+
+/** Whole weeks between two moments' app-day weeks. Math.round eats the ±1h a DST edge adds. */
+function weeksBetween(a: Date, b: Date, rolloverHour: number): number {
+  return Math.round(
+    (weekStartOfAppDay(b, rolloverHour).getTime() - weekStartOfAppDay(a, rolloverHour).getTime())
+      / (7 * 86_400_000),
+  );
+}
+
 /** Weekly/monthly: the next spawn moment (rolloverHour on a due day), strictly after `after`. */
 export function nextScheduledSpawn(mode: RecurrenceMode, after: Date, rolloverHour: number): number | null {
   if (mode.kind === 'weekly') {
     if (mode.weekdays.length === 0) return null;
-    for (let i = 0; i <= 7; i++) {
+    // Without an anchor there is no way to say WHICH weeks are on — treat as
+    // plain weekly rather than let the on-week drift with the search date.
+    const every = mode.anchorMs === undefined ? 1 : Math.max(1, mode.everyWeeks ?? 1);
+    const anchor = new Date(mode.anchorMs ?? after.getTime());
+    for (let i = 0; i <= every * 7 + 7; i++) {
       const c = new Date(after.getFullYear(), after.getMonth(), after.getDate() + i, rolloverHour);
-      if (c.getTime() > after.getTime() && mode.weekdays.includes(c.getDay())) return c.getTime();
+      if (c.getTime() <= after.getTime()) continue;
+      if (!mode.weekdays.includes(c.getDay())) continue;
+      // ((x % n) + n) % n: weeksBetween goes negative when `after` sits
+      // before the anchor week, and JS % keeps the sign.
+      if (every > 1 && ((weeksBetween(anchor, c, rolloverHour) % every) + every) % every !== 0) continue;
+      return c.getTime();
     }
     return null; // unreachable with a non-empty weekday set
   }
   if (mode.kind === 'monthly') {
-    // Check this month and the next two — enough to skate past short-month clamping.
+    const wanted: Array<number | 'last'> = mode.days?.length ? mode.days : [mode.dayOfMonth];
+    // Check this month and the next two — enough to skate past short-month
+    // clamping — and take the EARLIEST of all wanted days that lies ahead.
+    let best: number | null = null;
     for (let i = 0; i <= 2; i++) {
       const first = new Date(after.getFullYear(), after.getMonth() + i, 1);
       const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-      const c = new Date(first.getFullYear(), first.getMonth(), Math.min(mode.dayOfMonth, lastDay), rolloverHour);
-      if (c.getTime() > after.getTime()) return c.getTime();
+      for (const w of wanted) {
+        const day = w === 'last' ? lastDay : Math.min(w, lastDay);
+        const c = new Date(first.getFullYear(), first.getMonth(), day, rolloverHour);
+        if (c.getTime() > after.getTime() && (best === null || c.getTime() < best)) best = c.getTime();
+      }
     }
-    return null; // unreachable
+    return best;
   }
   return null;
 }
