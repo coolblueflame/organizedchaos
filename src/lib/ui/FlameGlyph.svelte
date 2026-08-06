@@ -68,34 +68,65 @@
   });
 </script>
 
-<svg
-  class="flame"
-  class:flaring
-  viewBox="0 0 12 12"
-  width={size}
-  height={size}
-  role={title ? 'img' : 'presentation'}
-  aria-label={title}
-  aria-hidden={title ? undefined : 'true'}
->
-  <path d={FRAMES[frame]} />
-</svg>
+<!-- The glow is a REAL circle painted behind the flame, faded with opacity —
+     never a filter. The old `drop-shadow` transition sat on the same layer
+     the flicker repaints every 150ms, and iOS WebKit composites that badly:
+     the layer's rectangular backing store showed through as a SQUARE glow
+     with stale black patches where the re-rasterized flame should be (Ben's
+     2026-08-06 report: "more like a square than a circle", "solid black,
+     while the edges remain"). Opacity on a separate element gives the
+     compositor nothing to corrupt. -->
+<span class="holder" class:flaring data-testid="flame-holder">
+  <svg
+    class="flame"
+    class:flaring
+    viewBox="0 0 12 12"
+    width={size}
+    height={size}
+    role={title ? 'img' : 'presentation'}
+    aria-label={title}
+    aria-hidden={title ? undefined : 'true'}
+  >
+    <path d={FRAMES[frame]} />
+  </svg>
+</span>
 
 <style>
-  .flame {
+  .holder {
+    position: relative;
     display: inline-block;
+    /* The baseline tweak the svg used to carry — the wrapper owns it now,
+       with the svg a plain block inside, so text lines sit exactly as
+       they did before the wrapper existed. */
     vertical-align: -0.08em;
+    /* Fence the glow's z-index:-1 inside — without a stacking context it
+       could sink beneath an ancestor's content. */
+    isolation: isolate;
+  }
+  .holder::after {
+    content: '';
+    position: absolute;
+    inset: -45%;
+    z-index: -1;
+    border-radius: 50%;
+    background: radial-gradient(circle, currentColor 0%, transparent 65%);
+    opacity: 0;
+    transition: opacity 240ms ease;
+    pointer-events: none;
+  }
+  .holder.flaring::after { opacity: 0.55; }
+  .flame {
+    display: block;
     overflow: visible;
     transform-origin: 50% 92%;
-    transition: transform 240ms cubic-bezier(0.2, 1.6, 0.4, 1), filter 240ms ease;
+    transition: transform 240ms cubic-bezier(0.2, 1.6, 0.4, 1);
   }
   .flame path { fill: currentColor; stroke: none; }
-  .flame.flaring {
-    transform: scale(1.4);
-    filter: drop-shadow(0 0 5px currentColor);
-  }
+  .flame.flaring { transform: scale(1.4); }
   @media (prefers-reduced-motion: reduce) {
     .flame { transition: none; }
-    .flame.flaring { transform: none; filter: none; }
+    .flame.flaring { transform: none; }
+    .holder::after { transition: none; }
+    .holder.flaring::after { opacity: 0; }
   }
 </style>

@@ -1510,6 +1510,56 @@ test('a ritual already done today still completes again from the current card', 
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
 
+test('the streak flare is a circle behind the flame — never a filter on it', async ({ page }) => {
+  await reset(page);
+  // A 3-day streak through the engine's own persisted row — the tile's gate.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open('organizedchaos');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const d = new Date(Date.now() - 4 * 3_600_000);
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const tx = req.result.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put({ key: 'eggState', value: {
+        seen: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 99,
+        lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+        lastCompletionDay: day, streakDays: 3,
+      } });
+      tx.oncomplete = () => { req.result.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+  }));
+  await page.reload();
+  await expect(page.getByTestId('streak-tile')).toBeVisible();
+
+  // The flare never fires under automation (by design), so force its classes
+  // and read what the browser would actually paint — AFTER the 240ms opacity
+  // transition has run, or the read lands on its starting value of 0.
+  await page.evaluate(() => {
+    const holder = document.querySelector('[data-testid="flame-holder"]')!;
+    holder.classList.add('flaring');
+    holder.querySelector('svg')!.classList.add('flaring');
+  });
+  await page.waitForTimeout(400);
+  const styles = await page.evaluate(() => {
+    const holder = document.querySelector('[data-testid="flame-holder"]')!;
+    const glow = getComputedStyle(holder, '::after');
+    return {
+      svgFilter: getComputedStyle(holder.querySelector('svg')!).filter,
+      glowRadius: glow.borderRadius,
+      glowOpacity: parseFloat(glow.opacity),
+      glowBg: glow.backgroundImage,
+    };
+  });
+  // The layer the flicker repaints must carry NO filter — a transitioned
+  // drop-shadow there is what iOS composited as a black-patched SQUARE
+  // (2026-08-06 report). The glow is a real circle, visibly on while flaring.
+  expect(styles.svgFilter).toBe('none');
+  expect(styles.glowRadius).toBe('50%');
+  expect(styles.glowOpacity).toBeGreaterThan(0.3);
+  expect(styles.glowBg).toContain('radial-gradient');
+});
+
 test('the way back stays on screen: headers stick through a deep scroll', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Long Haul');
