@@ -200,6 +200,24 @@
     </p>
   </section>
 
+  {#if pushSupported()}
+    <section class="group" data-testid="settings-alarms">
+      <h2>timebox alarms</h2>
+      <p class="hint">A tiny scheduler (your own Cloudflare Worker — see
+        <code>tools/alarm-worker</code>) pushes the alarm at the exact second,
+        even with the phone locked in a pocket. Leave empty and timeboxes work
+        exactly as they always have.</p>
+      <label><span>worker url</span>
+        <input data-testid="alarm-url" placeholder="https://…workers.dev"
+          value={app.state.settings.alarmWorkerUrl ?? ''}
+          onchange={(e) => setting({ alarmWorkerUrl: e.currentTarget.value.trim() || undefined })} /></label>
+      <label><span>alarm secret</span>
+        <input data-testid="alarm-secret" type="password" placeholder="the ALARM_SECRET you set"
+          value={app.state.settings.alarmWorkerSecret ?? ''}
+          onchange={(e) => setting({ alarmWorkerSecret: e.currentTarget.value.trim() || undefined })} /></label>
+    </section>
+  {/if}
+
   <section class="group" data-testid="settings-privacy">
     <h2>locked lists</h2>
     {#if hasPin()}

@@ -1,6 +1,9 @@
 name = "organizedchaos-alarms"
 main = "worker.js"
 compatibility_date = "2026-08-05"
+# The push library's isomorphic crypto shim may touch node:crypto at ALARM
+# time — the silent-failure zone. nodejs_compat is free insurance.
+compatibility_flags = ["nodejs_compat"]
 
 [[durable_objects.bindings]]
 name = "TIMEBOX_ALARM"

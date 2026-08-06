@@ -5,9 +5,15 @@
  * reads it each morning and sends the digest — the free CI is the "server".
  */
 
-/** Public half of the VAPID pair; the private half lives only in the data repo's Action secrets. */
+/**
+ * Public half of the VAPID pair; the private half lives only in the data
+ * repo's Action secrets and the alarm Worker's secrets (same pair — one
+ * identity for both senders). Pair rotated 2026-08-05: subscriptions are
+ * bound to this key, so changing it invalidates every existing subscription —
+ * each device must re-toggle reminders to re-subscribe.
+ */
 export const VAPID_PUBLIC_KEY =
-  'BMGmNH6N9_AWl4HyjTmwbjSXsGdXxSBgs3DOTNFiUQOyHkeFCD4Z7nd8QjlKXNc8q-Y5Z55390wrNXYOSnalA1Q';
+  'BAKBna8PAb-a0spGjjSJ3kWJ_J6AT_cm48fnWggS1NcCmOIASbCyJFR6vG7F-h0W17KNo8OMV0lVL8lldmIW8LU';
 
 /** PushManager wants the key as raw bytes, not base64url. */
 function applicationServerKey(): Uint8Array {

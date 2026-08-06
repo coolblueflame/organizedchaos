@@ -238,6 +238,13 @@ export interface Settings {
   quickAddListId?: string;
   /** Salted SHA-256 of the lock PIN. Synced so one PIN unlocks every device. */
   lockPin?: { salt: string; hash: string };
+  /**
+   * The timebox alarm scheduler (a tiny Cloudflare Worker; tools/alarm-worker).
+   * Optional by design: unset, timeboxes behave exactly as they always have —
+   * the app must never depend on the one hosted piece it has.
+   */
+  alarmWorkerUrl?: string;
+  alarmWorkerSecret?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings =

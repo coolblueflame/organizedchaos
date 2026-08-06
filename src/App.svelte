@@ -6,6 +6,7 @@
   import { toast } from './lib/ui/toast.svelte';
   import { searchQuery } from './lib/ui/searchState.svelte';
   import { checkTimeboxes } from './lib/ui/timeboxWatch.svelte';
+  import { syncAlarms } from './lib/state/alarmPush.svelte';
 
   // Spawn-sweep triggers beyond init (spec §5): returning to the app, and the
   // 4am rollover while it stays open. The timer re-arms itself each rollover.
@@ -68,9 +69,12 @@
   */
   $effect(() => {
     if (!app.ready) return;
-    const sweep = () => checkTimeboxes(
-      app.state.tasks, app.state.lists, () => app.fireEgg('timeboxFinished'),
-    );
+    const sweep = () => {
+      checkTimeboxes(app.state.tasks, app.state.lists, () => app.fireEgg('timeboxFinished'));
+      // The remote half rides the same beat: a cheap diff that almost always
+      // sends nothing, and is a no-op entirely until Settings configures it.
+      void syncAlarms(app.state.tasks, app.state.lists, app.state.settings);
+    };
     const onVisible = () => { if (document.visibilityState === 'visible') sweep(); };
     const id = setInterval(sweep, 1000);
     document.addEventListener('visibilitychange', onVisible);
