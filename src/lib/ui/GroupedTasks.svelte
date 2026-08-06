@@ -11,6 +11,7 @@
   import type { TaskGroup } from '../domain/views';
   import { regroupPatch } from '../domain/regroup';
   import { PRIORITIES, type Priority, type Task } from '../domain/types';
+  import { ESTIMATE_HINT, parseEstimate } from '../domain/estimate';
   import TaskRow from './TaskRow.svelte';
   import { haptic } from './fx/haptics';
   import { burstAt, motionOk } from './fx/particles';
@@ -154,7 +155,7 @@
     await runBulk('delete');
   }
 
-  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue', value?: string) {
+  async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue' | 'estimate', value?: string) {
     const ids = [...selected];
     selected = [];
     // Reset the pickers, or re-choosing the same value next time is a no-op.
@@ -409,6 +410,17 @@
       <option value="">→ move to…</option>
       {#each app.state.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
     </select>
+    <!-- Enter commits: one estimate lands on every selected task and clears
+         their NEW badges — an estimate is triage (2026-08-05 ask). -->
+    <input class="est" data-testid="bulk-estimate" placeholder="⧖ 45m"
+      title="set one time estimate for the whole selection ({ESTIMATE_HINT})"
+      onkeydown={(e) => {
+        if (e.key !== 'Enter') return;
+        const hours = parseEstimate(e.currentTarget.value);
+        if (hours === null) return;
+        e.currentTarget.value = '';
+        void runBulk('estimate', String(hours));
+      }} />
     <button class="danger" class:armed={deleteArmed} data-testid="bulk-delete"
       onclick={() => void confirmDelete()}>
       {deleteArmed ? `delete ${selected.length}?` : 'delete'}
@@ -482,6 +494,12 @@
     own label; the dropdown still shows every option at full length.
   */
   .bulk select { max-width: 34vw; min-width: 0; }
+  .bulk .est {
+    width: 74px; background: var(--bg1); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--text); font-family: var(--font-mono);
+    font-size: 0.8rem; padding: 7px 8px; outline: none;
+  }
+  .bulk .est:focus { border-color: var(--acc-cyan); }
   .bulk .danger { color: var(--acc-magenta); }
   .bulk .danger.armed {
     background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);

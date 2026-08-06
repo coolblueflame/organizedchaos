@@ -545,7 +545,7 @@ export class AppStore {
    */
   async bulkApply(
     taskIds: string[],
-    action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue',
+    action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue' | 'estimate',
     value?: string,
   ): Promise<void> {
     // Queueing is one singleton write, not a per-task loop — handle it whole.
@@ -571,7 +571,10 @@ export class AppStore {
     const before = taskIds
       .map((id) => this.state.tasks.find((t) => t.id === id))
       .filter((t): t is Task => t !== undefined)
-      .map((t) => ({ id: t.id, listId: t.listId, priority: t.priority, tagIds: [...t.tagIds] }));
+      .map((t) => ({
+        id: t.id, listId: t.listId, priority: t.priority, tagIds: [...t.tagIds],
+        estimateHours: t.estimateHours, needsReview: t.needsReview,
+      }));
     if (before.length === 0) return;
 
     // Collect each item's real inverse — and its forward, for redo — as we
@@ -613,6 +616,16 @@ export class AppStore {
           inverse.push(() => this.patchTask(snap.id, { tagIds: snap.tagIds }));
           forward.push(() => this.patchTask(snap.id, { tagIds: [...snap.tagIds, value] }));
         }
+      } else if (action === 'estimate' && value) {
+        // One patch does both halves of the ask (Ben, 2026-08-05): the
+        // estimate lands AND the NEW badge clears — an estimate is triage,
+        // and a fifty-row music list should not need each card opened twice.
+        const hours = Number(value);
+        await this.patchTask(snap.id, { estimateHours: hours, needsReview: false });
+        inverse.push(() => this.patchTask(snap.id, {
+          estimateHours: snap.estimateHours, needsReview: snap.needsReview,
+        }));
+        forward.push(() => this.patchTask(snap.id, { estimateHours: hours, needsReview: false }));
       }
     }
     if (inverse.length === 0) return;
@@ -621,6 +634,7 @@ export class AppStore {
       : action === 'delete' ? 'Deleted'
       : action === 'move' ? 'Moved'
       : action === 'tag' ? 'Tagged'
+      : action === 'estimate' ? 'Estimated'
       : 'Re-prioritised';
     // `inverse` counts what actually changed — tagging skips tasks that already
     // wore it, and the toast should not claim to have touched them.

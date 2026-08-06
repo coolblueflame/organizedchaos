@@ -1509,3 +1509,37 @@ test('a ritual already done today still completes again from the current card', 
   await page.getByTestId('completed-link').click();
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
 });
+
+test('bulk estimate: one value lands on the whole selection and clears NEW', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Music');
+  await addTask(page, 'album one');
+  await addTask(page, 'album two');
+  await addTask(page, 'album three');
+
+  // Fresh tasks wear NEW — the badge this feature exists to clear en masse.
+  await expect(page.getByTestId(/^needs-review-/)).toHaveCount(3);
+
+  const ids = await Promise.all(
+    (await page.getByTestId(/^task-row-/).all()).map(async (row) =>
+      (await row.getAttribute('data-testid'))!.replace('task-row-', '')),
+  );
+  await page.getByTestId(`select-${ids[0]}`).click();
+  await page.getByTestId(`select-${ids[1]}`).click();
+  await page.getByTestId('bulk-estimate').fill('45m');
+  await page.getByTestId('bulk-estimate').press('Enter');
+
+  // Two triaged in one stroke, the bystander untouched.
+  await expect(page.getByTestId(/^needs-review-/)).toHaveCount(1);
+
+  // Undoable as one, redoable as one — checked BEFORE opening any row,
+  // because a tap-expand is itself a triage and would eat a badge.
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(/^needs-review-/)).toHaveCount(3);
+  await page.keyboard.press('Control+Shift+z');
+  await expect(page.getByTestId(/^needs-review-/)).toHaveCount(1);
+
+  // The estimate really landed, in the compact spoken form.
+  await page.getByText('album one', { exact: true }).click();
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('45m');
+});
