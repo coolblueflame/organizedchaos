@@ -65,6 +65,8 @@ export class AppStore {
   private pendingEggs: Array<{ event: EggEvent; extra: { screen?: string } }> = [];
   /** Reactive mirrors of delight state the UI cares about. */
   eggStreak = $state(0);
+  /** App-day key of the newest completion — '' until the engine loads. */
+  eggLastCompletionDay = $state('');
   eggBestStreak = $state(0);
   eggUnlocks = $state<string[]>([]);
   eggTrivia = $state({ correct: 0, total: 0 });
@@ -129,6 +131,7 @@ export class AppStore {
     if (!this.eggs) return;
     this.eggStreak = this.eggs.streakDays;
     this.eggBestStreak = this.eggs.bestStreakDays;
+    this.eggLastCompletionDay = this.eggs.lastCompletionDay;
     this.eggUnlocks = this.eggs.unlocks;
     this.eggTrivia = this.eggs.triviaStats;
   }
@@ -152,6 +155,10 @@ export class AppStore {
     const automated = underAutomation();
     const force = typeof localStorage !== 'undefined' ? localStorage.getItem('OC_EGG_FORCE') : null;
     if (automated) {
+      // Silent, not amnesiac: the streak (and its fed-today display state)
+      // still advances under webdriver — only the lottery stays off.
+      this.eggs.noteQuietly(event);
+      this.syncEggMirrors();
       const def = force ? REGISTRY.find((r) => r.id === force && r.triggers.includes(event)) : undefined;
       if (def) {
         localStorage.removeItem('OC_EGG_FORCE'); // one-shot: a forced entry fires once

@@ -3,10 +3,22 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { completionCounts } from '../domain/stats';
+  import { appDayKey } from '../domain/time';
   import { motionOk } from './fx/particles';
   import FlameGlyph from './FlameGlyph.svelte';
 
   const counts = $derived(completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour));
+
+  /**
+   * Fed = the streak has been extended TODAY. Until then the flame runs
+   * muted (2026-08-07 ask) — a quiet "this still needs one" instead of a
+   * fire that looks equally alive whether or not today has earned it.
+   * Same clock idiom as `counts` above: re-evaluated on every completion,
+   * which is the moment it can flip.
+   */
+  const fedToday = $derived(
+    app.eggLastCompletionDay === appDayKey(new Date(), app.state.settings.rolloverHour),
+  );
 
   const tiles = $derived([
     { label: 'today', value: counts.today },
@@ -51,8 +63,11 @@
     {/each}
   </button>
   {#if app.eggStreak >= 3}
-    <button class="streak" data-testid="streak-tile" onclick={() => navigate({ name: 'stats' })}
-      title="{app.eggStreak}-day streak · best {app.eggBestStreak}">
+    <button class="streak" class:cold={!fedToday} data-testid="streak-tile"
+      onclick={() => navigate({ name: 'stats' })}
+      title={fedToday
+        ? `${app.eggStreak}-day streak · best ${app.eggBestStreak}`
+        : `${app.eggStreak}-day streak · complete one today to keep it`}>
       <!-- flareKey: every completion today makes the fire surge for a beat. -->
       <FlameGlyph size={15} flareKey={counts.today} />
       <span class="streak-n">{app.eggStreak}</span>
@@ -85,4 +100,8 @@
   }
   @media (hover: hover) { .streak:hover { background: var(--bg2); } }
   .streak-n { color: var(--acc-orange); font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; }
+  /* Hungry: today hasn't fed the streak yet. Everything inherits the dim —
+     the flame and glow run on currentColor, so they mute with it. */
+  .streak.cold, .streak.cold .streak-n { color: var(--dim); }
+  .streak.cold { opacity: 0.75; }
 </style>

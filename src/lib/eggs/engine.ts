@@ -203,6 +203,20 @@ export class EggEngine {
 
   get streakDays(): number { return this.state.streakDays; }
   get bestStreakDays(): number { return Math.max(this.state.bestStreakDays ?? 0, this.state.streakDays); }
+  /** The app-day of the newest completion — lets the UI show a streak as fed or hungry. */
+  get lastCompletionDay(): string { return this.state.lastCompletionDay; }
+
+  /**
+   * The bookkeeping half of handle() with no lottery and no presentation.
+   * Automation silences delight, but silence must not mean amnesia — the
+   * streak (and the fed-today state the UI muting rides on) still has to
+   * advance when a completion happens under webdriver.
+   */
+  noteQuietly(event: EggEvent): void {
+    if (event !== 'taskCompleted') return;
+    this.touchStreak(appDayKey(this.now(), this.rolloverHour));
+    this.persist();
+  }
   get triviaStats(): { correct: number; total: number } { return { ...this.state.trivia }; }
   get unlocks(): string[] { return [...this.state.unlocks]; }
   get storyStage(): number { return this.state.storyStage; }
