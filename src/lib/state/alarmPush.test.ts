@@ -30,6 +30,13 @@ function harness(status = 200) {
 }
 
 beforeEach(() => {
+  // A device-local storage for the persisted ledger (jsdom-free fake).
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+  });
   resetAlarmLedger();
   // A push subscription exists on this "device".
   vi.stubGlobal('navigator', {
@@ -82,6 +89,27 @@ describe('syncAlarms', () => {
     const t = task({ listId: 'SECRET', timeboxEndsAt: NOW + 60_000, name: 'the private thing' });
     await syncAlarms([t], lists, SETTINGS, NOW, send);
     expect(String(sent[0]!.body.body)).not.toContain('private thing');
+  });
+
+  it('an alarm scheduled before a reload is still cancelled after it', async () => {
+    // Ben's 2026-08-06 report: complete a boxed task early and the push
+    // arrives anyway at the would-have-expired moment. The ledger was
+    // session-local — a reload emptied it, and cancels only ever come FROM
+    // the ledger, so the Worker's appointment could never be taken back.
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const before = harness();
+    await syncAlarms([t], [], SETTINGS, NOW, before.send);
+    expect(before.sent).toHaveLength(1); // scheduled, ledger persisted
+
+    resetAlarmLedger(true); // the reload: memory gone, device ledger kept
+
+    // The task was completed ahead of its box; the fresh session must
+    // remember enough to send the cancel.
+    const after = harness();
+    await syncAlarms([{ ...t, completedAt: NOW + 5_000, timeboxEndsAt: undefined }],
+      [], SETTINGS, NOW + 6_000, after.send);
+    expect(after.sent).toHaveLength(1);
+    expect(after.sent[0]!.body).toMatchObject({ taskId: t.id, action: 'cancel' });
   });
 
   it('a failed send is retried by the next sweep, a confirmed one is not', async () => {

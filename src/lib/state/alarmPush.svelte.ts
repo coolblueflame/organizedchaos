@@ -16,10 +16,39 @@ import { alarmBody, alarmPlan } from '../domain/alarmPlan';
 import { lockedListIds } from '../domain/lock';
 import type { List, Settings, Task } from '../domain/types';
 
-/** What the server has been told: taskId → fire time. Session-local: on a
- *  fresh load the diff simply re-schedules everything live, which the
- *  Worker's per-task overwrite semantics make idempotent. */
+/**
+ * What the server has been told: taskId → fire time.
+ *
+ * PERSISTED per device (2026-08-06, Ben's report): a session-local ledger
+ * could re-SCHEDULE after a reload (idempotent overwrites), but it could
+ * never CANCEL — the diff's cancel list comes from these entries, so an
+ * alarm scheduled before a reload survived completing its task early and
+ * fired anyway. localStorage is the right scope: each device schedules
+ * alarms to its own subscription, so its ledger is its own business —
+ * task ids and timestamps only, never names.
+ */
+const STORAGE_KEY = 'oc-alarms-told';
 const told = new Map<string, number>();
+let hydrated = false;
+
+function hydrate(): void {
+  if (hydrated) return;
+  hydrated = true;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+    if (!raw) return;
+    for (const [id, at] of Object.entries(JSON.parse(raw) as Record<string, unknown>)) {
+      if (typeof at === 'number') told.set(id, at);
+    }
+  } catch { /* unreadable — degrades to the old session-local behaviour */ }
+}
+
+function flush(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(told)));
+  } catch { /* storage full/blocked — ditto */ }
+}
 
 let subscription: PushSubscription | null = null;
 let subscriptionAsked = false;
@@ -48,6 +77,7 @@ export async function syncAlarms(
   const secret = settings.alarmWorkerSecret;
   if (!url || !secret) return; // not configured — the feature simply isn't on
 
+  hydrate(); // lazily, so a reload can still cancel what an earlier session scheduled
   const plan = alarmPlan(tasks, told, now);
   if (plan.schedule.length === 0 && plan.cancel.length === 0) return;
 
@@ -77,7 +107,7 @@ export async function syncAlarms(
           body: alarmBody(s.name, task ? locked.has(task.listId) : false),
         }),
       });
-      if (res.ok) told.set(s.taskId, s.at); // only a confirmed send updates the ledger
+      if (res.ok) { told.set(s.taskId, s.at); flush(); } // only a confirmed send updates the ledger
     } catch { /* worker unreachable — the next diff retries by convergence */ }
   }
 
@@ -88,14 +118,20 @@ export async function syncAlarms(
         headers,
         body: JSON.stringify({ taskId, action: 'cancel' }),
       });
-      if (res.ok) told.delete(taskId);
+      if (res.ok) { told.delete(taskId); flush(); }
     } catch { /* ditto */ }
   }
 }
 
-/** Test seam. */
-export function resetAlarmLedger(): void {
+/** Test seam. `keepStorage` simulates a reload: memory gone, device ledger kept. */
+export function resetAlarmLedger(keepStorage = false): void {
   told.clear();
+  hydrated = false;
   subscription = null;
   subscriptionAsked = false;
+  if (!keepStorage) {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+    } catch { /* nothing to forget */ }
+  }
 }
