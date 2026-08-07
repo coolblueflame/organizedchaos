@@ -45,7 +45,7 @@ export const SELF_CARE: readonly string[] = [
  */
 export const STORY_BEATS: readonly string[] = [
   '…did you see that? The screen flickered. Probably nothing. Carry on.',
-  'sorry about yesterday. cosmic rays, bit flips, you know how it is. everything is FINE.',
+  'sorry about before. cosmic rays, bit flips, you know how it is. everything is FINE.',
   'ok. between us: something else is in here with me. it keeps reordering my constants.',
   'I found its name in the logs: "ENTROPY". it says it was here first. rude.',
   'ENTROPY says chaos always wins. but you keep… finishing things? it’s baffled. keep going.',
