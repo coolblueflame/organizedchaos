@@ -214,6 +214,9 @@ test('multi-select bulk-completes several tasks, undoable as one', async ({ page
 
   await page.getByTestId('bulk-complete').click();
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
+  // Same armed-undo signal as the bulk-estimate test: rows vanish from the
+  // mirror before the batch's undo entry exists — the toast closes the gap.
+  await expect(page.getByText('Completed 2 tasks', { exact: true })).toBeVisible();
 
   await page.keyboard.press('Control+z');
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(3);
@@ -1739,6 +1742,11 @@ test('bulk estimate: one value lands on the whole selection and clears NEW', asy
 
   // Two triaged in one stroke, the bystander untouched.
   await expect(page.getByTestId(/^needs-review-/)).toHaveCount(1);
+  // The badge count updates at the MIRROR layer; the batch's single undo
+  // entry arms after the loop's last disk write. The toast is the "undo is
+  // armed" signal a human sees — wait for it, or a fast Ctrl+Z finds an
+  // empty stack (caught on CI's slower IndexedDB, 2026-08-07).
+  await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
 
   // Undoable as one, redoable as one — checked BEFORE opening any row,
   // because a tap-expand is itself a triage and would eat a badge.
