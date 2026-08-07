@@ -457,8 +457,12 @@ test('a deep link reaches a task buried past the render budget', async ({ page }
   await expect.poll(async () => {
     const box = await title.boundingBox();
     if (!box) return 'no box';
-    return box.y >= 0 && box.y < 150 ? 'at the top' : `y=${Math.round(box.y)}`;
-  }, { message: 'the jump lands with the title at the top, no scrolling needed' }).toBe('at the top');
+    // ≥ 40: BELOW the sticky header, not flush with the viewport edge —
+    // flush meant under the Dynamic Island on iOS (2026-08-07 report;
+    // scroll-margin-top on [data-editing-root] is what provides this).
+    return box.y >= 40 && box.y < 150 ? 'at the top, clear of the bar' : `y=${Math.round(box.y)}`;
+  }, { message: 'the jump lands the title below the sticky bar, no scrolling needed' })
+    .toBe('at the top, clear of the bar');
 });
 
 test('removing a tag in tag view keeps the relocated card on screen', async ({ page }) => {
@@ -1508,6 +1512,44 @@ test('a ritual already done today still completes again from the current card', 
   // Both efforts are history: two completed records, one credited day.
   await page.getByTestId('completed-link').click();
   await expect(page.getByText('walk the dog', { exact: true })).toHaveCount(2);
+});
+
+test('the streak runs cold until today feeds it', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Fuel');
+  await addTask(page, 'kindling');
+  await page.getByTestId('back').click();
+  // A 3-day streak last fed YESTERDAY: today has not earned the fire yet.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open('organizedchaos');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const d = new Date(Date.now() - 4 * 3_600_000 - 86_400_000);
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const tx = req.result.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put({ key: 'eggState', value: {
+        seen: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 99,
+        lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+        lastCompletionDay: day, streakDays: 3,
+      } });
+      tx.oncomplete = () => { req.result.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+  }));
+  await page.reload();
+
+  const tile = page.getByTestId('streak-tile');
+  await expect(tile).toBeVisible();
+  await expect(tile).toHaveClass(/cold/);
+  await expect(tile).toHaveAttribute('title', /complete one today/);
+
+  // Feed it: the first completion of the day warms the tile back up.
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Fuel' }).first().click();
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await page.getByTestId('back').click();
+  await expect(tile).not.toHaveClass(/cold/);
 });
 
 test('the streak flare is a circle behind the flame — never a filter on it', async ({ page }) => {
