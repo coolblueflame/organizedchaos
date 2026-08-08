@@ -75,7 +75,11 @@
       // sends nothing, and is a no-op entirely until Settings configures it.
       void syncAlarms(app.state.tasks, app.state.lists, app.state.settings);
     };
-    const onVisible = () => { if (document.visibilityState === 'visible') sweep(); };
+    // BOTH edges on purpose (2026-08-08 report): visible catches up after a
+    // suspension; hidden is the last gasp BEFORE one. Complete a boxed task
+    // and pocket the phone in the same motion, and this — with keepalive on
+    // the request — is the only chance the cancel gets.
+    const onVisible = () => sweep();
     const id = setInterval(sweep, 1000);
     document.addEventListener('visibilitychange', onVisible);
     sweep();
@@ -83,6 +87,20 @@
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
+  });
+
+  // The 1s sweep catches drift; THIS catches the moment. A box appearing,
+  // moving, or vanishing triggers the diff in the same tick — a completion
+  // followed instantly by pocketing the phone must not bet on a timer that
+  // suspension may never grant (2026-08-08 report: the early-completed
+  // task's alarm still fired). Reading the boxed fields registers them as
+  // dependencies; the sweep itself is a cheap diff that usually sends nothing.
+  $effect(() => {
+    if (!app.ready) return;
+    for (const t of app.state.tasks) {
+      void t.timeboxEndsAt; void t.completedAt; void t.deleted;
+    }
+    void syncAlarms(app.state.tasks, app.state.lists, app.state.settings);
   });
 
   // Keyboard: Cmd/Ctrl+Z undoes the last consequential action long after its

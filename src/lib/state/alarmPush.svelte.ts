@@ -96,6 +96,9 @@ export async function syncAlarms(
       const res = await send(url, {
         method: 'POST',
         headers,
+        // keepalive: this may be the page's last act before iOS suspends it
+        // (complete → pocket the phone) — the request must outlive the page.
+        keepalive: true,
         body: JSON.stringify({
           taskId: s.taskId,
           action: 'set',
@@ -116,6 +119,7 @@ export async function syncAlarms(
       const res = await send(url, {
         method: 'POST',
         headers,
+        keepalive: true, // cancels especially — see the schedule POST's note
         body: JSON.stringify({ taskId, action: 'cancel' }),
       });
       if (res.ok) { told.delete(taskId); flush(); }

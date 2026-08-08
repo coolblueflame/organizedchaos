@@ -21,9 +21,9 @@ const SETTINGS = {
 } as Settings;
 
 function harness(status = 200) {
-  const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const sent: Array<{ url: string; body: Record<string, unknown>; keepalive?: boolean }> = [];
   const send = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-    sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+    sent.push({ url: String(url), body: JSON.parse(String(init?.body)), keepalive: init?.keepalive });
     return new Response('', { status });
   }) as unknown as typeof fetch;
   return { sent, send };
@@ -89,6 +89,18 @@ describe('syncAlarms', () => {
     const t = task({ listId: 'SECRET', timeboxEndsAt: NOW + 60_000, name: 'the private thing' });
     await syncAlarms([t], lists, SETTINGS, NOW, send);
     expect(String(sent[0]!.body.body)).not.toContain('private thing');
+  });
+
+  it('every request rides keepalive — it may be the page\'s last act', async () => {
+    // Complete a boxed task and pocket the phone in one motion: the cancel
+    // goes out as iOS suspends the page, and only keepalive lets it finish
+    // (2026-08-08 report — an early-completed task's alarm still fired).
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const { sent, send } = harness();
+    await syncAlarms([t], [], SETTINGS, NOW, send);
+    await syncAlarms([{ ...t, timeboxEndsAt: undefined }], [], SETTINGS, NOW + 1000, send);
+    expect(sent).toHaveLength(2); // one set, one cancel
+    for (const req of sent) expect(req.keepalive).toBe(true);
   });
 
   it('an alarm scheduled before a reload is still cancelled after it', async () => {
