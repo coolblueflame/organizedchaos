@@ -652,6 +652,7 @@ test('a timebox alarm fires from another screen, not just the home card', async 
 });
 
 test('a completed task records how long it took', async ({ page }) => {
+  await page.clock.install();
   await reset(page);
   await makeList(page, 'Timed');
   await addTask(page, 'quick one');
@@ -659,6 +660,14 @@ test('a completed task records how long it took', async ({ page }) => {
 
   await page.getByTestId('big-button').click();
   await page.getByTestId('draw-accept').click();
+  // The accept settles behind an animation timer — let the card actually
+  // exist BEFORE jumping the clock, or the deferred accept stamps startedAt
+  // on the far side of the jump and the "30s of work" collapses to ~300ms.
+  await expect(page.getByTestId('current-task-card')).toContainText('quick one');
+  // Long enough to be real work: an instant accept-and-complete now records
+  // nothing at all (MIN_TRACKED_MS), which this test used to depend on
+  // sneaking under.
+  await page.clock.fastForward('00:30');
   await page.getByTestId('current-complete').click();
   await expect(page.getByTestId('current-task-card')).toHaveCount(0);
 
@@ -1270,6 +1279,33 @@ test('expanding a task near the bottom scrolls its editor into view', async ({ p
     const h = await page.evaluate(() => window.innerHeight);
     return box !== null && box.y + box.height <= h;
   }, { timeout: 4000 }).toBe(true);
+});
+
+test('a forgotten clock resets from the card, and the stale stretch never records', async ({ page }) => {
+  await page.clock.install();
+  await reset(page);
+  await makeList(page, 'Forgetful');
+  await addTask(page, 'water the garden');
+
+  // Pick it up… and "forget" it for two hours.
+  await page.getByText('water the garden', { exact: true }).click();
+  await page.getByTestId('task-make-current').click();
+  await page.clock.fastForward('02:00:00');
+  await expect(page.getByTestId('current-task-card')).toContainText('2h');
+
+  // The card's reset puts the clock back to zero…
+  await page.getByTestId('clock-reset').click();
+  await expect(page.getByTestId('current-task-card')).not.toContainText('2h');
+
+  // …and completing shortly after records NOTHING: the real work happened
+  // off the books, and a near-zero sample would lie to the averages.
+  await page.clock.fastForward('00:04');
+  await page.getByTestId('current-complete').click();
+  await expect(page.getByTestId('current-task-card')).toHaveCount(0);
+  await page.getByTestId('completed-link').click();
+  const done = page.getByTestId(/^task-row-/).filter({ hasText: 'water the garden' }).first();
+  await expect(done).toBeVisible();
+  await expect(done).not.toContainText('⧗');
 });
 
 test('finishing tracked work with an estimate splashes the comparison', async ({ page }) => {

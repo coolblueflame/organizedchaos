@@ -1349,3 +1349,49 @@ describe('generated tasks', () => {
     expect((await persisted()).tasks.map((x) => x.id)).toContain(first.id);
   });
 });
+
+describe('the work clock', () => {
+  it('a stretch under the threshold records nothing, not even a template sample', async () => {
+    vi.setSystemTime(new Date('2026-08-08T10:00:00'));
+    const list = await store.addList('Quick');
+    const t = await store.addTask(list.id);
+    await store.setInProgress(t.id, true);
+    vi.setSystemTime(new Date('2026-08-08T10:00:04')); // four seconds "of work"
+    await store.completeTask(t.id);
+    // The work happened off the books (2026-08-08 ask): a near-zero sample
+    // would be a confident lie to the estimate averages.
+    expect(store.state.tasks.find((x) => x.id === t.id)!.activeMs).toBeUndefined();
+  });
+
+  it('a real stretch still records exactly', async () => {
+    vi.setSystemTime(new Date('2026-08-08T10:00:00'));
+    const list = await store.addList('Slow');
+    const t = await store.addTask(list.id);
+    await store.setInProgress(t.id, true);
+    vi.setSystemTime(new Date('2026-08-08T10:05:00'));
+    await store.completeTask(t.id);
+    expect(store.state.tasks.find((x) => x.id === t.id)!.activeMs).toBe(5 * 60_000);
+  });
+
+  it('reset discards running AND banked time; undo restores both', async () => {
+    vi.setSystemTime(new Date('2026-08-08T10:00:00'));
+    const list = await store.addList('Oops');
+    const t = await store.addTask(list.id);
+    await store.setInProgress(t.id, true);
+    vi.setSystemTime(new Date('2026-08-08T10:30:00'));
+    await store.setInProgress(t.id, false); // banks 30m
+    expect(store.state.tasks.find((x) => x.id === t.id)!.activeAccumulatedMs).toBe(30 * 60_000);
+    await store.setInProgress(t.id, true);
+    vi.setSystemTime(new Date('2026-08-08T11:00:00'));
+
+    await store.resetWorkClock(t.id);
+    let row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.activeAccumulatedMs).toBeUndefined();
+    expect(row.startedAt).toBe(new Date('2026-08-08T11:00:00').getTime());
+
+    await store.undoLast();
+    row = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(row.activeAccumulatedMs).toBe(30 * 60_000);
+    expect(row.startedAt).toBe(new Date('2026-08-08T10:30:00').getTime());
+  });
+});

@@ -198,6 +198,16 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
+ * A tracked stretch shorter than this records NOTHING at completion
+ * (2026-08-08 ask). Completing seconds after picking up — or seconds after
+ * resetting a forgotten clock — means the real work happened off the books,
+ * and the true duration is unknowable. Recording near-zero would feed the
+ * template averages a confident lie; a blank teaches nothing, which is the
+ * honest amount (same doctrine as the "already did this one" draw control).
+ */
+export const MIN_TRACKED_MS = 10_000;
+
+/**
  * Estimate vs. reality, for tasks where both halves exist: an estimate the
  * user actually typed and time the tracker actually recorded. Most tasks have
  * neither, and that is fine — the readout only appears when it can teach

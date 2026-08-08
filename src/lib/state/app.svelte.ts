@@ -31,7 +31,7 @@ import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
-import { completionCounts, estimateOutcome } from '../domain/stats';
+import { completionCounts, estimateOutcome, MIN_TRACKED_MS } from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
@@ -713,12 +713,14 @@ export class AppStore {
     const owed = perWindow ? credit !== -1 : task.ritualDoneDay !== day;
 
     // Time counts the same way it does anywhere else: only a stretch that was
-    // actually being tracked when it finished. It belongs to the record, not to
+    // actually being tracked when it finished, and only when it clears
+    // MIN_TRACKED_MS — see completeTask. It belongs to the record, not to
     // the ritual, which is about to start tomorrow from nothing.
     const finishedAt = Date.now();
-    const tracked = task.inProgress && task.startedAt !== undefined
+    const rawTracked = task.inProgress && task.startedAt !== undefined
       ? (task.activeAccumulatedMs ?? 0) + (finishedAt - task.startedAt)
       : undefined;
+    const tracked = rawTracked !== undefined && rawTracked >= MIN_TRACKED_MS ? rawTracked : undefined;
     const wasInProgress = task.inProgress;
     const priorStartedAt = task.startedAt;
     const priorAccumulated = task.activeAccumulatedMs;
@@ -837,10 +839,13 @@ export class AppStore {
     const finishedAt = Date.now();
     // Time counts ONLY when finishing something you were actively working on.
     // Ticking it off the list — or completing it after pausing — records nothing,
-    // because that stretch was never tracked to completion.
-    const tracked = task?.inProgress && task.startedAt !== undefined
+    // because that stretch was never tracked to completion. And a stretch under
+    // MIN_TRACKED_MS also records nothing: completing seconds after pickup (or
+    // after a clock reset) means the work happened off the books.
+    const rawTracked = task?.inProgress && task.startedAt !== undefined
       ? (task.activeAccumulatedMs ?? 0) + (finishedAt - task.startedAt)
       : undefined;
+    const tracked = rawTracked !== undefined && rawTracked >= MIN_TRACKED_MS ? rawTracked : undefined;
 
     // Did this open a door? Asked before the write, because newlyUnblocked
     // answers "given that this one is done" regardless of whether that has
@@ -1272,6 +1277,30 @@ export class AppStore {
       activeAccumulatedMs: banked > 0 ? banked : undefined,
       timeboxEndsAt: undefined, // the clock stops with the work
     });
+  }
+
+  /**
+   * "I forgot to put this down" (2026-08-08 ask): restart the running clock
+   * without touching anything else. The stale stretch — running AND banked —
+   * is discarded, not shrunk: the true time is unknowable, and a made-up
+   * number would teach the estimate averages a lie. Pairs with
+   * MIN_TRACKED_MS at completion, so reset-then-finish records nothing.
+   */
+  async resetWorkClock(id: string): Promise<void> {
+    const task = this.state.tasks.find((t) => t.id === id);
+    if (!task) return;
+    if (task.startedAt === undefined && task.activeAccumulatedMs === undefined) return;
+    const prior = { startedAt: task.startedAt, activeAccumulatedMs: task.activeAccumulatedMs };
+    const fresh = {
+      // Still being worked on = the clock restarts now; put down = it just clears.
+      startedAt: task.inProgress ? Date.now() : undefined,
+      activeAccumulatedMs: undefined,
+    };
+    // Armed before the mutation, same as every undo here.
+    this.pushUndo(`Reset the clock on "${task.name || 'task'}"`,
+      () => this.patchTask(id, prior),
+      () => this.patchTask(id, fresh));
+    await this.patchTask(id, fresh);
   }
 
   /**

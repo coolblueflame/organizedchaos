@@ -127,6 +127,11 @@
         <span class="elapsed" title="time actually spent working on this">
           ⧗ {formatElapsed(elapsedSoFar(task, now))} in
         </span>
+        <!-- Forgot to put it down? The stale stretch is discarded, not
+             recorded (2026-08-08 ask) — and undo brings it back. -->
+        <button class="clock-reset" data-testid="clock-reset"
+          title="restart the clock — the time so far is discarded (undoable)"
+          onclick={() => void app.resetWorkClock(task!.id)}>reset</button>
       {/if}
     </div>
 
@@ -185,6 +190,12 @@
   }
   .timebox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .elapsed { color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem; }
+  .clock-reset {
+    background: none; border: 1px solid var(--line); border-radius: 5px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.62rem;
+    padding: 2px 6px; cursor: pointer;
+  }
+  @media (hover: hover) { .clock-reset:hover { color: var(--acc-orange); border-color: var(--acc-orange); } }
   .actions { display: flex; gap: 8px; }
   .done {
     flex: 2; background: var(--bg2); border: 1px solid var(--acc-green); border-radius: 8px;
