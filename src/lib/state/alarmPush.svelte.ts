@@ -51,11 +51,19 @@ function flush(): void {
 }
 
 let subscription: PushSubscription | null = null;
-let subscriptionAsked = false;
 
+/**
+ * Cached once FOUND — never cached as null. The old version asked exactly
+ * once per session, and a transient miss (the very first sweep can run
+ * before the SW registration settles on an iOS cold start) poisoned the
+ * whole session: every later sweep short-circuited, and because the
+ * subscription gate ALSO stood in front of the cancel loop, cancels went
+ * silently unsent no matter how long the app stayed open. That was the
+ * third and real answer to "I completed it early and it still alarmed"
+ * (2026-08-10) — the two ledger fixes before it were real but downstream.
+ */
 async function pushSubscription(): Promise<PushSubscription | null> {
-  if (subscriptionAsked) return subscription;
-  subscriptionAsked = true;
+  if (subscription) return subscription;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     subscription = (await reg?.pushManager.getSubscription()) ?? null;
@@ -81,37 +89,40 @@ export async function syncAlarms(
   const plan = alarmPlan(tasks, told, now);
   if (plan.schedule.length === 0 && plan.cancel.length === 0) return;
 
-  const sub = await pushSubscription();
-  if (!sub) return; // no push subscription yet — nothing the server could do
-
-  const locked = lockedListIds(lists, false);
   const headers = {
     'content-type': 'application/json',
     authorization: `Bearer ${secret}`,
   };
 
-  for (const s of plan.schedule) {
-    const task = tasks.find((t) => t.id === s.taskId);
-    try {
-      const res = await send(url, {
-        method: 'POST',
-        headers,
-        // keepalive: this may be the page's last act before iOS suspends it
-        // (complete → pocket the phone) — the request must outlive the page.
-        keepalive: true,
-        body: JSON.stringify({
-          taskId: s.taskId,
-          action: 'set',
-          at: s.at,
-          subscription: sub.toJSON(),
-          title: '⏳ Timebox finished',
-          // The push lands on a lock screen the PIN cannot gate — a locked
-          // list's task is never named, same rule as every notification.
-          body: alarmBody(s.name, task ? locked.has(task.listId) : false),
-        }),
-      });
-      if (res.ok) { told.set(s.taskId, s.at); flush(); } // only a confirmed send updates the ledger
-    } catch { /* worker unreachable — the next diff retries by convergence */ }
+  // Scheduling needs somewhere to push TO; cancelling does not. The cancel
+  // loop below must NEVER wait on the subscription — see pushSubscription
+  // for the session this gate silently ate.
+  const sub = plan.schedule.length > 0 ? await pushSubscription() : null;
+  if (sub) {
+    const locked = lockedListIds(lists, false);
+    for (const s of plan.schedule) {
+      const task = tasks.find((t) => t.id === s.taskId);
+      try {
+        const res = await send(url, {
+          method: 'POST',
+          headers,
+          // keepalive: this may be the page's last act before iOS suspends it
+          // (complete → pocket the phone) — the request must outlive the page.
+          keepalive: true,
+          body: JSON.stringify({
+            taskId: s.taskId,
+            action: 'set',
+            at: s.at,
+            subscription: sub.toJSON(),
+            title: '⏳ Timebox finished',
+            // The push lands on a lock screen the PIN cannot gate — a locked
+            // list's task is never named, same rule as every notification.
+            body: alarmBody(s.name, task ? locked.has(task.listId) : false),
+          }),
+        });
+        if (res.ok) { told.set(s.taskId, s.at); flush(); } // only a confirmed send updates the ledger
+      } catch { /* worker unreachable — the next diff retries by convergence */ }
+    }
   }
 
   for (const taskId of plan.cancel) {
@@ -132,7 +143,6 @@ export function resetAlarmLedger(keepStorage = false): void {
   told.clear();
   hydrated = false;
   subscription = null;
-  subscriptionAsked = false;
   if (!keepStorage) {
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);

@@ -91,6 +91,62 @@ describe('syncAlarms', () => {
     expect(String(sent[0]!.body.body)).not.toContain('private thing');
   });
 
+  it('cancels go out even when this session has no push subscription', async () => {
+    // The third "completed early, alarmed anyway" (2026-08-10): a session
+    // that couldn't see its subscription silently skipped its CANCELS too,
+    // though cancelling needs no subscription at all.
+    vi.stubGlobal('navigator', {
+      serviceWorker: { getRegistration: async () => undefined },
+    });
+    // The Worker knows about a box (persisted ledger from an earlier session).
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const before = harness();
+    // Seed the ledger via a normal session first…
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        getRegistration: async () => ({
+          pushManager: { getSubscription: async () => ({ toJSON: () => ({ endpoint: 'e', keys: {} }) }) },
+        }),
+      },
+    });
+    await syncAlarms([t], [], SETTINGS, NOW, before.send);
+    expect(before.sent).toHaveLength(1);
+    resetAlarmLedger(true); // reload
+
+    // …then a session whose subscription never resolves completes the task.
+    vi.stubGlobal('navigator', {
+      serviceWorker: { getRegistration: async () => undefined },
+    });
+    const after = harness();
+    await syncAlarms([{ ...t, completedAt: NOW + 5_000, timeboxEndsAt: undefined }],
+      [], SETTINGS, NOW + 6_000, after.send);
+    expect(after.sent).toHaveLength(1);
+    expect(after.sent[0]!.body).toMatchObject({ taskId: t.id, action: 'cancel' });
+  });
+
+  it('a subscription miss is retried next sweep, never cached for the session', async () => {
+    let asks = 0;
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        getRegistration: async () => ({
+          pushManager: {
+            // First ask misses (SW registration still settling); second finds it.
+            getSubscription: async () => (++asks === 1
+              ? null
+              : { toJSON: () => ({ endpoint: 'e', keys: {} }) }),
+          },
+        }),
+      },
+    });
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const { sent, send } = harness();
+    await syncAlarms([t], [], SETTINGS, NOW, send);
+    expect(sent).toHaveLength(0); // couldn't schedule yet…
+    await syncAlarms([t], [], SETTINGS, NOW + 1000, send);
+    expect(sent).toHaveLength(1); // …but the miss was not cached
+    expect(asks).toBe(2);
+  });
+
   it('every request rides keepalive — it may be the page\'s last act', async () => {
     // Complete a boxed task and pocket the phone in one motion: the cancel
     // goes out as iOS suspends the page, and only keepalive lets it finish
