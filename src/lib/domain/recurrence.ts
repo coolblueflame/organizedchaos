@@ -95,8 +95,23 @@ export function nextScheduledSpawn(mode: RecurrenceMode, after: Date, rolloverHo
   return null;
 }
 
+/**
+ * The identity of ONE occurrence of ONE template — deterministic, so two
+ * devices sweeping the same due moment mint THE SAME row and the id-keyed
+ * newest-wins merge collapses them into one. (2026-08-11 report: a daily
+ * walk spawned twice, 1.7s apart, one per device at the 4am rollover —
+ * skip-if-open cannot see a row the other device hasn't synced yet.)
+ * dueAt comes from the SYNCED nextSpawnAt, so both devices agree on it.
+ * Known residual: the dormant-template self-heal arms afterCompletion to
+ * each device's own `now`, so simultaneous REGROWS can still differ — rare,
+ * and bounded to that healing path.
+ */
+export function spawnId(tplId: string, dueAt: number): string {
+  return `sp_${tplId}_${dueAt}`;
+}
+
 export interface SweepResult {
-  drafts: TaskDraft[];
+  drafts: Array<TaskDraft & { id: string }>;
   updates: Array<{ id: string; nextSpawnAt: number | undefined }>;
 }
 
@@ -118,6 +133,7 @@ export function sweepSpawns(
     );
     if (!hasOpenInstance) {
       res.drafts.push({
+        id: spawnId(tpl.id, tpl.nextSpawnAt),
         listId: tpl.listId,
         name: tpl.name,
         notes: tpl.notes,

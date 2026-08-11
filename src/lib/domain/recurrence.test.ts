@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from './recurrence';
+import { nextScheduledSpawn, scheduleAfterCompletion, spawnId, sweepSpawns } from './recurrence';
 import { DEFAULT_SETTINGS, type RecurrenceTemplate, type Task } from './types';
 
 const tpl = (over: Partial<RecurrenceTemplate>): RecurrenceTemplate => ({
@@ -125,6 +125,27 @@ describe('nextScheduledSpawn', () => {
     const mode = { kind: 'monthly' as const, dayOfMonth: 1, days: [20] as Array<number | 'last'> };
     expect(nextScheduledSpawn(mode, at('2026-07-02T12:00:00'), 4))
       .toBe(at('2026-07-20T04:00:00').getTime()); // NOT the 1st of August
+  });
+
+  it('two devices sweeping the same due moment mint the SAME instance id', () => {
+    // The 2026-08-11 duplicate walk: each device spawned its own row at the
+    // 4am rollover, blind to the other until sync. With the id derived from
+    // (template, synced due moment), both rows ARE one row and the merge
+    // collapses them.
+    const tpl = {
+      id: 'walk-tpl', listId: 'L', name: 'Go for a walk', notes: '', tagIds: [],
+      priority: 'medium' as const, mode: { kind: 'afterCompletion' as const, interval: 1, unit: 'days' as const },
+      paused: false, nextSpawnAt: at('2026-08-10T04:00:00').getTime(),
+      createdAt: 0, updatedAt: 0, deleted: false,
+    };
+    const deviceA = sweepSpawns([tpl], [], at('2026-08-10T03:59:58'), DEFAULT_SETTINGS);
+    const deviceB = sweepSpawns([tpl], [], at('2026-08-10T04:00:00'), DEFAULT_SETTINGS);
+    expect(deviceA.drafts).toHaveLength(0); // not due yet on A's clock
+    const deviceA2 = sweepSpawns([tpl], [], at('2026-08-10T04:00:02'), DEFAULT_SETTINGS);
+    expect(deviceA2.drafts).toHaveLength(1);
+    expect(deviceB.drafts).toHaveLength(1);
+    expect(deviceA2.drafts[0]!.id).toBe(deviceB.drafts[0]!.id);
+    expect(deviceA2.drafts[0]!.id).toBe(spawnId('walk-tpl', tpl.nextSpawnAt));
   });
 
   it("an anchor in the rollover window belongs to the APP day's week, not the calendar's", () => {

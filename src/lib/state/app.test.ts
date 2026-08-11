@@ -1350,6 +1350,44 @@ describe('generated tasks', () => {
   });
 });
 
+describe('spawn idempotency', () => {
+  it('near-simultaneous sweeps produce exactly one instance', async () => {
+    // Two triggers landing together (init + visibility, rollover timers) must
+    // not each spawn — the 2026-08-11 duplicate-walk report, same-device half.
+    vi.setSystemTime(new Date('2026-08-09T09:00:00'));
+    const list = await store.addList('Lake');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'Go for a walk' });
+    await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.completeTask(t.id); // arms nextSpawnAt = +1 day
+
+    vi.setSystemTime(new Date('2026-08-10T09:00:01'));
+    await Promise.all([store.runSpawnSweep(), store.runSpawnSweep()]);
+    const open = store.state.tasks.filter(
+      (x) => x.name === 'Go for a walk' && !x.deleted && x.completedAt === undefined,
+    );
+    expect(open).toHaveLength(1);
+  });
+
+  it('the spawned instance carries the deterministic occurrence id', async () => {
+    // Cross-device half of the same report: both devices mint THIS id from
+    // the synced due moment, so the merge collapses their rows into one.
+    vi.setSystemTime(new Date('2026-08-09T09:00:00'));
+    const list = await store.addList('Lake');
+    const t = await store.addTask(list.id);
+    const tpl = await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.completeTask(t.id);
+    const due = store.state.templates.find((x) => x.id === tpl.id)!.nextSpawnAt!;
+
+    vi.setSystemTime(new Date('2026-08-10T09:00:01'));
+    await store.runSpawnSweep();
+    const spawned = store.state.tasks.find(
+      (x) => x.recurrenceId === tpl.id && x.completedAt === undefined && !x.deleted,
+    )!;
+    expect(spawned.id).toBe(`sp_${tpl.id}_${due}`);
+  });
+});
+
 describe('the work clock', () => {
   it('a stretch under the threshold records nothing, not even a template sample', async () => {
     vi.setSystemTime(new Date('2026-08-08T10:00:00'));

@@ -158,7 +158,9 @@ export class Repo {
     return row;
   }
 
-  async createTask(draft: TaskDraft): Promise<Task> {
+  /** A draft may bring its own id — the spawn sweep does, so that the same
+   *  occurrence minted on two devices merges into one row. */
+  async createTask(draft: TaskDraft & { id?: string }): Promise<Task> {
     const row: Task = { ...stamp(), ...draft };
     await this.db.tasks.put(row);
     return row;

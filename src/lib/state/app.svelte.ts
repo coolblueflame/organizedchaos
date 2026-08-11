@@ -1429,7 +1429,22 @@ export class AppStore {
   }
 
   /** Materialize due templates. Called from init, window focus, and the rollover timer. */
+  /** Set while a sweep runs — two triggers can land near-simultaneously
+   *  (init + visibility, or a rollover timer), and the second must not
+   *  compute from state the first is mid-way through changing. */
+  private spawnSweepInFlight = false;
+
   async runSpawnSweep(now: Date = new Date()): Promise<number> {
+    if (this.spawnSweepInFlight) return 0;
+    this.spawnSweepInFlight = true;
+    try {
+      return await this.runSpawnSweepBody(now);
+    } finally {
+      this.spawnSweepInFlight = false;
+    }
+  }
+
+  private async runSpawnSweepBody(now: Date): Promise<number> {
     /*
       Self-heal dormant templates before sweeping. The Things import shipped
       templates with no `nextSpawnAt`, and sweepSpawns skips unarmed rows — so
@@ -1457,6 +1472,9 @@ export class AppStore {
 
     const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings);
     for (const draft of res.drafts) {
+      // Deterministic ids mean the same occurrence can already be here —
+      // synced in from another device mid-sweep. Same id = same row; skip.
+      if (this.state.tasks.some((t) => t.id === draft.id)) continue;
       const task = await this.repo.createTask(draft);
       this.state.tasks.push(task);
     }
