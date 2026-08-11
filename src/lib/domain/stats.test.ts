@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { type Priority, type Task } from './types';
 import {
   formatDurationLong,
-  burdenSeries, completionCounts, completionSeries, formatDuration, totalEstimateHours,
-  winsList, estimateOutcome,
+  burdenChange, burdenSeries, burdenShift, completionCounts, completionSeries,
+  formatDuration, totalEstimateHours, winsList, estimateOutcome,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -119,6 +119,53 @@ describe('burdenSeries', () => {
     expect(byKey['2026-07-12']).toBe(3);  // t3 deleted that day → gone
     expect(byKey['2026-07-13']).toBe(2);  // t2 completed → gone
     expect(byKey['2026-07-15']).toBe(2);  // just t1 remains
+  });
+});
+
+describe('burdenShift', () => {
+  const day = (s: string) => new Date(s).getTime();
+
+  it('itemizes the delta: new-by-hand, new-by-rule, finished, removed', () => {
+    const tasks = [
+      // Standing since last week, untouched — in the pile both times, absent here.
+      task({ priority: 'low', estimateHours: 4, createdAt: day('2026-07-10T09:00:00') }),
+      // Added today by hand.
+      task({ priority: 'low', estimateHours: 2, createdAt: day('2026-07-15T09:00:00') }),
+      // Spawned today by a rule.
+      task({ priority: 'low', estimateHours: 3, createdAt: day('2026-07-15T05:00:00'), recurrenceId: 'R1' }),
+      // Standing yesterday, finished today.
+      { ...task({ priority: 'low', estimateHours: 5, createdAt: day('2026-07-10T09:00:00') }),
+        completedAt: day('2026-07-15T10:00:00') },
+      // Standing yesterday, deleted today.
+      { ...task({ priority: 'low', estimateHours: 7, createdAt: day('2026-07-10T09:00:00') }),
+        deleted: true, updatedAt: day('2026-07-15T11:00:00') },
+      // Born AND finished today: net zero, deliberately absent everywhere.
+      { ...task({ priority: 'low', estimateHours: 9, createdAt: day('2026-07-15T08:00:00') }),
+        completedAt: day('2026-07-15T09:30:00') },
+    ];
+    const s = burdenShift(tasks, 'day', now, 4);
+    expect(s.addedByHand.map((e) => e.hours)).toEqual([2]);
+    expect(s.addedByRules.map((e) => e.hours)).toEqual([3]);
+    expect(s.completed.map((e) => e.hours)).toEqual([5]);
+    expect(s.removed.map((e) => e.hours)).toEqual([7]);
+  });
+
+  it('the four buckets sum to the headline delta, exactly', () => {
+    const tasks = [
+      task({ priority: 'low', estimateHours: 4, createdAt: day('2026-07-01T09:00:00') }),
+      task({ priority: 'low', createdAt: day('2026-07-15T09:00:00') }), // default 1h
+      task({ priority: 'low', estimateHours: 2.5, createdAt: day('2026-07-15T06:00:00'), recurrenceId: 'R' }),
+      { ...task({ priority: 'low', estimateHours: 5, createdAt: day('2026-07-02T09:00:00') }),
+        completedAt: day('2026-07-15T10:00:00') },
+      { ...task({ priority: 'low', estimateHours: 0.75, createdAt: day('2026-07-03T09:00:00') }),
+        deleted: true, updatedAt: day('2026-07-14T09:00:00') },
+    ];
+    for (const window of ['day', 'week', 'month'] as const) {
+      const s = burdenShift(tasks, window, now, 4);
+      const sum = (rows: Array<{ hours: number }>) => rows.reduce((a, r) => a + r.hours, 0);
+      const itemized = sum(s.addedByHand) + sum(s.addedByRules) - sum(s.completed) - sum(s.removed);
+      expect(itemized, window).toBeCloseTo(burdenChange(tasks, window, now, 4), 10);
+    }
   });
 });
 

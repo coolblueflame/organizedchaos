@@ -264,6 +264,61 @@ export function burdenAt(tasks: Task[], key: string, rolloverHour: number): numb
   return hours;
 }
 
+export interface BurdenShiftEntry {
+  id: string;
+  name: string;
+  listId: string;
+  hours: number;
+}
+export interface BurdenShift {
+  /** Open now, not standing at the comparison point — the pile's new weight. */
+  addedByHand: BurdenShiftEntry[];
+  addedByRules: BurdenShiftEntry[];
+  /** Standing then, out of the pile since. */
+  completed: BurdenShiftEntry[];
+  removed: BurdenShiftEntry[];
+}
+
+/**
+ * WHO moved the pile — burdenChange's number, itemized (2026-08-11 ask:
+ * "what is increasing my estimate compared to yesterday?"). Uses exactly
+ * the two row tests the headline uses (totalEstimateHours for now,
+ * burdenAt for then), so the four buckets sum to the delta to the minute.
+ * That also means estimate EDITS never appear: the reconstruction prices
+ * every task at its CURRENT estimate, moving both endpoints alike — the
+ * headline can't see them, so neither can this. A task born and finished
+ * inside the window nets zero and is deliberately absent.
+ */
+export function burdenShift(
+  tasks: Task[],
+  window: BurdenWindow,
+  now: Date,
+  rolloverHour: number,
+): BurdenShift {
+  const thenKey = addDaysKey(appDayKey(now, rolloverHour), -BURDEN_WINDOWS[window].days);
+  const [y, m, d] = addDaysKey(thenKey, 1).split('-').map(Number);
+  const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
+
+  const shift: BurdenShift = { addedByHand: [], addedByRules: [], completed: [], removed: [] };
+  for (const t of tasks) {
+    const openNow = !t.deleted && t.completedAt === undefined;
+    const countedThen = t.createdAt <= end
+      && !(t.completedAt !== undefined && t.completedAt <= end)
+      && !(t.deleted && t.updatedAt <= end);
+    if (openNow === countedThen) continue; // in the pile both times, or neither
+    const entry = { id: t.id, name: t.name, listId: t.listId, hours: t.estimateHours ?? 1 };
+    if (openNow) (t.recurrenceId !== undefined ? shift.addedByRules : shift.addedByHand).push(entry);
+    else if (t.deleted) shift.removed.push(entry);
+    else shift.completed.push(entry);
+  }
+  const byWeight = (a: BurdenShiftEntry, b: BurdenShiftEntry) => b.hours - a.hours;
+  shift.addedByHand.sort(byWeight);
+  shift.addedByRules.sort(byWeight);
+  shift.completed.sort(byWeight);
+  shift.removed.sort(byWeight);
+  return shift;
+}
+
 export type BurdenWindow = 'day' | 'week' | 'month' | 'year';
 export const BURDEN_WINDOWS: Record<BurdenWindow, { days: number; label: string }> = {
   day: { days: 1, label: 'since yesterday' },

@@ -10,10 +10,13 @@
   import { navigate } from './router.svelte';
   import { listHealth, shortAge } from '../domain/listHealth';
   import {
-    averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, completionSeries,
-    formatDuration, formatDurationLong, formatElapsed, totalEstimateHours,
-    type BurdenWindow,
+    averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, burdenShift,
+    completionSeries, formatDuration, formatDurationLong, formatElapsed,
+    totalEstimateHours, type BurdenShiftEntry, type BurdenWindow,
   } from '../domain/stats';
+  import { formatEstimate } from '../domain/estimate';
+  import { lockedListIds } from '../domain/lock';
+  import { lockSession } from '../state/lockSession.svelte';
   import { clock } from './clock.svelte';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
   import { estimateQueue } from '../domain/sweep';
@@ -45,6 +48,19 @@
   const avgActive = $derived(averageActiveMs(plainTasks));
   const burdenDelta = $derived(
     burdenChange(plainTasks, burdenWindow, clock.now, app.state.settings.rolloverHour));
+
+  /** The delta, itemized on demand (2026-08-11 ask) — computed only while open. */
+  let shiftOpen = $state(false);
+  const shift = $derived(shiftOpen
+    ? burdenShift(plainTasks, burdenWindow, clock.now, app.state.settings.rolloverHour)
+    : null);
+  /** Locked lists show hours, never names — stats' standing rule. */
+  const lockedLists = $derived(lockedListIds(app.state.lists, lockSession.unlocked));
+  const entryName = (e: BurdenShiftEntry) =>
+    lockedLists.has(e.listId) ? 'a locked task' : (e.name || 'unnamed task');
+  const sectionHours = (rows: BurdenShiftEntry[]) => rows.reduce((s, r) => s + r.hours, 0);
+  /** Long sections show their heaviest movers; the subtotal owns the truth. */
+  const SHIFT_ROW_CAP = 8;
 
   const unconfirmedEstimates = $derived(estimateQueue(plainTasks, app.state.lists).length);
 
@@ -87,7 +103,11 @@
          (2026-08-03 ask). Shrinking is the good direction, so it gets the
          green and the plain word rather than a minus sign to decode. -->
     <span class="delta-row" data-testid="stats-burden-delta">
-      <span class="delta" class:down={burdenDelta < 0} class:up={burdenDelta > 0}>
+      <!-- Tappable even at "no change" — a flat delta can hide real churn
+           (3h added, 3h finished), and the breakdown is where that shows. -->
+      <button class="delta" class:down={burdenDelta < 0} class:up={burdenDelta > 0}
+        data-testid="stats-burden-open" aria-expanded={shiftOpen}
+        onclick={() => (shiftOpen = !shiftOpen)}>
         {#if Math.round(burdenDelta) === 0}
           no change
         {:else if burdenDelta < 0}
@@ -95,7 +115,8 @@
         {:else}
           ▲ {formatDurationLong(burdenDelta)} heavier
         {/if}
-      </span>
+        <span class="delta-caret">{shiftOpen ? '▴' : '▾'}</span>
+      </button>
       <select data-testid="stats-burden-window" bind:value={burdenWindow}
         aria-label="compare against">
         {#each Object.entries(BURDEN_WINDOWS) as [key, w] (key)}
@@ -103,6 +124,46 @@
         {/each}
       </select>
     </span>
+    {#if shift}
+      <div class="shift" data-testid="burden-shift">
+        {#each [
+          { label: 'added', rows: shift.addedByHand, sign: '+' },
+          { label: '↻ from repeating rules', rows: shift.addedByRules, sign: '+' },
+          { label: 'finished', rows: shift.completed, sign: '−' },
+          { label: 'removed', rows: shift.removed, sign: '−' },
+        ] as section (section.label)}
+          {#if section.rows.length > 0}
+            <div class="shift-section">
+              <div class="shift-head">
+                <span>{section.label}</span>
+                <span class="shift-sum" class:gain={section.sign === '+'}>
+                  {section.sign}{formatEstimate(sectionHours(section.rows))}
+                  · {section.rows.length}
+                </span>
+              </div>
+              {#each section.rows.slice(0, SHIFT_ROW_CAP) as e (e.id)}
+                <div class="shift-item">
+                  <span class="shift-name">{entryName(e)}</span>
+                  <span class="shift-hours">{formatEstimate(e.hours)}</span>
+                </div>
+              {/each}
+              {#if section.rows.length > SHIFT_ROW_CAP}
+                <div class="shift-item more">
+                  + {section.rows.length - SHIFT_ROW_CAP} more ·
+                  {formatEstimate(sectionHours(section.rows.slice(SHIFT_ROW_CAP)))}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        {/each}
+        {#if shift.addedByHand.length + shift.addedByRules.length + shift.completed.length + shift.removed.length === 0}
+          <div class="shift-item more">nothing moved in this window</div>
+        {/if}
+        <!-- The honest footnote: the delta prices everything at its CURRENT
+             estimate, so editing an estimate moves the whole line silently. -->
+        <div class="shift-note">estimate edits reprice past and present alike — they never appear here</div>
+      </div>
+    {/if}
     {#if unconfirmedEstimates > 0}
       <button class="est-check" data-testid="stats-est-check"
         onclick={() => navigate({ name: 'sweep', mode: 'estimates' })}>
@@ -245,9 +306,34 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .delta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-  .delta { font-family: var(--font-mono); font-size: 0.78rem; color: var(--dim); }
+  .delta {
+    font-family: var(--font-mono); font-size: 0.78rem; color: var(--dim);
+    background: none; border: none; padding: 0; cursor: pointer;
+  }
   .delta.down { color: var(--acc-green); }
   .delta.up { color: var(--acc-orange); }
+  .delta-caret { opacity: 0.6; margin-left: 2px; }
+  .shift {
+    display: flex; flex-direction: column; gap: 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin-top: 8px; text-align: left;
+  }
+  .shift-section { display: flex; flex-direction: column; gap: 3px; }
+  .shift-head {
+    display: flex; justify-content: space-between; gap: 8px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .shift-sum { color: var(--acc-green); text-transform: none; }
+  .shift-sum.gain { color: var(--acc-orange); }
+  .shift-item {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 0.78rem; color: var(--text);
+  }
+  .shift-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .shift-hours { color: var(--dim); font-family: var(--font-mono); flex: none; }
+  .shift-item.more { color: var(--dim); font-size: 0.72rem; }
+  .shift-note { color: var(--dim); font-size: 0.65rem; opacity: 0.7; }
   .delta-row select {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;

@@ -41,6 +41,46 @@ test('completions feed the strip and the stats screen renders both charts', asyn
   await expect(page.locator('svg[role="img"]')).toHaveCount(2);
 });
 
+test('tapping the burden delta itemizes who moved the pile', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Lake');
+  await page.getByTestId('new-list-input').press('Enter');
+
+  // Two by hand (default 1h), one made recurring (rule-born pile weight),
+  // and one older-looking finished task is impossible to seed by UI today —
+  // added/finished sections carry the assertion load.
+  for (const name of ['temp one', 'temp two']) {
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.getByTestId('task-collapse').click();
+  }
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('daily stretch');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('1');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('stats-strip').click();
+  await page.getByTestId('stats-burden-open').click();
+
+  const shift = page.getByTestId('burden-shift');
+  await expect(shift).toBeVisible();
+  // Hand-added tasks itemize under "added"…
+  await expect(shift).toContainText('temp one');
+  await expect(shift).toContainText('temp two');
+  // …and the task attached to a rule sits apart, answering "how much of
+  // this is my repeating stuff" at a glance (the 2026-08-11 ask).
+  await expect(shift).toContainText('from repeating rules');
+  await expect(shift).toContainText('daily stretch');
+
+  // Collapses again on tap.
+  await page.getByTestId('stats-burden-open').click();
+  await expect(shift).toHaveCount(0);
+});
+
 test('list health names the list most in need of the sweep', async ({ page }) => {
   // beforeEach already reset. Tidy list: one task, triaged by touching a field.
   await page.getByTestId('new-list').click();
