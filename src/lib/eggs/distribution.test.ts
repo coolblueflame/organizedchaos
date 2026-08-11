@@ -120,4 +120,43 @@ describe('delight distribution over a realistic day', () => {
     console.log('browse-heavy day →', JSON.stringify({ byEvent, kindsByEvent }));
     expect(byEvent.taskCompleted).toBeGreaterThanOrEqual(byEvent.screenVisited * 2);
   });
+
+  it('a ritual-heavy day is not wall-to-wall candles (2026-08-11 report)', async () => {
+    // The ritual voice is the ONLY entry on its event; uncapped, six daily
+    // rituals meant a candle on most completions — cozy register, noon or
+    // not. Capped, it rests and the paired taskCompleted event right behind
+    // it supplies the ordinary variety instead.
+    let clock = new Date('2026-08-11T09:00:00').getTime();
+    let saved: EggState | null = {
+      seen: {}, trivia: { correct: 0, total: 0 }, unlocks: UNLOCKS.map((u) => u.id),
+      storyStage: 99, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+      lastCompletionDay: '', streakDays: 4,
+    };
+    const engine = new EggEngine({
+      registry: REGISTRY,
+      rolloverHour: 4,
+      rng: () => 0.01, // every chance gate passes; only cooldowns/caps block
+      now: () => new Date(clock),
+      load: async () => saved,
+      save: async (s) => { saved = s; },
+    });
+    await engine.ready;
+
+    let candles = 0;
+    let others = 0;
+    // Six rituals through the day, each firing its pair like completeRitual does.
+    for (let i = 0; i < 6; i += 1) {
+      const r = engine.handle('ritualCompleted', { completionsToday: i + 1, lifetimeCompletions: 300 + i });
+      clock += 1000;
+      const t = engine.handle('taskCompleted', { completionsToday: i + 1, lifetimeCompletions: 300 + i });
+      for (const p of [r, t]) {
+        if (!p) continue;
+        if (p.kind === 'note' && p.emoji === '🕯️') candles += 1;
+        else others += 1;
+      }
+      clock += 90 * 60_000; // ninety minutes to the next ritual
+    }
+    expect(candles).toBeLessThanOrEqual(2); // the daily cap holds
+    expect(others).toBeGreaterThanOrEqual(2); // and the day still has a voice
+  });
 });

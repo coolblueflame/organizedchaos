@@ -76,7 +76,13 @@ export const REGISTRY: EggDef[] = [
     present: (c) => ({ kind: 'note', emoji: '🗝', accent: 'green', text: pick(UNBLOCK_LINES, c.rng) }),
   },
   {
+    // Cooldown + cap (2026-08-11, "candles at noon"): this is the ONLY voice
+    // on its event, so uncapped it dominated a ritual-heavy day — the cozy
+    // register read as a wind-down message the clock never asked for. When
+    // it sits out, the paired taskCompleted event right behind supplies the
+    // ordinary variety instead.
     id: 'ritual-line', weight: 60, triggers: ['ritualCompleted'],
+    cooldownMs: 3 * HOUR, maxPerDay: 2,
     present: (c) => ({ kind: 'note', emoji: '🕯️', accent: 'green', text: pick(RITUAL_LINES, c.rng) }),
   },
   {
