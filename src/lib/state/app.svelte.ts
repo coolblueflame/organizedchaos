@@ -1029,9 +1029,15 @@ export class AppStore {
     this.state.tasks = this.state.tasks.filter((t) => t.id !== id);
     this.requestSync();
     if (!opts.silent) {
+      // A rule-bound copy regrows tomorrow (the rule is the commitment), so
+      // its delete toast offers ending the rule outright (2026-08-11 ask).
+      const tpl = task?.recurrenceId
+        ? this.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted)
+        : undefined;
       this.pushUndo(`Deleted "${task?.name || 'task'}"`, () => this.restoreTask(id),
         // Silent: the entry shuttling between the stacks IS the undo record.
-        () => this.removeTask(id, { silent: true }));
+        () => this.removeTask(id, { silent: true }),
+        tpl ? { label: 'stop repeating too', run: () => this.stopRuleFromToast(tpl.id) } : undefined);
     }
   }
 
@@ -1132,11 +1138,16 @@ export class AppStore {
    * aren't redoable, and the stack breaks the redo chain there instead of
    * skipping them.
    */
-  private pushUndo(label: string, run: () => Promise<void>, redo?: () => Promise<void>): void {
+  private pushUndo(
+    label: string,
+    run: () => Promise<void>,
+    redo?: () => Promise<void>,
+    extra?: { label: string; run: () => void },
+  ): void {
     const entry = undoStack.push(label, run, redo);
     toast.show(label, () => void undoStack.undoEntry(entry).catch(() => {
       toast.show('Undo failed — nothing was lost, try again', () => {});
-    }));
+    }), 5000, extra);
   }
 
   /**
@@ -1428,6 +1439,26 @@ export class AppStore {
     this.requestSync();
   }
 
+  /**
+   * The delete toast's "stop repeating too" (2026-08-11 ask). Ends the rule
+   * with its own undo toast — same restore shape as RecurringView's removal,
+   * guarded against the push-twice sync race (see restoreList).
+   */
+  private stopRuleFromToast(tplId: string): void {
+    const tpl = this.state.templates.find((t) => t.id === tplId);
+    if (!tpl) return;
+    const snapshot = $state.snapshot(tpl) as RecurrenceTemplate;
+    void this.removeRecurring(tplId).then(() => {
+      toast.show(`Stopped repeating "${snapshot.name || 'task'}"`, () => {
+        void this.updateRecurring(snapshot.id, { deleted: false }).then(() => {
+          if (!this.state.templates.some((t) => t.id === snapshot.id)) {
+            this.state.templates.push({ ...snapshot, deleted: false });
+          }
+        });
+      });
+    });
+  }
+
   /** Materialize due templates. Called from init, window focus, and the rollover timer. */
   /** Set while a sweep runs — two triggers can land near-simultaneously
    *  (init + visibility, or a rollover timer), and the second must not
@@ -1451,11 +1482,14 @@ export class AppStore {
       an imported weekly rule could never spawn, ever. Arming here (rather
       than only at import) also heals every library imported before the fix.
       - Scheduled modes arm to their next cadence moment.
-      - afterCompletion arms to NOW only when no open copy exists: its normal
-        resting state is unarmed-with-an-open-copy, but unarmed with NOTHING
-        open is a rule waiting for a completion that cannot come. This also
-        means deleting a rule's copy regrows one — the RULE is the commitment;
-        pause or delete the rule itself to stop it.
+      - afterCompletion arms to the NEXT ROLLOVER only when no open copy
+        exists: its normal resting state is unarmed-with-an-open-copy, but
+        unarmed with NOTHING open is a rule waiting for a completion that
+        cannot come. Deleting a rule's copy therefore regrows one — the RULE
+        is the commitment — but not until tomorrow: arming to NOW made a
+        deleted copy resurrect on the very next app open (2026-08-11 report,
+        whack-a-mole), and a deletion means "not today" at minimum. The
+        delete toast offers stopping the rule outright.
     */
     const openByRecurrence = new Set(
       this.state.tasks
@@ -1465,7 +1499,9 @@ export class AppStore {
     for (const tpl of this.state.templates) {
       if (tpl.deleted || tpl.paused || tpl.nextSpawnAt !== undefined) continue;
       const armed = tpl.mode.kind === 'afterCompletion'
-        ? (openByRecurrence.has(tpl.id) ? null : now.getTime())
+        ? (openByRecurrence.has(tpl.id)
+          ? null
+          : nextRolloverTs(now.getTime(), this.state.settings.rolloverHour))
         : nextScheduledSpawn(tpl.mode, now, this.state.settings.rolloverHour);
       if (armed !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: armed });
     }

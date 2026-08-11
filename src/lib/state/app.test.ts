@@ -820,7 +820,8 @@ describe('AppStore', () => {
     expect(store.state.tasks[0]!.name).toBe('water weekly');
   });
 
-  it('importThings: an afterCompletion template with no open copy spawns its first one', async () => {
+  it('importThings: an afterCompletion template with no open copy arms for tomorrow', async () => {
+    vi.setSystemTime(new Date('2026-08-11T12:00:00'));
     await store.importThings({
       lists: [{ id: 'TP1', thingsUuid: 'TP1', title: 'Garden', sortMode: 'priority' as const, createdAt: 100, updatedAt: 100, deleted: false }],
       tags: [], tasks: [],
@@ -832,7 +833,14 @@ describe('AppStore', () => {
       review: [], counts: { lists: 1, tags: 0, openTasks: 0, completedTasks: 0, templates: 1 },
     });
     // Without a living copy nothing could ever be completed to re-arm it —
-    // the import hands one over immediately.
+    // the heal arms it for the NEXT ROLLOVER (not NOW: arming to now made a
+    // deliberately deleted copy resurrect on every app open, 2026-08-11).
+    expect(store.state.tasks.filter((t) => t.completedAt === undefined)).toHaveLength(0);
+    expect(store.state.templates[0]!.nextSpawnAt)
+      .toBe(new Date('2026-08-12T04:00:00').getTime());
+
+    vi.setSystemTime(new Date('2026-08-12T05:00:00'));
+    await store.runSpawnSweep();
     const open = store.state.tasks.filter((t) => t.completedAt === undefined);
     expect(open).toHaveLength(1);
     expect(open[0]!.name).toBe('sharpen tools');
@@ -1385,6 +1393,32 @@ describe('spawn idempotency', () => {
       (x) => x.recurrenceId === tpl.id && x.completedAt === undefined && !x.deleted,
     )!;
     expect(spawned.id).toBe(`sp_${tpl.id}_${due}`);
+  });
+});
+
+describe('deleting a recurring copy', () => {
+  it('stays gone until the next rollover, then regrows once', async () => {
+    // 2026-08-11 report: a deleted daily's copy resurrected on EVERY app
+    // open — the dormant-rule heal armed afterCompletion to NOW. A delete
+    // means "not today" at minimum; the rule regrows it tomorrow.
+    vi.setSystemTime(new Date('2026-08-11T12:00:00'));
+    const list = await store.addList('Lake');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'stretch' });
+    const tpl = await store.createRecurring(t.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.removeTask(t.id);
+
+    const open = () => store.state.tasks.filter(
+      (x) => x.recurrenceId === tpl.id && !x.deleted && x.completedAt === undefined,
+    );
+    // Whack-a-mole check: repeated sweeps today never bring it back…
+    await store.runSpawnSweep();
+    await store.runSpawnSweep();
+    expect(open()).toHaveLength(0);
+    // …but tomorrow (past the 4am rollover) the rule keeps its commitment.
+    vi.setSystemTime(new Date('2026-08-12T05:00:00'));
+    await store.runSpawnSweep();
+    expect(open()).toHaveLength(1);
   });
 });
 

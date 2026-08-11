@@ -5,6 +5,10 @@
 {#if toast.current}
   <div class="toast" data-testid="undo-toast">
     <span>{toast.current.label}</span>
+    {#if toast.current.extra}
+      <button class="extra" data-testid="toast-extra"
+        onclick={() => toast.runExtra()}>{toast.current.extra.label}</button>
+    {/if}
     <button onclick={() => toast.undo()}>Undo</button>
   </div>
 {/if}
@@ -37,4 +41,6 @@
     cursor: pointer;
     padding: 0;
   }
+  /* The rarer, more consequential choice reads quieter than Undo. */
+  button.extra { color: var(--acc-orange); font-weight: 400; font-size: 0.78rem; }
 </style>

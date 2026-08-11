@@ -203,6 +203,41 @@ test('editing a recurring task shows the rule drift, and one tap adopts it', asy
   await expect(page.getByTestId('rule-drift')).toHaveCount(0);
 });
 
+test("deleting a recurring copy offers to stop the rule — and doesn't whack-a-mole", async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Lake');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('stretch');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('1');
+  await page.getByTestId('recur-save').click();
+
+  // Delete the copy: the toast carries the second, rule-ending choice.
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-delete-${id}`).click(); // arm…
+  await page.getByTestId(`task-delete-${id}`).click(); // …confirm
+  await expect(page.getByTestId('toast-extra')).toHaveText('stop repeating too');
+
+  // Reloading (the sweep runs at init) must NOT resurrect it today —
+  // the 2026-08-11 whack-a-mole.
+  await page.reload();
+  await page.getByTestId('new-task').waitFor();
+  await expect(page.getByText('stretch', { exact: true })).toHaveCount(0);
+
+  // A plain (non-recurring) delete never shows the offer.
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('one-off');
+  const row2 = page.getByTestId(/^task-row-/).first();
+  const id2 = (await row2.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-delete-${id2}`).click();
+  await page.getByTestId(`task-delete-${id2}`).click();
+  await expect(page.getByTestId('undo-toast')).toBeVisible();
+  await expect(page.getByTestId('toast-extra')).toHaveCount(0);
+});
+
 test('an untouched reopen-save keeps a fortnight rule on ITS weeks', async ({ page }) => {
   // Pinned: Wed Aug 12 2026 — anchor week Aug 9–15 is ON, its Monday is
   // already past, so the first spawn is Mon Aug 24 (Aug 17 sits in the
