@@ -51,6 +51,8 @@
   let bulkPriority = $state<Priority | ''>('');
   let bulkList = $state('');
   let bulkTag = $state('');
+  /** Bare-hours ≥10 arm here awaiting a second Enter — see the est input. */
+  let estArmed = $state<number | null>(null);
   let deleteArmed = $state(false);
 
   const selectionMode = $derived(selected.length > 0);
@@ -419,13 +421,33 @@
       {/each}
     </select>
     <!-- Enter commits: one estimate lands on every selected task and clears
-         their NEW badges — an estimate is triage (2026-08-05 ask). -->
-    <input class="est" data-testid="bulk-estimate" placeholder="⧖ 45m"
+         their NEW badges — an estimate is triage (2026-08-05 ask). A bare
+         10+ ("30" = 30 HOURS, times the whole selection) arms instead of
+         applying — Enter again confirms, any edit disarms (2026-08-12,
+         the 30h guitar). -->
+    <input class="est" data-testid="bulk-estimate"
+      placeholder={estArmed !== null ? `${estArmed}h each?` : '⧖ 45m'}
+      class:armed={estArmed !== null}
       title="set one time estimate for the whole selection ({ESTIMATE_HINT})"
+      oninput={() => (estArmed = null)}
       onkeydown={(e) => {
         if (e.key !== 'Enter') return;
-        const hours = parseEstimate(e.currentTarget.value);
+        const raw = e.currentTarget.value.trim();
+        // Second Enter on the emptied, armed field: they mean it.
+        if (estArmed !== null && raw === '') {
+          const hours = estArmed;
+          estArmed = null;
+          void runBulk('estimate', String(hours));
+          return;
+        }
+        const hours = parseEstimate(raw);
         if (hours === null) return;
+        if (/^\d+$/.test(raw) && hours >= 10) {
+          estArmed = hours; // the field empties and asks "Nh each?"
+          e.currentTarget.value = '';
+          return;
+        }
+        estArmed = null;
         e.currentTarget.value = '';
         void runBulk('estimate', String(hours));
       }} />
@@ -508,6 +530,8 @@
     font-size: 0.8rem; padding: 7px 8px; outline: none;
   }
   .bulk .est:focus { border-color: var(--acc-cyan); }
+  .bulk .est.armed { border-color: var(--acc-orange); }
+  .bulk .est.armed::placeholder { color: var(--acc-orange); }
   .bulk .danger { color: var(--acc-magenta); }
   .bulk .danger.armed {
     background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);

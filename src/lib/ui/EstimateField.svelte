@@ -37,17 +37,37 @@
     draft = incoming;
   });
 
+  /**
+   * A bare "30" means 30 HOURS, and at least once that was meant as minutes
+   * — a 30h guitar practice inflated the burden delta by a day (2026-08-12).
+   * Ten-plus bare hours earns a one-tap corrector, never a blocker: real
+   * 12h epics just ignore it.
+   */
+  let suspicious = $state<number | null>(null);
+
   function commit(text: string) {
     draft = text;
     const trimmed = text.trim();
     if (trimmed === '') {
+      suspicious = null;
       onchange(undefined);
       return;
     }
     const parsed = parseEstimate(trimmed);
     // Half-typed input ("45mi") is not a request to wipe the estimate; leave
     // whatever was last understood in place and wait for the rest.
-    if (parsed !== null) onchange(parsed);
+    if (parsed !== null) {
+      suspicious = /^\d+$/.test(trimmed) && parsed >= 10 ? parsed : null;
+      onchange(parsed);
+    }
+  }
+
+  function meantMinutes() {
+    if (suspicious === null) return;
+    const hoursFromMinutes = suspicious / 60;
+    suspicious = null;
+    onchange(hoursFromMinutes);
+    draft = formatEstimate(hoursFromMinutes);
   }
 
   /** Leaving tidies "90m" into "1h 30m" — same value, said the shorter way. */
@@ -60,6 +80,11 @@
   bind:this={el} value={draft}
   oninput={(e) => commit(e.currentTarget.value)}
   onblur={tidy} />
+{#if suspicious !== null}
+  <button class="meant-minutes" data-testid="{testid}-meant-minutes" onclick={meantMinutes}>
+    that's {suspicious} hours — meant {suspicious}m?
+  </button>
+{/if}
 
 <style>
   /*
@@ -74,4 +99,10 @@
     width: 100%; min-width: 0; font-family: inherit;
   }
   input:focus { border-color: var(--acc-blue); }
+  .meant-minutes {
+    display: block; margin-top: 4px;
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--acc-orange); font-family: var(--font-mono); font-size: 0.7rem;
+    text-align: left; text-decoration: underline;
+  }
 </style>

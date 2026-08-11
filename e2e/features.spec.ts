@@ -676,6 +676,42 @@ test('a completed task records how long it took', async ({ page }) => {
   await expect(page.getByTestId('search-completed')).toContainText('⧗');
 });
 
+test('a bare ten-plus estimate asks if you meant minutes', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Music');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('play guitar');
+
+  // Bare "30" saves 30 HOURS — believed, but questioned (the 2026-08-12
+  // guitar that weighed a day). One tap converts to minutes.
+  await page.getByTestId('task-estimate-input').fill('30');
+  const fix = page.getByTestId('task-estimate-input-meant-minutes');
+  await expect(fix).toContainText('30 hours — meant 30m?');
+  await fix.click();
+  await expect(page.getByTestId('task-estimate-input')).toHaveValue('30m');
+  await expect(fix).toHaveCount(0);
+
+  // An explicit unit is believed without questions.
+  await page.getByTestId('task-estimate-input').fill('12h');
+  await expect(page.getByTestId('task-estimate-input-meant-minutes')).toHaveCount(0);
+
+  // Bulk: the blast radius is the whole selection, so bare 10+ ARMS instead
+  // of applying — Enter again means it.
+  await page.getByTestId('task-collapse').click();
+  await addTask(page, 'second song');
+  const ids = await Promise.all((await page.getByTestId(/^task-row-/).all()).map(async (r) =>
+    (await r.getAttribute('data-testid'))!.replace('task-row-', '')));
+  await page.getByTestId(`select-${ids[0]}`).click();
+  await page.getByTestId(`select-${ids[1]}`).click();
+  const est = page.getByTestId('bulk-estimate');
+  await est.fill('30');
+  await est.press('Enter');
+  await expect(est).toHaveAttribute('placeholder', '30h each?');
+  await expect(page.getByText('Estimated 2 tasks', { exact: true })).toHaveCount(0);
+  await est.press('Enter');
+  await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
+});
+
 test('the estimate field lets you finish typing "45m" without rewriting it', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Est');
