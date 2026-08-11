@@ -246,20 +246,38 @@ export function burdenSeries(
   const todayKey = appDayKey(now, rolloverHour);
   const keys: string[] = [];
   for (let i = sampleDays - 1; i >= 0; i--) keys.push(addDaysKey(todayKey, -i));
-  return keys.map((key) => ({ key, hours: burdenAt(tasks, key, rolloverHour) }));
+  return keys.map((key) => ({ key, hours: burdenAt(tasks, key, rolloverHour, now.getTime()) }));
+}
+
+/**
+ * Was this task standing in the open pile at moment `end`? THE row test for
+ * every backlog reconstruction — burdenAt, the chart, and burdenShift all
+ * share it, so the headline and its breakdown cannot diverge.
+ *
+ * `nowMs` guards against FUTURE timestamps: the 2026 import repair left
+ * ~2,400 rows with 2050s merge stamps (by design — they must outrank stale
+ * device copies), and a tombstone whose updatedAt sits in 2055 read as
+ * "not deleted yet" for every historical day — ghosts standing in
+ * yesterday's pile forever, depressing the delta and stuffing the removed
+ * list daily (found auditing Ben's 2026-08-11 report). A deletion or
+ * completion stamped in the future happened at SOME unknown past moment;
+ * the honest reconstruction treats it as already-gone throughout.
+ */
+export function standsInPileAt(t: Task, end: number, nowMs: number): boolean {
+  if (t.createdAt > end) return false;
+  if (t.completedAt !== undefined && (t.completedAt <= end || t.completedAt > nowMs)) return false;
+  if (t.deleted && (t.updatedAt <= end || t.updatedAt > nowMs)) return false;
+  return true;
 }
 
 /** Hours of open work standing at the END of app-day `key`. */
-export function burdenAt(tasks: Task[], key: string, rolloverHour: number): number {
+export function burdenAt(tasks: Task[], key: string, rolloverHour: number, nowMs = Date.now()): number {
   // End of app-day `key` = rollover moment of the NEXT calendar day.
   const [y, m, d] = addDaysKey(key, 1).split('-').map(Number);
   const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
   let hours = 0;
   for (const t of tasks) {
-    if (t.createdAt > end) continue;
-    if (t.completedAt !== undefined && t.completedAt <= end) continue;
-    if (t.deleted && t.updatedAt <= end) continue;
-    hours += t.estimateHours ?? 1;
+    if (standsInPileAt(t, end, nowMs)) hours += t.estimateHours ?? 1;
   }
   return hours;
 }
@@ -299,12 +317,11 @@ export function burdenShift(
   const [y, m, d] = addDaysKey(thenKey, 1).split('-').map(Number);
   const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
 
+  const nowMs = now.getTime();
   const shift: BurdenShift = { addedByHand: [], addedByRules: [], completed: [], removed: [] };
   for (const t of tasks) {
     const openNow = !t.deleted && t.completedAt === undefined;
-    const countedThen = t.createdAt <= end
-      && !(t.completedAt !== undefined && t.completedAt <= end)
-      && !(t.deleted && t.updatedAt <= end);
+    const countedThen = standsInPileAt(t, end, nowMs);
     if (openNow === countedThen) continue; // in the pile both times, or neither
     const entry = { id: t.id, name: t.name, listId: t.listId, hours: t.estimateHours ?? 1 };
     if (openNow) (t.recurrenceId !== undefined ? shift.addedByRules : shift.addedByHand).push(entry);
@@ -341,5 +358,5 @@ export function burdenChange(
   rolloverHour: number,
 ): number {
   const thenKey = addDaysKey(appDayKey(now, rolloverHour), -BURDEN_WINDOWS[window].days);
-  return totalEstimateHours(tasks) - burdenAt(tasks, thenKey, rolloverHour);
+  return totalEstimateHours(tasks) - burdenAt(tasks, thenKey, rolloverHour, now.getTime());
 }

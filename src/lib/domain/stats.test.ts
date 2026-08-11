@@ -150,6 +150,24 @@ describe('burdenShift', () => {
     expect(s.removed.map((e) => e.hours)).toEqual([7]);
   });
 
+  it('a future-stamped tombstone haunts no pile — not then, not now, not removed', () => {
+    // The 2026 import repair left tombstones with 2050s merge stamps (by
+    // design). Read literally, "deleted at 2055" means "not deleted yet" for
+    // every historical day — ghosts standing in yesterday's pile forever,
+    // depressing the delta and refilling the removed list daily (found
+    // auditing Ben's 2026-08-11 report against his live data).
+    const ghost = {
+      ...task({ priority: 'low', estimateHours: 5, createdAt: day('2020-01-01T09:00:00') }),
+      deleted: true, updatedAt: day('2055-06-01T09:00:00'),
+    };
+    const standing = task({ priority: 'low', estimateHours: 2, createdAt: day('2026-07-01T09:00:00') });
+    expect(burdenChange([ghost, standing], 'day', now, 4)).toBe(0);
+    const s = burdenShift([ghost, standing], 'day', now, 4);
+    expect(s.removed).toEqual([]);
+    expect(s.completed).toEqual([]);
+    expect(s.addedByHand).toEqual([]);
+  });
+
   it('the four buckets sum to the headline delta, exactly', () => {
     const tasks = [
       task({ priority: 'low', estimateHours: 4, createdAt: day('2026-07-01T09:00:00') }),
