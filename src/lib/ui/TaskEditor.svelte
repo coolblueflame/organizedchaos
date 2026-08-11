@@ -7,6 +7,7 @@
   import { untrack } from 'svelte';
   import { app } from '../state/app.svelte';
   import { pickerListGroups } from '../domain/listOrder';
+  import { formatEstimate } from '../domain/estimate';
   import { describeRitualTask, isRitualTask, ritualWindows } from '../domain/ritual';
   import { ALL_DAYS } from '../domain/schedule';
   import { navigate } from './router.svelte';
@@ -216,6 +217,30 @@
     ? app.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted)
     : undefined);
 
+  /**
+   * Where this instance has drifted from its rule (2026-08-11, the walk that
+   * respawned Medium after being bumped to MAX): every spawn is born from
+   * the RULE, so an instance-only edit quietly reverts next time. Priority
+   * and estimate only — names and notes legitimately diverge per instance.
+   */
+  const ruleDrift = $derived.by(() => {
+    if (!template) return [] as string[];
+    const drift: string[] = [];
+    if (template.priority !== task.priority) drift.push(template.priority);
+    if (template.estimateHours !== task.estimateHours) {
+      drift.push(template.estimateHours === undefined ? 'no estimate' : formatEstimate(template.estimateHours));
+    }
+    return drift;
+  });
+
+  function adoptIntoRule() {
+    if (!template) return;
+    void app.updateRecurring(template.id, {
+      priority: task.priority,
+      estimateHours: task.estimateHours,
+    });
+  }
+
   async function saveRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: number) {
     if (template) {
       await app.updateRecurring(template.id, { mode, deadlineOffsetDays });
@@ -310,6 +335,13 @@
       {#if template}↻ {describeRecurrence(template.mode, template.deadlineOffsetDays)}{#if template.paused}&nbsp;(paused){/if}
       {:else}↻ make recurring{/if}
     </button>
+    {#if ruleDrift.length > 0}
+      <!-- The next spawn is born from the RULE — say so before it surprises. -->
+      <div class="rule-drift" data-testid="rule-drift">
+        <span>the rule still says <b>{ruleDrift.join(' · ')}</b> — future spawns follow it</span>
+        <button data-testid="rule-adopt" onclick={adoptIntoRule}>make the rule match</button>
+      </div>
+    {/if}
   {/if}
 
   {#if task.notTodayUntil && task.notTodayUntil > Date.now()}
@@ -476,6 +508,18 @@
   }
   @media (hover: hover) { .repeat-row:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
   .repeat-row.linked { color: var(--acc-cyan); border-style: solid; }
+  .rule-drift {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 2px 2px 0;
+  }
+  .rule-drift b { color: var(--acc-orange); font-weight: 600; }
+  .rule-drift button {
+    background: none; border: 1px solid var(--line); border-radius: 5px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.68rem;
+    padding: 3px 8px; cursor: pointer;
+  }
+  @media (hover: hover) { .rule-drift button:hover { border-color: var(--acc-cyan); } }
   .repeat-row.snoozed { color: var(--acc-purple); border-color: var(--acc-purple); }
   .ritual-editor {
     display: flex; flex-direction: column; gap: 8px;

@@ -174,6 +174,35 @@ test('every-2-weeks and multi-day monthly round-trip through the editor', async 
   await expect(page.getByTestId('task-recur-row')).toContainText('monthly on the last day');
 });
 
+test('editing a recurring task shows the rule drift, and one tap adopts it', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Lake');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('go for a walk');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('1');
+  await page.getByTestId('recur-save').click();
+
+  // In step with its rule: no drift line.
+  await expect(page.getByTestId('rule-drift')).toHaveCount(0);
+
+  // Bump the instance to MAX — the exact 2026-08-11 surprise: the rule
+  // still says medium, and tomorrow's spawn would be born medium.
+  await page.getByTestId('priority-max').click();
+  await expect(page.getByTestId('rule-drift')).toContainText('medium');
+  await expect(page.getByTestId('rule-drift')).toContainText('future spawns follow it');
+
+  // One explicit tap makes the rule match — drift gone, and it STAYS gone
+  // across a collapse/expand (the rule really changed, not just the line).
+  await page.getByTestId('rule-adopt').click();
+  await expect(page.getByTestId('rule-drift')).toHaveCount(0);
+  await page.getByTestId('task-collapse').click();
+  await page.getByText('go for a walk', { exact: true }).click();
+  await expect(page.getByTestId('rule-drift')).toHaveCount(0);
+});
+
 test('an untouched reopen-save keeps a fortnight rule on ITS weeks', async ({ page }) => {
   // Pinned: Wed Aug 12 2026 — anchor week Aug 9–15 is ON, its Monday is
   // already past, so the first spawn is Mon Aug 24 (Aug 17 sits in the
