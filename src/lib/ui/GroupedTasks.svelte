@@ -51,11 +51,19 @@
   let bulkPriority = $state<Priority | ''>('');
   let bulkList = $state('');
   let bulkTag = $state('');
-  /** Bare-hours ≥10 arm here awaiting a second Enter — see the est input. */
+  /** Bare-hours ≥10 arm here awaiting an explicit confirm — see the est input. */
   let estArmed = $state<number | null>(null);
   let deleteArmed = $state(false);
+  let completeArmed = $state(false);
 
   const selectionMode = $derived(selected.length > 0);
+
+  // Armed states belong to ONE outing of the bar. Without this, arming an
+  // estimate and then clearing the selection left the confirm button waiting
+  // for the NEXT selection — 30 hours, primed for whatever you picked later.
+  $effect(() => {
+    if (!selectionMode) { estArmed = null; completeArmed = false; deleteArmed = false; }
+  });
 
   // ── how many rows actually reach the DOM ─────────────────────────────────
   /*
@@ -155,6 +163,53 @@
     }
     deleteArmed = false;
     await runBulk('delete');
+  }
+
+  /**
+   * Completing arms the same way. It is undoable, unlike delete, but it was
+   * labelled "done" — which everywhere else means "close this pane" — and one
+   * mistaken tap completed a 700-task library (2026-08-12). The armed label
+   * says the count out loud, so the second tap knows what it is agreeing to.
+   */
+  async function confirmComplete() {
+    if (!completeArmed) {
+      completeArmed = true;
+      haptic('tick');
+      setTimeout(() => (completeArmed = false), 3000);
+      return;
+    }
+    completeArmed = false;
+    await runBulk('complete');
+  }
+
+  /**
+   * One estimate for the whole selection, committed the way every other field
+   * in the app commits: Enter, or just leaving the field (mobile keyboards'
+   * "done" blurs — Enter-only was a desktop habit, reported 2026-08-12).
+   * A bare 10+ ("30" = 30 HOURS, times the whole selection) arms instead of
+   * applying — the confirm button beside the field (or Enter again) means it,
+   * any edit disarms (2026-08-12, the 30h guitar).
+   */
+  function commitEstimate(el: HTMLInputElement) {
+    const raw = el.value.trim();
+    if (raw === '') return; // nothing typed; an armed ask keeps waiting
+    const hours = parseEstimate(raw);
+    if (hours === null) return; // half-typed is not a request
+    if (/^\d+$/.test(raw) && hours >= 10) {
+      estArmed = hours;
+      el.value = '';
+      return;
+    }
+    estArmed = null;
+    el.value = '';
+    void runBulk('estimate', String(hours));
+  }
+
+  function applyArmedEstimate() {
+    if (estArmed === null) return;
+    const hours = estArmed;
+    estArmed = null;
+    void runBulk('estimate', String(hours));
   }
 
   async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue' | 'estimate', value?: string) {
@@ -395,7 +450,10 @@
 {#if selectionMode}
   <div class="bulk" data-testid="bulk-bar">
     <span class="count">{selected.length} selected</span>
-    <button data-testid="bulk-complete" onclick={() => void runBulk('complete')}>✓ done</button>
+    <button class="confirm" class:armed={completeArmed} data-testid="bulk-complete"
+      onclick={() => void confirmComplete()}>
+      {completeArmed ? `complete ${selected.length}?` : '✓ complete'}
+    </button>
     <select data-testid="bulk-priority" bind:value={bulkPriority}
       onchange={() => bulkPriority && void runBulk('priority', bulkPriority)}>
       <option value="">→ priority…</option>
@@ -420,37 +478,29 @@
         {/if}
       {/each}
     </select>
-    <!-- Enter commits: one estimate lands on every selected task and clears
-         their NEW badges — an estimate is triage (2026-08-05 ask). A bare
-         10+ ("30" = 30 HOURS, times the whole selection) arms instead of
-         applying — Enter again confirms, any edit disarms (2026-08-12,
-         the 30h guitar). -->
+    <!-- One estimate lands on every selected task and clears their NEW badges
+         — an estimate is triage (2026-08-05 ask). Commit is Enter OR leaving
+         the field; the ≥10 bare-hours arm is explained at commitEstimate. -->
     <input class="est" data-testid="bulk-estimate"
-      placeholder={estArmed !== null ? `${estArmed}h each?` : '⧖ 45m'}
+      placeholder="⧖ 45m"
       class:armed={estArmed !== null}
       title="set one time estimate for the whole selection ({ESTIMATE_HINT})"
       oninput={() => (estArmed = null)}
+      onblur={(e) => commitEstimate(e.currentTarget)}
       onkeydown={(e) => {
         if (e.key !== 'Enter') return;
-        const raw = e.currentTarget.value.trim();
-        // Second Enter on the emptied, armed field: they mean it.
-        if (estArmed !== null && raw === '') {
-          const hours = estArmed;
-          estArmed = null;
-          void runBulk('estimate', String(hours));
+        // Enter on the emptied, armed field: they mean it (the desktop path;
+        // the confirm button beside the field is the same answer by tap).
+        if (estArmed !== null && e.currentTarget.value.trim() === '') {
+          applyArmedEstimate();
           return;
         }
-        const hours = parseEstimate(raw);
-        if (hours === null) return;
-        if (/^\d+$/.test(raw) && hours >= 10) {
-          estArmed = hours; // the field empties and asks "Nh each?"
-          e.currentTarget.value = '';
-          return;
-        }
-        estArmed = null;
-        e.currentTarget.value = '';
-        void runBulk('estimate', String(hours));
+        commitEstimate(e.currentTarget);
       }} />
+    {#if estArmed !== null}
+      <button class="confirm armed" data-testid="bulk-estimate-confirm"
+        onclick={applyArmedEstimate}>{estArmed}h each?</button>
+    {/if}
     <button class="danger" class:armed={deleteArmed} data-testid="bulk-delete"
       onclick={() => void confirmDelete()}>
       {deleteArmed ? `delete ${selected.length}?` : 'delete'}
@@ -511,10 +561,18 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   }
   .count { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
-  .bulk button, .bulk select {
+  /*
+    Every control in the bar shares ONE set of metrics — the estimate input
+    ran its own font and padding and stood a few pixels prouder than the
+    buttons beside it (reported 2026-08-12), and native selects like to bring
+    their platform's own idea of height. appearance:none flattens that; the
+    trailing "…" in each select's label still says "this one opens".
+  */
+  .bulk button, .bulk select, .bulk .est {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); font-family: var(--font-mono); font-size: 0.72rem;
-    padding: 5px 9px; cursor: pointer;
+    padding: 5px 9px; margin: 0; line-height: 1.3; cursor: pointer;
+    appearance: none; -webkit-appearance: none;
   }
   /*
     A native select's intrinsic minimum width is its LONGEST OPTION, and with a
@@ -524,14 +582,12 @@
     own label; the dropdown still shows every option at full length.
   */
   .bulk select { max-width: 34vw; min-width: 0; }
-  .bulk .est {
-    width: 74px; background: var(--bg1); border: 1px solid var(--line);
-    border-radius: 8px; color: var(--text); font-family: var(--font-mono);
-    font-size: 0.8rem; padding: 7px 8px; outline: none;
-  }
+  .bulk .est { width: 74px; outline: none; cursor: text; }
   .bulk .est:focus { border-color: var(--acc-cyan); }
   .bulk .est.armed { border-color: var(--acc-orange); }
-  .bulk .est.armed::placeholder { color: var(--acc-orange); }
+  .bulk .confirm.armed {
+    background: var(--acc-orange); border-color: var(--acc-orange); color: var(--bg0);
+  }
   .bulk .danger { color: var(--acc-magenta); }
   .bulk .danger.armed {
     background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);

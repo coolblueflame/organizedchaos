@@ -212,6 +212,13 @@ test('multi-select bulk-completes several tasks, undoable as one', async ({ page
   await page.getByTestId(`select-${ids[1]}`).click();
   await expect(page.getByTestId('bulk-bar')).toContainText('2 selected');
 
+  // First tap only ARMS — the 2026-08-12 accident was a "done" that read as
+  // "close" and completed a 700-task library in one tap. The armed label says
+  // the count back; nothing completes until the second tap agrees to it.
+  await page.getByTestId('bulk-complete').click();
+  await expect(page.getByTestId('bulk-complete')).toContainText('complete 2?');
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(3);
+
   await page.getByTestId('bulk-complete').click();
   await expect(page.getByTestId(/^task-row-/)).toHaveCount(1);
   // Same armed-undo signal as the bulk-estimate test: rows vanish from the
@@ -696,7 +703,7 @@ test('a bare ten-plus estimate asks if you meant minutes', async ({ page }) => {
   await expect(page.getByTestId('task-estimate-input-meant-minutes')).toHaveCount(0);
 
   // Bulk: the blast radius is the whole selection, so bare 10+ ARMS instead
-  // of applying — Enter again means it.
+  // of applying — a visible confirm button (or Enter again) means it.
   await page.getByTestId('task-collapse').click();
   await addTask(page, 'second song');
   const ids = await Promise.all((await page.getByTestId(/^task-row-/).all()).map(async (r) =>
@@ -706,10 +713,39 @@ test('a bare ten-plus estimate asks if you meant minutes', async ({ page }) => {
   const est = page.getByTestId('bulk-estimate');
   await est.fill('30');
   await est.press('Enter');
-  await expect(est).toHaveAttribute('placeholder', '30h each?');
+  await expect(page.getByTestId('bulk-estimate-confirm')).toContainText('30h each?');
   await expect(page.getByText('Estimated 2 tasks', { exact: true })).toHaveCount(0);
   await est.press('Enter');
   await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
+});
+
+test('bulk estimate commits on leaving the field; the 10+ ask confirms by tap', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Blur');
+  await addTask(page, 'one');
+  await addTask(page, 'two');
+  const ids = await Promise.all((await page.getByTestId(/^task-row-/).all()).map(async (r) =>
+    (await r.getAttribute('data-testid'))!.replace('task-row-', '')));
+
+  // Enter-only was a desktop habit (reported 2026-08-12): a phone keyboard's
+  // "done" blurs the field, so blurring must be a commit too.
+  await page.getByTestId(`select-${ids[0]}`).click();
+  await page.getByTestId(`select-${ids[1]}`).click();
+  const est = page.getByTestId('bulk-estimate');
+  await est.fill('45m');
+  await est.blur();
+  await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
+
+  // And a suspicious bare 10+ armed by blur is answered by TAPPING the ask —
+  // one task this time, so a stale "2 tasks" toast can't fake the pass.
+  await page.getByTestId(`select-${ids[0]}`).click();
+  await est.fill('30');
+  await est.blur();
+  const confirm = page.getByTestId('bulk-estimate-confirm');
+  await expect(confirm).toContainText('30h each?');
+  await expect(page.getByText('Estimated 1 task', { exact: true })).toHaveCount(0);
+  await confirm.click();
+  await expect(page.getByText('Estimated 1 task', { exact: true })).toBeVisible();
 });
 
 test('the estimate field lets you finish typing "45m" without rewriting it', async ({ page }) => {

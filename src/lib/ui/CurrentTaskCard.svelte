@@ -136,8 +136,11 @@
     </div>
 
     <div class="actions">
+      <!-- "complete", not "done": done means "close this pane" everywhere else
+           in the app, and the two reading identically is how 700 tasks once
+           got finished by a tap that meant "dismiss" (2026-08-12, bulk bar). -->
       <button class="done" data-testid="current-complete" onclick={(e) => completeCurrent(e, task!.id)}>
-        ✓ done
+        ✓ complete
       </button>
       <button class="later" data-testid="current-not-today"
         onclick={() => { loopArmed = true; void app.sendNotToday(task!.id); }}>
