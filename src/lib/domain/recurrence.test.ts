@@ -213,6 +213,26 @@ describe('sweepSpawns', () => {
     expect(res.updates[0]!.nextSpawnAt).toBeUndefined();
   });
 
+  it('an archived or deleted list silences its rules — schedule frozen for revival', () => {
+    // 2026-08-12 report: archiving a list did not stop its recurring tasks
+    // coming back. Silenced means no draft AND no schedule advance, so
+    // un-archiving revives the rule at its already-armed moment.
+    const home = (over: Partial<import('./types').List>) => ({
+      id: 'L1', title: 'chores', createdAt: 0, updatedAt: 0, deleted: false, ...over,
+    } as import('./types').List);
+    const t = tpl({ nextSpawnAt: at('2026-07-20T04:00:00').getTime() });
+
+    const archived = sweepSpawns([t], [], now, DEFAULT_SETTINGS, [home({ archived: true })]);
+    expect(archived.drafts).toHaveLength(0);
+    expect(archived.updates).toHaveLength(0);
+
+    const tombstoned = sweepSpawns([t], [], now, DEFAULT_SETTINGS, [home({ deleted: true })]);
+    expect(tombstoned.drafts).toHaveLength(0);
+
+    const alive = sweepSpawns([t], [], now, DEFAULT_SETTINGS, [home({})]);
+    expect(alive.drafts, 'a living list spawns as before').toHaveLength(1);
+  });
+
   it('ignores paused, deleted, not-yet-due, and unscheduled templates', () => {
     const due = at('2026-07-20T04:00:00').getTime();
     const list = [

@@ -11,7 +11,7 @@
  * every template whose `nextSpawnAt` has passed.
  */
 import { addDaysKey, appDayKey } from './time';
-import type { RecurrenceMode, RecurrenceTemplate, Settings, Task, TaskDraft } from './types';
+import type { List, RecurrenceMode, RecurrenceTemplate, Settings, Task, TaskDraft } from './types';
 
 /** Month-add with clamping (Jan 31 + 1mo → Feb 28) — JS Date would overflow into March. */
 function addMonthsClamped(d: Date, months: number): Date {
@@ -115,16 +115,26 @@ export interface SweepResult {
   updates: Array<{ id: string; nextSpawnAt: number | undefined }>;
 }
 
-/** Materialize every due template. Pure — the caller persists drafts and updates. */
+/**
+ * Materialize every due template. Pure — the caller persists drafts and updates.
+ *
+ * `lists` gates on the template's HOME: an archived list is an abandoned one,
+ * and its rules must fall silent with it (2026-08-12 report: archiving a list
+ * did not stop its recurring tasks coming back). A silenced template keeps its
+ * armed `nextSpawnAt` untouched, so un-archiving the list revives the rule on
+ * the very next sweep — one catch-up copy, then back on cadence.
+ */
 export function sweepSpawns(
   templates: RecurrenceTemplate[],
   tasks: Task[],
   now: Date,
   settings: Settings,
+  lists: List[] = [],
 ): SweepResult {
+  const gone = new Set(lists.filter((l) => l.deleted || l.archived).map((l) => l.id));
   const res: SweepResult = { drafts: [], updates: [] };
   for (const tpl of templates) {
-    if (tpl.paused || tpl.deleted) continue;
+    if (tpl.paused || tpl.deleted || gone.has(tpl.listId)) continue;
     if (tpl.nextSpawnAt === undefined || tpl.nextSpawnAt > now.getTime()) continue;
 
     // Skip-if-open (spec §5): don't pile up "water the plants" while one is pending.
