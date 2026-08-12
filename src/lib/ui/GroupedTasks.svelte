@@ -30,6 +30,7 @@
     onenter,
     revealAt = 'nearest',
     ontoggled,
+    onselection,
   }: {
     groups: TaskGroup[];
     /** Which attribute a drop assigns; 'custom' makes dragging REORDER
@@ -43,6 +44,9 @@
     /** A TAP toggled a row (never fired by programmatic opens like the add
         button) — the parent uses it to put revealAt back to 'nearest'. */
     ontoggled?: () => void;
+    /** Multi-select opened or closed — the parent hides its floating "+"
+        while the bulk editor owns that corner of the screen (2026-08-12). */
+    onselection?: (active: boolean) => void;
   } = $props();
 
   // ── multi-select ─────────────────────────────────────────────────────────
@@ -64,6 +68,8 @@
   $effect(() => {
     if (!selectionMode) { estArmed = null; completeArmed = false; deleteArmed = false; }
   });
+
+  $effect(() => { onselection?.(selectionMode); });
 
   // ── how many rows actually reach the DOM ─────────────────────────────────
   /*
@@ -214,12 +220,17 @@
 
   async function runBulk(action: 'complete' | 'delete' | 'move' | 'priority' | 'tag' | 'queue' | 'estimate', value?: string) {
     const ids = [...selected];
-    selected = [];
+    // The selection is a WORKSPACE, not a one-shot (2026-08-12 ask): set a
+    // priority, then an estimate, then a tag without re-picking every row.
+    // Only actions whose rows leave this view close it — a bar counting
+    // invisible tasks would be worse than re-selecting.
+    if (action === 'complete' || action === 'delete' || action === 'move') selected = [];
     // Reset the pickers, or re-choosing the same value next time is a no-op.
     bulkPriority = '';
     bulkList = '';
     bulkTag = '';
     deleteArmed = false;
+    completeArmed = false;
     await app.bulkApply(ids, action, value);
     haptic('success');
     // Scale the payoff to the size of the sweep — clearing eight at once should
@@ -448,12 +459,22 @@
 {/if}
 
 {#if selectionMode}
+  <!-- Two tidy columns instead of one wrapping row (2026-08-12 iOS report):
+       the anti-zoom 16px floor makes selects/inputs taller than buttons no
+       matter what, so everything shares ONE min-height and the space comes
+       back from layout — paired cells, "done" in the corner (it closes the
+       editor, same word as everywhere else; ✕ read as "cancel my changes"),
+       delete on its own full-width row where a stray thumb has to mean it. -->
   <div class="bulk" data-testid="bulk-bar">
-    <span class="count">{selected.length} selected</span>
+    <div class="bulk-head">
+      <span class="count">{selected.length} selected</span>
+      <button class="close" data-testid="bulk-done" onclick={() => (selected = [])}>done</button>
+    </div>
     <button class="confirm" class:armed={completeArmed} data-testid="bulk-complete"
       onclick={() => void confirmComplete()}>
       {completeArmed ? `complete ${selected.length}?` : '✓ complete'}
     </button>
+    <button data-testid="bulk-queue" onclick={() => void runBulk('queue')}>≡ queue</button>
     <select data-testid="bulk-priority" bind:value={bulkPriority}
       onchange={() => bulkPriority && void runBulk('priority', bulkPriority)}>
       <option value="">→ priority…</option>
@@ -464,7 +485,6 @@
       <option value="">+ tag…</option>
       {#each app.state.tags as t (t.id)}<option value={t.id}>+ {t.name}</option>{/each}
     </select>
-    <button data-testid="bulk-queue" onclick={() => void runBulk('queue')}>≡ queue</button>
     <select data-testid="bulk-move" bind:value={bulkList}
       onchange={() => bulkList && void runBulk('move', bulkList)}>
       <option value="">→ move to…</option>
@@ -490,7 +510,7 @@
       onkeydown={(e) => {
         if (e.key !== 'Enter') return;
         // Enter on the emptied, armed field: they mean it (the desktop path;
-        // the confirm button beside the field is the same answer by tap).
+        // the confirm button below the field is the same answer by tap).
         if (estArmed !== null && e.currentTarget.value.trim() === '') {
           applyArmedEstimate();
           return;
@@ -498,14 +518,13 @@
         commitEstimate(e.currentTarget);
       }} />
     {#if estArmed !== null}
-      <button class="confirm armed" data-testid="bulk-estimate-confirm"
+      <button class="confirm armed wide" data-testid="bulk-estimate-confirm"
         onclick={applyArmedEstimate}>{estArmed}h each?</button>
     {/if}
-    <button class="danger" class:armed={deleteArmed} data-testid="bulk-delete"
+    <button class="danger wide" class:armed={deleteArmed} data-testid="bulk-delete"
       onclick={() => void confirmDelete()}>
       {deleteArmed ? `delete ${selected.length}?` : 'delete'}
     </button>
-    <button class="clear" data-testid="bulk-clear" onclick={() => (selected = [])}>✕</button>
   </div>
 {/if}
 
@@ -555,36 +574,41 @@
     position: fixed; z-index: 120;
     left: 50%; transform: translateX(-50%);
     bottom: calc(16px + env(safe-area-inset-bottom));
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
+    width: min(94vw, 330px);
     background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 10px;
-    padding: 8px 12px; max-width: 94vw;
+    padding: 8px 10px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  .bulk-head {
+    grid-column: 1 / -1; display: flex; align-items: center;
+    justify-content: space-between; min-height: 0;
   }
   .count { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
   /*
-    Every control in the bar shares ONE set of metrics — the estimate input
-    ran its own font and padding and stood a few pixels prouder than the
-    buttons beside it (reported 2026-08-12), and native selects like to bring
-    their platform's own idea of height. appearance:none flattens that; the
-    trailing "…" in each select's label still says "this one opens".
+    Every control in the bar shares ONE set of metrics. On touch devices the
+    anti-zoom rule (app.css) floors input/select text at 16px — that height
+    cannot be argued with, so the buttons rise to meet it via min-height
+    instead of the fields failing to shrink (reported 2026-08-12: everything
+    with a field stood taller than the buttons). appearance:none keeps native
+    selects from adding their own chrome on top; the trailing "…" in each
+    select's label still says "this one opens".
   */
   .bulk button, .bulk select, .bulk .est {
     background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); font-family: var(--font-mono); font-size: 0.72rem;
-    padding: 5px 9px; margin: 0; line-height: 1.3; cursor: pointer;
+    padding: 4px 9px; margin: 0; line-height: 1.3; cursor: pointer;
     appearance: none; -webkit-appearance: none;
+    width: 100%; min-width: 0; min-height: 30px; box-sizing: border-box;
   }
-  /*
-    A native select's intrinsic minimum width is its LONGEST OPTION, and with a
-    real library one long tag or list name makes the control wider than the
-    whole bar — it burst straight through the border (reported with a
-    screenshot, 2026-07-28). The closed control only ever needs to show its
-    own label; the dropdown still shows every option at full length.
-  */
-  .bulk select { max-width: 34vw; min-width: 0; }
-  .bulk .est { width: 74px; outline: none; cursor: text; }
+  /* One grid cell caps every control, so a long list or tag name can no
+     longer burst the bar the way the old flex row let it (2026-07-28);
+     minmax(0, 1fr) is what lets a cell actually shrink below a select's
+     longest option. Dropdowns still show every option at full length. */
+  .bulk .est { outline: none; cursor: text; }
   .bulk .est:focus { border-color: var(--acc-cyan); }
   .bulk .est.armed { border-color: var(--acc-orange); }
+  .bulk .wide { grid-column: 1 / -1; }
   .bulk .confirm.armed {
     background: var(--acc-orange); border-color: var(--acc-orange); color: var(--bg0);
   }
@@ -592,7 +616,13 @@
   .bulk .danger.armed {
     background: var(--acc-magenta); border-color: var(--acc-magenta); color: var(--bg0);
   }
-  .bulk .clear { color: var(--dim); border-color: transparent; }
+  /* The head's "done" opts out of the control metrics: it's the pane-closer
+     (same word as the task editor's), quiet by design. */
+  .bulk-head .close {
+    width: auto; min-height: 0; background: none; border: none;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem;
+    padding: 2px 4px; cursor: pointer; text-decoration: underline;
+  }
   .ghost {
     position: fixed; z-index: 500; pointer-events: none;
     transform: translate(-50%, -140%);

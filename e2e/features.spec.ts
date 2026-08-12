@@ -727,18 +727,27 @@ test('bulk estimate commits on leaving the field; the 10+ ask confirms by tap', 
   const ids = await Promise.all((await page.getByTestId(/^task-row-/).all()).map(async (r) =>
     (await r.getAttribute('data-testid'))!.replace('task-row-', '')));
 
-  // Enter-only was a desktop habit (reported 2026-08-12): a phone keyboard's
-  // "done" blurs the field, so blurring must be a commit too.
+  // The floating "+" yields the corner while the bulk editor is up.
+  await expect(page.getByTestId('list-fab')).toBeVisible();
   await page.getByTestId(`select-${ids[0]}`).click();
   await page.getByTestId(`select-${ids[1]}`).click();
+  await expect(page.getByTestId('list-fab')).toHaveCount(0);
+
+  // Enter-only was a desktop habit (reported 2026-08-12): a phone keyboard's
+  // "done" blurs the field, so blurring must be a commit too.
   const est = page.getByTestId('bulk-estimate');
   await est.fill('45m');
   await est.blur();
   await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
 
+  // The selection is a workspace (2026-08-12 ask): applying an estimate must
+  // NOT dissolve it — the next field edit works without re-picking rows.
+  await expect(page.getByTestId('bulk-bar')).toContainText('2 selected');
+
   // And a suspicious bare 10+ armed by blur is answered by TAPPING the ask —
   // one task this time, so a stale "2 tasks" toast can't fake the pass.
-  await page.getByTestId(`select-${ids[0]}`).click();
+  await page.getByTestId(`select-${ids[0]}`).click(); // toggle one OFF
+  await expect(page.getByTestId('bulk-bar')).toContainText('1 selected');
   await est.fill('30');
   await est.blur();
   const confirm = page.getByTestId('bulk-estimate-confirm');
@@ -746,6 +755,12 @@ test('bulk estimate commits on leaving the field; the 10+ ask confirms by tap', 
   await expect(page.getByText('Estimated 1 task', { exact: true })).toHaveCount(0);
   await confirm.click();
   await expect(page.getByText('Estimated 1 task', { exact: true })).toBeVisible();
+
+  // "done" closes the editor — the same word that closes the task editor —
+  // and the floating "+" gets its corner back.
+  await page.getByTestId('bulk-done').click();
+  await expect(page.getByTestId('bulk-bar')).toHaveCount(0);
+  await expect(page.getByTestId('list-fab')).toBeVisible();
 });
 
 test('the estimate field lets you finish typing "45m" without rewriting it', async ({ page }) => {
@@ -878,7 +893,7 @@ test('tagging a whole selection at once, undoably', async ({ page }) => {
   const first = page.getByTestId(/^task-row-/).filter({ hasText: 'one' }).first();
   const firstId = (await first.getAttribute('data-testid'))!.replace('task-row-', '');
   await page.getByTestId(`select-${firstId}`).click(); // selectable without opening
-  await page.getByTestId('bulk-clear').click();
+  await page.getByTestId('bulk-done').click();
 
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
@@ -1855,6 +1870,11 @@ test('bulk estimate: one value lands on the whole selection and clears NEW', asy
   // armed" signal a human sees — wait for it, or a fast Ctrl+Z finds an
   // empty stack (caught on CI's slower IndexedDB, 2026-08-07).
   await expect(page.getByText('Estimated 2 tasks', { exact: true })).toBeVisible();
+
+  // The selection persists after the apply (it's a workspace now), which
+  // keeps the estimate field FOCUSED — and while you're in a field, Ctrl+Z
+  // rightly belongs to the field, not the app. Step out first, like a human.
+  await page.getByTestId('bulk-estimate').blur();
 
   // Undoable as one, redoable as one — checked BEFORE opening any row,
   // because a tap-expand is itself a triage and would eat a badge.

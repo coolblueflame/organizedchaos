@@ -131,6 +131,8 @@
    * The review fleet caught it with a live probe; the dead function is gone.
    */
   let revealAt = $state<'start' | 'nearest'>('nearest');
+  /** True while the multi-select bulk editor is open (GroupedTasks reports it). */
+  let bulkActive = $state(false);
 
   /**
    * Synchronous for the same reason the Enter-chain is: iOS opens the keyboard
@@ -239,6 +241,7 @@
     bind:editingTaskId
     {revealAt}
     ontoggled={() => (revealAt = 'nearest')}
+    onselection={(active) => (bulkActive = active)}
     onenter={chainNext} />
   {#if groups.length === 0}
     <p class="empty">// nothing here yet</p>
@@ -251,7 +254,9 @@
        keyboard comes up in the same tap. Hidden while the keyboard is up
        (2026-08-01 ask) — fixed-position elements ride the visual viewport on
        iOS and the button scooted up to cover the text being typed. -->
-  {#if !keyboard.open}
+  <!-- …and hidden while the bulk editor is up (2026-08-12 ask): the two float
+       in the same corner region, and mid-selection is no time to add tasks. -->
+  {#if !keyboard.open && !bulkActive}
     <button class="fab" data-testid="list-fab" aria-label="new todo" onclick={newTask}>
       <Glyph name="plus" size={20} />
     </button>
