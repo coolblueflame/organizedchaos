@@ -164,12 +164,20 @@ main > header {
  * DESKTOP Safari paints today's date (dimmed) into an EMPTY date input — every
  * task without a deadline looked like it was due today (reported 2026-08-12;
  * mobile renders empty fields blank already). Components mark a valueless date
- * input with .empty so its segment text hides until either a value lands (the
- * class is bound to the value) or the field is focused for typing. Chrome's
+ * input with .empty so its text hides until either a value lands (the class is
+ * bound to the value) or the field is focused for typing. Chrome's
  * "mm/dd/yyyy" template hides with it, which is fine — each of these fields
  * sits under its own "deadline"/"done by" label.
+ *
+ * Both rules on purpose (second 2026-08-12 report: still visible on Safari):
+ * ::-webkit-datetime-edit is honored by Blink but not by Safari's own date
+ * shadow DOM, whose segment text simply INHERITS the input's color — so the
+ * input itself goes transparent too. !important for the same reason as the
+ * 16px rule above: Svelte scoped styles are class selectors and would
+ * silently outrank this wherever a component styles its own inputs.
  */
 input[type='date'].empty:not(:focus)::-webkit-datetime-edit { color: transparent; }
+input[type='date'].empty:not(:focus) { color: transparent !important; }
 
 @media (pointer: coarse) {
   input, textarea, select {
