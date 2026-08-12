@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type Priority, type Task } from './types';
 import {
   formatDurationLong,
-  burdenChange, burdenSeries, burdenShift, completionCounts, completionSeries,
+  burdenChange, burdenSeries, burdenShift, burdenTasks, completionCounts, completionSeries,
   formatDuration, maxCompletionsInOneDay, totalEstimateHours, winsList, estimateOutcome,
 } from './stats';
 
@@ -144,6 +144,75 @@ describe('burdenSeries', () => {
     expect(byKey['2026-07-12']).toBe(3);  // t3 deleted that day → gone
     expect(byKey['2026-07-13']).toBe(2);  // t2 completed → gone
     expect(byKey['2026-07-15']).toBe(2);  // just t1 remains
+  });
+
+  it('a measured ledger reading beats the reconstruction for its day', () => {
+    const t1 = task({ priority: 'low', estimateHours: 2, createdAt: new Date('2026-07-10T09:00:00').getTime() });
+    // End of 07-12 = start of 07-13: the snapshot remembers 9h the rows can't.
+    const ledger = { '2026-07-13': { v: 9, at: new Date('2026-07-13T04:01:00').getTime() } };
+    const s = burdenSeries([t1], 6, now, 4, ledger);
+    const byKey = Object.fromEntries(s.map((p) => [p.key, p.hours]));
+    expect(byKey['2026-07-12'], 'measured').toBe(9);
+    expect(byKey['2026-07-11'], 'unmeasured days still reconstruct').toBe(2);
+  });
+});
+
+describe('burdenTasks (archived lists are abandoned)', () => {
+  const list = (over: Partial<import('./types').List>) => ({
+    id: 'L1', title: 'x', createdAt: 0, updatedAt: 0, deleted: false, ...over,
+  } as import('./types').List);
+
+  it('drops tasks on archived lists, keeps the rest', () => {
+    const keep = task({ priority: 'low', estimateHours: 2 });
+    const shelved = { ...task({ priority: 'low', estimateHours: 5 }), listId: 'L2' };
+    const out = burdenTasks([keep, shelved], [list({}), list({ id: 'L2', archived: true })]);
+    expect(out).toEqual([keep]);
+    expect(totalEstimateHours(out)).toBe(2);
+  });
+
+  it('a DELETED archived list no longer shelters its rows from the count', () => {
+    // Deleting a list tombstones its tasks separately; the list tombstone
+    // itself must not act as an archive filter or a revived list's history
+    // would vanish from the math.
+    const t = { ...task({ priority: 'low' }), listId: 'L2' };
+    const out = burdenTasks([t], [list({ id: 'L2', archived: true, deleted: true })]);
+    expect(out).toEqual([t]);
+  });
+});
+
+describe('burdenChange against a measured baseline', () => {
+  // THE 2026-08-12 ask: deleting tasks and fixing estimates must move the
+  // delta. Reconstruction can't see either (it reprices both ends alike);
+  // a written-down yesterday can.
+  const ledgerFor = (v: number) => ({
+    // now = 2026-07-15; 'day' window compares against end of 07-14 = start of 07-15.
+    '2026-07-15': { v, at: new Date('2026-07-15T04:00:30').getTime() },
+  });
+
+  it('deleting a task makes the pile lighter than the measured yesterday', () => {
+    const t = task({ priority: 'low', estimateHours: 3, createdAt: new Date('2026-07-01').getTime() });
+    const before = burdenChange([t], 'day', now, 4, ledgerFor(3));
+    expect(before, 'still standing → no change').toBe(0);
+    const deleted = { ...t, deleted: true, updatedAt: now.getTime() };
+    expect(burdenChange([deleted], 'day', now, 4, ledgerFor(3)), 'deleted → 3h lighter').toBe(-3);
+  });
+
+  it('even a future-stamped deletion (import-repair rows) moves the measured delta', () => {
+    // The actual 2026-08-12 blind spot: Things-repair rows carry 2050s merge
+    // stamps, so a fresh deletion inherits a FUTURE updatedAt and the
+    // reconstruction reads it as already-gone at both endpoints — invisible.
+    // The measured yesterday still holds those hours, so the drop shows.
+    const t = task({ priority: 'low', estimateHours: 3, createdAt: new Date('2026-07-01').getTime() });
+    const deleted = { ...t, deleted: true, updatedAt: new Date('2050-01-01').getTime() };
+    expect(burdenChange([deleted], 'day', now, 4, {}), 'reconstruction blind spot, pinned').toBe(0);
+    expect(burdenChange([deleted], 'day', now, 4, ledgerFor(3)), 'measured sees it').toBe(-3);
+  });
+
+  it('fixing a wild estimate moves the delta by the correction', () => {
+    const t = task({ priority: 'low', estimateHours: 30, createdAt: new Date('2026-07-01').getTime() });
+    const corrected = { ...t, estimateHours: 0.5 };
+    expect(burdenChange([corrected], 'day', now, 4, ledgerFor(30)), '30h → 30m').toBe(-29.5);
+    expect(burdenChange([corrected], 'day', now, 4, {}), 'reconstruction blind spot, pinned').toBe(0);
   });
 });
 

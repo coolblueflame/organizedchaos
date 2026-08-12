@@ -202,6 +202,21 @@ describe('discoveries travel between devices', () => {
       .toEqual({ oops: 1_000_000 });
   });
 
+  it('burden measurements travel, and the earliest reading owns each day', async () => {
+    phone.snap.burdenLedger = { '2026-08-12': { v: 41, at: 2000 } };
+    await phone.engine.syncNow();
+
+    pc.snap.burdenLedger = { '2026-08-12': { v: 42, at: 5000 }, '2026-08-13': { v: 40, at: 9000 } };
+    await pc.engine.syncNow();
+    expect(pc.snap.burdenLedger).toEqual({
+      '2026-08-12': { v: 41, at: 2000 }, // phone measured first — its day
+      '2026-08-13': { v: 40, at: 9000 },
+    });
+
+    await phone.engine.syncNow();
+    expect(phone.snap.burdenLedger).toEqual(pc.snap.burdenLedger);
+  });
+
   it('a grant newer than the revocation wins everywhere', async () => {
     pc.snap.delight = withDelight({ unlocks: [], unlockRevokes: { prize: 5_000 } });
     await pc.engine.syncNow();

@@ -12,6 +12,7 @@
 import type {
   CurrentTaskRef, List, RecurrenceTemplate, Settings, Tag, Task,
 } from '../domain/types';
+import type { BurdenLedger } from '../domain/stats';
 
 /**
  * 2 (2026-08-03): open tasks moved out of active.json into `tasks-<n>.json`
@@ -108,6 +109,12 @@ export interface RemoteSnapshot {
   queueIds: string[];
   queueUpdatedAt: number;
   delight?: DelightProgress;
+  /**
+   * Daily backlog measurements (see domain/stats.BurdenLedger). Not a stamped
+   * singleton: days merge independently, earliest measurement per day wins.
+   * Absent on remotes written before it existed.
+   */
+  burdenLedger?: BurdenLedger;
 }
 
 export interface SyncFilePayloads {
@@ -130,6 +137,7 @@ interface ActiveFile {
   queueIds?: string[];
   queueUpdatedAt?: number;
   delight?: DelightProgress;
+  burdenLedger?: BurdenLedger;
 }
 
 interface LogbookFile {
@@ -193,6 +201,8 @@ export function toFiles(snap: RemoteSnapshot, now: Date): SyncFilePayloads {
     queueIds: snap.queueIds,
     queueUpdatedAt: snap.queueUpdatedAt,
     ...(snap.delight ? { delight: snap.delight } : {}),
+    ...(snap.burdenLedger && Object.keys(snap.burdenLedger).length
+      ? { burdenLedger: snap.burdenLedger } : {}),
   };
   files['active.json'] = active;
 
@@ -267,5 +277,6 @@ export function fromFiles(files: SyncFilePayloads): RemoteSnapshot {
     queueUpdatedAt: active.queueUpdatedAt ?? 0,
     // Absent on remotes written before delight synced — merge treats it as none.
     ...(active.delight ? { delight: active.delight } : {}),
+    ...(active.burdenLedger ? { burdenLedger: active.burdenLedger } : {}),
   };
 }

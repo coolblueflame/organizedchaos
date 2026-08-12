@@ -10,7 +10,7 @@
   import { navigate } from './router.svelte';
   import { listHealth, shortAge } from '../domain/listHealth';
   import {
-    averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, burdenShift,
+    averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, burdenShift, burdenTasks,
     completionSeries, formatDuration, formatDurationLong, formatElapsed,
     totalEstimateHours, type BurdenShiftEntry, type BurdenWindow,
   } from '../domain/stats';
@@ -37,23 +37,58 @@
     on raw data — the derived caches it until the tasks actually change.
   */
   const plainTasks = $derived($state.snapshot(app.state.tasks) as typeof app.state.tasks);
+  const plainLedger = $derived($state.snapshot(app.burdenLedger));
 
   const series = $derived(completionSeries(
     plainTasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
 
-  const estimateHours = $derived(totalEstimateHours(plainTasks));
+  const plainLists = $derived($state.snapshot(app.state.lists));
+
+  /* Archived lists are abandoned, not owed (2026-08-12 ask) — every burden
+     number below counts these rows; completions history keeps ALL tasks. */
+  const countedTasks = $derived(burdenTasks(plainTasks, plainLists));
+
+  /*
+    Tombstones live only on disk — the mirror keeps living rows — so this
+    screen fetches them once per visit: a deletion must show up as "lighter"
+    (and be NAMED in the breakdown), and a deletion's whole point is that it
+    left the mirror. They join every backlog computation below, where the
+    open-pile filters ignore them for "now" and the reconstruction counts
+    them for "then"; the hero total never sees them.
+  */
+  let ghosts = $state<import('../domain/types').Task[]>([]);
+  $effect(() => {
+    void app.deletedTasks().then((rows) => (ghosts = rows));
+  });
+  const reckonTasks = $derived(
+    [...countedTasks, ...burdenTasks($state.snapshot(ghosts), plainLists)]);
+
+  const estimateHours = $derived(totalEstimateHours(countedTasks));
   const openCount = $derived(
-    plainTasks.filter((t) => !t.deleted && t.completedAt === undefined).length,
+    countedTasks.filter((t) => !t.deleted && t.completedAt === undefined).length,
   );
   const avgActive = $derived(averageActiveMs(plainTasks));
   const burdenDelta = $derived(
-    burdenChange(plainTasks, burdenWindow, clock.now, app.state.settings.rolloverHour));
+    burdenChange(reckonTasks, burdenWindow, clock.now, app.state.settings.rolloverHour, plainLedger));
 
   /** The delta, itemized on demand (2026-08-11 ask) — computed only while open. */
   let shiftOpen = $state(false);
   const shift = $derived(shiftOpen
-    ? burdenShift(plainTasks, burdenWindow, clock.now, app.state.settings.rolloverHour)
+    ? burdenShift(reckonTasks, burdenWindow, clock.now, app.state.settings.rolloverHour)
     : null);
+  /**
+   * What the headline moved that no row can own: estimate edits, lists
+   * archived or revived, tombstones already compacted. Only a measured
+   * baseline can see these (the reconstruction reprices both ends alike),
+   * so the line appears once the ledger covers the comparison day.
+   */
+  const shiftAdjustments = $derived.by(() => {
+    if (!shift) return 0;
+    const scanned =
+      sectionHours(shift.addedByHand) + sectionHours(shift.addedByRules)
+      - sectionHours(shift.completed) - sectionHours(shift.removed);
+    return burdenDelta - scanned;
+  });
   /** Locked lists show hours, never names — stats' standing rule. */
   const lockedLists = $derived(lockedListIds(app.state.lists, lockSession.unlocked));
   const entryName = (e: BurdenShiftEntry) =>
@@ -68,11 +103,11 @@
   const totalUntriaged = $derived(health.reduce((n, r) => n + r.untriaged, 0));
 
   const burden = $derived.by(() => {
-    const tasks = plainTasks;
+    const tasks = reckonTasks;
     const oldest = Math.min(Date.now(), ...tasks.map((t) => t.createdAt || Date.now()));
     const spanDays = Math.max(14, Math.min(365,
       -daysUntilDeadline(appDayKey(new Date(oldest), app.state.settings.rolloverHour), new Date(), app.state.settings.rolloverHour) + 1));
-    return burdenSeries(tasks, spanDays, new Date(), app.state.settings.rolloverHour);
+    return burdenSeries(tasks, spanDays, new Date(), app.state.settings.rolloverHour, plainLedger);
   });
 </script>
 
@@ -156,12 +191,22 @@
             </div>
           {/if}
         {/each}
-        {#if shift.addedByHand.length + shift.addedByRules.length + shift.completed.length + shift.removed.length === 0}
+        <!-- Half an hour of tolerance: the residual absorbs rounding and
+             pre-ledger drift, and a sub-30m line would be noise, not news. -->
+        {#if Math.abs(shiftAdjustments) >= 0.5}
+          <div class="shift-section" data-testid="shift-adjustments">
+            <div class="shift-head">
+              <span>estimate edits &amp; other adjustments</span>
+              <span class="shift-sum" class:gain={shiftAdjustments > 0}>
+                {shiftAdjustments > 0 ? '+' : '−'}{formatEstimate(Math.abs(shiftAdjustments))}
+              </span>
+            </div>
+          </div>
+        {/if}
+        {#if shift.addedByHand.length + shift.addedByRules.length + shift.completed.length + shift.removed.length === 0
+          && Math.abs(shiftAdjustments) < 0.5}
           <div class="shift-item more">nothing moved in this window</div>
         {/if}
-        <!-- The honest footnote: the delta prices everything at its CURRENT
-             estimate, so editing an estimate moves the whole line silently. -->
-        <div class="shift-note">estimate edits reprice past and present alike — they never appear here</div>
       </div>
     {/if}
     {#if unconfirmedEstimates > 0}
@@ -172,7 +217,7 @@
     {/if}
     {#if showAssumption}
       <p class="assumption">Sum of your open tasks' estimates — any task without an estimate
-        is assumed to take 1 hour.</p>
+        is assumed to take 1 hour. Archived lists don't count: shelved means not owed.</p>
     {/if}
   </section>
 
@@ -333,7 +378,6 @@
   .shift-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .shift-hours { color: var(--dim); font-family: var(--font-mono); flex: none; }
   .shift-item.more { color: var(--dim); font-size: 0.72rem; }
-  .shift-note { color: var(--dim); font-size: 0.65rem; opacity: 0.7; }
   .delta-row select {
     background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
     color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;

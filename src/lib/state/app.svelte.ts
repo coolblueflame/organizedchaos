@@ -31,7 +31,10 @@ import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
-import { completionCounts, estimateOutcome, maxCompletionsInOneDay, MIN_TRACKED_MS } from '../domain/stats';
+import {
+  burdenTasks, completionCounts, estimateOutcome, maxCompletionsInOneDay,
+  MIN_TRACKED_MS, totalEstimateHours, type BurdenLedger,
+} from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
@@ -70,6 +73,8 @@ export class AppStore {
   eggBestStreak = $state(0);
   eggUnlocks = $state<string[]>([]);
   eggTrivia = $state({ correct: 0, total: 0 });
+  /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
+  burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
   private trashTasks = new Map<string, Task>();
   private trashLists = new Map<string, List>();
@@ -87,7 +92,9 @@ export class AppStore {
     this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
     this.state.queueIds = loaded.queueIds;
     this.state.queueUpdatedAt = loaded.queueUpdatedAt;
+    this.burdenLedger = (await this.repo.getKv<BurdenLedger>('burdenLedger')) ?? {};
     // Materialize any recurrences that came due while the app was closed.
+    // (This also takes the day's burden measurement — see runSpawnSweepBody.)
     await this.runSpawnSweep();
     this.ready = true;
     const period = await this.repo.getKv<number | null>('workPeriod');
@@ -274,6 +281,11 @@ export class AppStore {
     this.syncStatus = 'idle';
   }
 
+  /** Task tombstones, read fresh from disk — see Repo.deletedTasks. */
+  async deletedTasks(): Promise<Task[]> {
+    return this.repo.deletedTasks();
+  }
+
   /** Re-read the (post-merge) db into the mirror without touching sync/ready. */
   private async refreshFromDisk(): Promise<void> {
     const loaded = await this.repo.loadState();
@@ -287,6 +299,7 @@ export class AppStore {
     this.state.settingsUpdatedAt = loaded.settingsUpdatedAt;
     this.state.queueIds = loaded.queueIds;
     this.state.queueUpdatedAt = loaded.queueUpdatedAt;
+    this.burdenLedger = (await this.repo.getKv<BurdenLedger>('burdenLedger')) ?? {};
   }
 
   async configureSync(owner: string, repo: string, token: string): Promise<{ ok: boolean; error?: string }> {
@@ -1482,6 +1495,23 @@ export class AppStore {
     });
   }
 
+  /**
+   * Write today's backlog measurement if this is the first run of the app-day
+   * (see domain/stats.BurdenLedger for why measurements exist at all). Rides
+   * the spawn-sweep triggers — boot, returning to the app, the 4am timer — so
+   * the reading lands as close to the rollover as this device ever gets; the
+   * per-day earliest-wins merge lets whichever DEVICE measured first own the
+   * day. Archived lists are excluded, same as every burden number.
+   */
+  private async recordBurdenSnapshot(now: Date): Promise<void> {
+    const day = appDayKey(now, this.state.settings.rolloverHour);
+    if (this.burdenLedger[day] !== undefined) return;
+    const v = totalEstimateHours(burdenTasks(this.state.tasks, this.state.lists));
+    this.burdenLedger = { ...this.burdenLedger, [day]: { v, at: now.getTime() } };
+    await this.repo.setKv('burdenLedger', $state.snapshot(this.burdenLedger));
+    this.requestSync();
+  }
+
   /** Materialize due templates. Called from init, window focus, and the rollover timer. */
   /** Set while a sweep runs — two triggers can land near-simultaneously
    *  (init + visibility, or a rollover timer), and the second must not
@@ -1499,6 +1529,9 @@ export class AppStore {
   }
 
   private async runSpawnSweepBody(now: Date): Promise<number> {
+    // Measure BEFORE spawning: today's recurring arrivals belong to "added
+    // since yesterday", so the day's baseline must not already contain them.
+    await this.recordBurdenSnapshot(now);
     /*
       Self-heal dormant templates before sweeping. The Things import shipped
       templates with no `nextSpawnAt`, and sweepSpawns skips unarmed rows — so
@@ -1519,8 +1552,12 @@ export class AppStore {
         .filter((t) => !t.deleted && t.completedAt === undefined && t.recurrenceId)
         .map((t) => t.recurrenceId!),
     );
+    // An archived (or deleted) list silences its rules — no healing, no
+    // spawning — until the list comes back (2026-08-12 zombie report).
+    const goneLists = new Set(
+      this.state.lists.filter((l) => l.deleted || l.archived).map((l) => l.id));
     for (const tpl of this.state.templates) {
-      if (tpl.deleted || tpl.paused || tpl.nextSpawnAt !== undefined) continue;
+      if (tpl.deleted || tpl.paused || goneLists.has(tpl.listId) || tpl.nextSpawnAt !== undefined) continue;
       const armed = tpl.mode.kind === 'afterCompletion'
         ? (openByRecurrence.has(tpl.id)
           ? null
@@ -1529,7 +1566,7 @@ export class AppStore {
       if (armed !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: armed });
     }
 
-    const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings);
+    const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings, this.state.lists);
     for (const draft of res.drafts) {
       // Deterministic ids mean the same occurrence can already be here —
       // synced in from another device mid-sweep. Same id = same row; skip.

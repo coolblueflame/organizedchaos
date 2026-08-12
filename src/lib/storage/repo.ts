@@ -14,7 +14,8 @@ import {
 } from '../domain/types';
 import type { DelightProgress, RemoteSnapshot } from '../sync/files';
 import type { SyncConfig } from '../sync/githubClient';
-import { mergeDelight, supersedes } from '../sync/merge';
+import { mergeBurdenLedger, mergeDelight, supersedes } from '../sync/merge';
+import type { BurdenLedger } from '../domain/stats';
 import type { Table } from 'dexie';
 import type { AppDb } from './db';
 
@@ -160,6 +161,16 @@ export class Repo {
     };
   }
 
+  /**
+   * Task tombstones only — the mirror above keeps living rows, but the stats
+   * breakdown has to NAME what was deleted this window, and a deletion's
+   * whole point is that it left the mirror. Read on demand (panel open), not
+   * kept in memory.
+   */
+  async deletedTasks(): Promise<Task[]> {
+    return (await this.db.tasks.toArray()).filter((t) => t.deleted);
+  }
+
   async createList(fields: { title: string; areaGroup?: string; generated?: boolean }): Promise<List> {
     const row: List = { ...stamp(), sortMode: 'priority', ...fields };
     await this.db.lists.put(row);
@@ -300,11 +311,12 @@ export class Repo {
   /** Full store INCLUDING tombstones — what the sync merge operates on. */
   async loadSnapshot(): Promise<RemoteSnapshot> {
     const state = await this.loadState();
-    const [lists, tasks, tags, templates, eggs, settingsRow] = await Promise.all([
+    const [lists, tasks, tags, templates, eggs, settingsRow, burdenLedger] = await Promise.all([
       this.db.lists.toArray(), this.db.tasks.toArray(),
       this.db.tags.toArray(), this.db.templates.toArray(),
       this.getKv<StoredDelight>('eggState'),
       this.db.kv.get('settings'),
+      this.getKv<BurdenLedger>('burdenLedger'),
     ]);
     // The snapshot feeds sync, so it must carry settings SPARSE — loadState
     // materialized defaults into `state.settings` for the app's own use, and
@@ -319,6 +331,7 @@ export class Repo {
       ...state, lists, tasks, tags, templates,
       settings: sparseSettings,
       ...(delight ? { delight } : {}),
+      ...(burdenLedger && Object.keys(burdenLedger).length ? { burdenLedger } : {}),
     };
   }
 
@@ -354,6 +367,17 @@ export class Repo {
       // pacing fields (seen / lastPresentedAt / presentedToday). Read-modify-
       // write inside the same transaction so a concurrent save cannot lose it,
       // and by union/max so a discovery earned mid-sync is not erased either.
+      // Same read-modify-write contract as delight below: the day another
+      // device measured first must win by the ledger's own rule, not by
+      // whoever wrote storage last.
+      if (snap.burdenLedger && Object.keys(snap.burdenLedger).length) {
+        const row = await this.db.kv.get('burdenLedger');
+        const current = (row?.value as BurdenLedger | undefined) ?? {};
+        await this.db.kv.put({
+          key: 'burdenLedger',
+          value: mergeBurdenLedger(current, snap.burdenLedger),
+        });
+      }
       if (snap.delight) {
         const row = await this.db.kv.get('eggState');
         const current = (row?.value as StoredDelight | undefined) ?? {};

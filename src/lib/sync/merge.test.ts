@@ -246,3 +246,36 @@ describe('when both sides claim the same instant', () => {
     expect(result.remoteChanged).toBe(false);
   });
 });
+
+describe('mergeSnapshots — the burden ledger', () => {
+  it('days merge independently; per day the earliest measurement wins, symmetrically', () => {
+    const local = snap({ burdenLedger: {
+      '2026-08-11': { v: 40, at: 1000 },
+      '2026-08-12': { v: 42, at: 5000 }, // measured at noon…
+    } });
+    const remote = snap({ burdenLedger: {
+      '2026-08-12': { v: 41, at: 2000 }, // …but the phone was up at 4:01am
+      '2026-08-13': { v: 39, at: 3000 },
+    } });
+    const want = {
+      '2026-08-11': { v: 40, at: 1000 },
+      '2026-08-12': { v: 41, at: 2000 },
+      '2026-08-13': { v: 39, at: 3000 },
+    };
+    expect(mergeSnapshots(local, remote).merged.burdenLedger).toEqual(want);
+    expect(mergeSnapshots(remote, local).merged.burdenLedger, 'order-independent').toEqual(want);
+  });
+
+  it('an exact at-tie converges on the smaller value from both sides', () => {
+    const a = snap({ burdenLedger: { '2026-08-12': { v: 42, at: 2000 } } });
+    const b = snap({ burdenLedger: { '2026-08-12': { v: 41, at: 2000 } } });
+    expect(mergeSnapshots(a, b).merged.burdenLedger).toEqual({ '2026-08-12': { v: 41, at: 2000 } });
+    expect(mergeSnapshots(b, a).merged.burdenLedger).toEqual({ '2026-08-12': { v: 41, at: 2000 } });
+  });
+
+  it('a remote from before the ledger existed merges to the local ledger, not to nothing', () => {
+    const local = snap({ burdenLedger: { '2026-08-12': { v: 42, at: 2000 } } });
+    const merged = mergeSnapshots(local, snap()).merged;
+    expect(merged.burdenLedger).toEqual({ '2026-08-12': { v: 42, at: 2000 } });
+  });
+});

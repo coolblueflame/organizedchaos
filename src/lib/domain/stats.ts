@@ -6,7 +6,7 @@
  * Things history graphs correctly from day one.
  */
 import { addDaysKey, appDayKey } from './time';
-import type { Task } from './types';
+import type { List, Task } from './types';
 
 const doneTasks = (tasks: Task[]) =>
   tasks.filter((t) => !t.deleted && t.completedAt !== undefined);
@@ -139,6 +139,32 @@ export function totalEstimateHours(tasks: Task[]): number {
     .reduce((sum, t) => sum + (t.estimateHours ?? 1), 0);
 }
 
+/**
+ * The rows the burden math is allowed to count: an ARCHIVED list is an
+ * abandoned one, and abandoned work is not time you still owe (2026-08-12
+ * ask). Deleted lists need no case here — deleting a list tombstones its
+ * tasks, which every burden test already skips. Completion history is NOT
+ * filtered this way anywhere: finishing a task counted even if its list was
+ * later shelved.
+ */
+export function burdenTasks(tasks: Task[], lists: List[]): Task[] {
+  const shelved = new Set(lists.filter((l) => !l.deleted && l.archived).map((l) => l.id));
+  return shelved.size === 0 ? tasks : tasks.filter((t) => !shelved.has(t.listId));
+}
+
+/**
+ * One measured backlog reading per app-day: the open-pile hours as the day
+ * BEGAN (first run after rollover), keyed by app-day. Exists because the
+ * reconstruction below prices history at CURRENT estimates and living rows —
+ * deleting a task or fixing a wild estimate changed both ends of the
+ * comparison and the delta read "no change" (2026-08-12 report). A written-
+ * down number moves when today moves, which is what a human means by
+ * "heavier than yesterday". `at` orders competing measurements: the one
+ * taken closest to the rollover is the day's truth.
+ */
+export interface BurdenSnap { v: number; at: number }
+export type BurdenLedger = Record<string, BurdenSnap>;
+
 const DURATION_UNITS: Array<[string, number]> = [
   ['y', 24 * 365], ['mo', 24 * 30], ['w', 24 * 7], ['d', 24], ['h', 1],
 ];
@@ -261,11 +287,12 @@ export function burdenSeries(
   sampleDays: number,
   now: Date,
   rolloverHour: number,
+  ledger: BurdenLedger = {},
 ): BurdenPoint[] {
   const todayKey = appDayKey(now, rolloverHour);
   const keys: string[] = [];
   for (let i = sampleDays - 1; i >= 0; i--) keys.push(addDaysKey(todayKey, -i));
-  return keys.map((key) => ({ key, hours: burdenAt(tasks, key, rolloverHour, now.getTime()) }));
+  return keys.map((key) => ({ key, hours: burdenAt(tasks, key, rolloverHour, now.getTime(), ledger) }));
 }
 
 /**
@@ -289,8 +316,21 @@ export function standsInPileAt(t: Task, end: number, nowMs: number): boolean {
   return true;
 }
 
-/** Hours of open work standing at the END of app-day `key`. */
-export function burdenAt(tasks: Task[], key: string, rolloverHour: number, nowMs = Date.now()): number {
+/**
+ * Hours of open work standing at the END of app-day `key`.
+ *
+ * A MEASURED reading beats a reconstruction: the end of day K is the start of
+ * day K+1, so if the ledger holds a snapshot for K+1 that written-down number
+ * is the answer — it remembers estimates as they were and tasks since deleted,
+ * which the reconstruction below re-prices out of existence. Days from before
+ * the ledger existed (all of an imported history) fall back to reconstruction.
+ */
+export function burdenAt(
+  tasks: Task[], key: string, rolloverHour: number, nowMs = Date.now(),
+  ledger: BurdenLedger = {},
+): number {
+  const measured = ledger[addDaysKey(key, 1)];
+  if (measured !== undefined) return measured.v;
   // End of app-day `key` = rollover moment of the NEXT calendar day.
   const [y, m, d] = addDaysKey(key, 1).split('-').map(Number);
   const end = new Date(y!, m! - 1, d!, rolloverHour).getTime();
@@ -318,12 +358,13 @@ export interface BurdenShift {
 
 /**
  * WHO moved the pile — burdenChange's number, itemized (2026-08-11 ask:
- * "what is increasing my estimate compared to yesterday?"). Uses exactly
- * the two row tests the headline uses (totalEstimateHours for now,
- * burdenAt for then), so the four buckets sum to the delta to the minute.
- * That also means estimate EDITS never appear: the reconstruction prices
- * every task at its CURRENT estimate, moving both endpoints alike — the
- * headline can't see them, so neither can this. A task born and finished
+ * "what is increasing my estimate compared to yesterday?"). The row scan can
+ * only attribute what rows still show: appearing, completing, and tombstoned
+ * deletions. Against a RECONSTRUCTED baseline these four buckets sum to the
+ * delta exactly; against a MEASURED one (the ledger) the headline also moves
+ * with estimate edits, archive flips and compacted tombstones, which no row
+ * can own — the caller shows that difference as one "adjustments" line so
+ * the sections still reconcile to the minute. A task born and finished
  * inside the window nets zero and is deliberately absent.
  */
 export function burdenShift(
@@ -375,7 +416,8 @@ export function burdenChange(
   window: BurdenWindow,
   now: Date,
   rolloverHour: number,
+  ledger: BurdenLedger = {},
 ): number {
   const thenKey = addDaysKey(appDayKey(now, rolloverHour), -BURDEN_WINDOWS[window].days);
-  return totalEstimateHours(tasks) - burdenAt(tasks, thenKey, rolloverHour, now.getTime());
+  return totalEstimateHours(tasks) - burdenAt(tasks, thenKey, rolloverHour, now.getTime(), ledger);
 }

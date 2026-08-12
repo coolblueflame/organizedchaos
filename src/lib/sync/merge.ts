@@ -8,6 +8,7 @@
  */
 import { resolveHeldUnlocks } from './files';
 import type { DelightProgress, RemoteSnapshot } from './files';
+import type { BurdenLedger } from '../domain/stats';
 
 export interface MergeResult {
   merged: RemoteSnapshot;
@@ -99,6 +100,25 @@ function sameRows<T extends Row>(a: T[], b: T[]): boolean {
   });
 }
 
+/**
+ * Days merge independently, and per day the EARLIEST measurement wins — the
+ * snapshot taken closest to the rollover is the day's truth, and a device
+ * that was open at 4:01am must not be overruled by one that first measured
+ * at noon. An exact `at` tie breaks to the smaller value so both sides pick
+ * the same winner (same shape of problem as pickSingleton's tiebreak).
+ */
+export function mergeBurdenLedger(
+  a: BurdenLedger | undefined,
+  b: BurdenLedger | undefined,
+): BurdenLedger {
+  const out: BurdenLedger = { ...(a ?? {}) };
+  for (const [day, snap] of Object.entries(b ?? {})) {
+    const mine = out[day];
+    if (!mine || snap.at < mine.at || (snap.at === mine.at && snap.v < mine.v)) out[day] = snap;
+  }
+  return out;
+}
+
 /** Per-key maximum of two timestamp maps — the merge rule for unlock clocks. */
 function maxByKey(
   a: Record<string, number> | undefined,
@@ -174,6 +194,7 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     local.queueIds, local.queueUpdatedAt, remote.queueIds, remote.queueUpdatedAt);
 
   const delight = mergeDelight(local.delight, remote.delight);
+  const burdenLedger = mergeBurdenLedger(local.burdenLedger, remote.burdenLedger);
 
   const merged: RemoteSnapshot = {
     lists: mergeRows(local.lists, remote.lists),
@@ -187,6 +208,7 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     queueIds,
     queueUpdatedAt,
     ...(delight ? { delight } : {}),
+    ...(Object.keys(burdenLedger).length ? { burdenLedger } : {}),
   };
 
   // canonical(), not JSON.stringify: one side has come back from IndexedDB and
@@ -204,7 +226,8 @@ export function mergeSnapshots(local: RemoteSnapshot, remote: RemoteSnapshot): M
     merged.settingsUpdatedAt === side.settingsUpdatedAt &&
     canonical(merged.queueIds) === canonical(side.queueIds) &&
     merged.queueUpdatedAt === side.queueUpdatedAt &&
-    canonical(merged.delight ?? null) === canonical(side.delight ?? null);
+    canonical(merged.delight ?? null) === canonical(side.delight ?? null) &&
+    canonical(merged.burdenLedger ?? null) === canonical(side.burdenLedger ?? null);
 
   return { merged, localChanged: !sameAs(local), remoteChanged: !sameAs(remote) };
 }

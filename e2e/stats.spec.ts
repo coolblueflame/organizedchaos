@@ -81,6 +81,83 @@ test('tapping the burden delta itemizes who moved the pile', async ({ page }) =>
   await expect(shift).toHaveCount(0);
 });
 
+test('once yesterday is measured, deletes and estimate fixes move the delta', async ({ page }) => {
+  // The 2026-08-12 ask: "my todo time goes down if I delete a bunch of tasks
+  // or properly estimate!" The reconstruction can't see either; the ledger
+  // (a written-down reading per day) can.
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Ledger');
+  await page.getByTestId('new-list-input').press('Enter');
+  for (const [name, est] of [['heavy chore', '3h'], ['wild guess', '2h']] as const) {
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.getByTestId('task-estimate-input').fill(est);
+    await page.getByTestId('task-collapse').click();
+  }
+
+  // Cross the rollover: tomorrow's first sweep writes the day's baseline
+  // with both tasks standing (5h measured).
+  const tomorrow = new Date(Date.now() + 24 * 3600_000);
+  tomorrow.setHours(6, 0, 0, 0);
+  await page.clock.setFixedTime(tomorrow);
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+  // Delete one (3h) and shrink the other's estimate (2h → 30m).
+  const heavyRow = page.getByTestId(/^task-row-/).filter({ hasText: 'heavy chore' }).first();
+  const heavyId = (await heavyRow.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-delete-${heavyId}`).click(); // arms…
+  await page.getByTestId(`task-delete-${heavyId}`).click(); // …means it
+  await expect(page.getByTestId(`task-row-${heavyId}`)).toHaveCount(0);
+  await page.getByText('wild guess', { exact: true }).click();
+  await page.getByTestId('task-estimate-input').fill('30m');
+  await page.getByTestId('task-collapse').click();
+
+  // Reload before reading stats: a just-deleted row lives in the undo trash,
+  // not the mirror, until state is re-read from disk — and checking stats
+  // later is exactly the real usage. The mocked clock survives the reload,
+  // and so does the route hash — step back to home where the strip lives.
+  await page.reload();
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').waitFor();
+
+  // live 0.5h vs measured 5h = 4h 30m lighter — the number a human expects.
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-burden-delta')).toContainText('4h 30m lighter');
+
+  // The breakdown reconciles to the minute: the deletion is attributable to
+  // its tombstone; the estimate edit is no row's to own, so it appears as
+  // the adjustments line (3h removed + 1h 30m adjusted = 4h 30m).
+  await page.getByTestId('stats-burden-open').click();
+  const shift = page.getByTestId('burden-shift');
+  await expect(shift).toContainText('heavy chore');
+  await expect(page.getByTestId('shift-adjustments')).toContainText('1h 30m');
+});
+
+test('archiving a list takes its hours off the books', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Shelf');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('dusty project');
+  await page.getByTestId('task-estimate-input').fill('4h');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-estimate')).toContainText('4h');
+  await page.getByTestId('back').click();
+
+  // Shelved means abandoned, and abandoned is not owed (2026-08-12 ask).
+  const listId = (await page.getByTestId(/^list-row-/).first().getAttribute('data-testid'))!
+    .replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId('list-settings-archive').click();
+
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-open-count')).toContainText('across 0 open todos');
+});
+
 test('list health names the list most in need of the sweep', async ({ page }) => {
   // beforeEach already reset. Tidy list: one task, triaged by touching a field.
   await page.getByTestId('new-list').click();
