@@ -112,7 +112,8 @@
       priority tiers together, based on the total work left.</p>
     <label class="field">
       <span>done by</span>
-      <input type="date" data-testid="list-settings-deadline" bind:value={deadline} />
+      <!-- .empty: see the desktop-Safari ghost-date rule in app.css -->
+      <input type="date" data-testid="list-settings-deadline" class:empty={!deadline} bind:value={deadline} />
     </label>
     {#if deadline}
       <p class="readout" data-testid="list-settings-readout">

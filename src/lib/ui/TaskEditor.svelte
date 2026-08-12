@@ -300,7 +300,10 @@
       <span>deadline</span>
       <!-- oninput AND onchange: a deadline edit can re-group (and remount) this
            row, so waiting for blur would lose the value (found via screenshot QA) -->
+      <!-- .empty: desktop Safari ghosts today's date into valueless date
+           inputs; the app.css rule hides that until a real value lands -->
       <input type="date" data-testid="task-deadline-input" value={task.deadline ?? ''}
+        class:empty={!task.deadline}
         oninput={(e) => setDeadline(e.currentTarget.value)}
         onchange={(e) => setDeadline(e.currentTarget.value)} />
     </label>

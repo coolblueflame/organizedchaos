@@ -160,6 +160,17 @@ main > header {
   }
 }
 
+/*
+ * DESKTOP Safari paints today's date (dimmed) into an EMPTY date input — every
+ * task without a deadline looked like it was due today (reported 2026-08-12;
+ * mobile renders empty fields blank already). Components mark a valueless date
+ * input with .empty so its segment text hides until either a value lands (the
+ * class is bound to the value) or the field is focused for typing. Chrome's
+ * "mm/dd/yyyy" template hides with it, which is fine — each of these fields
+ * sits under its own "deadline"/"done by" label.
+ */
+input[type='date'].empty:not(:focus)::-webkit-datetime-edit { color: transparent; }
+
 @media (pointer: coarse) {
   input, textarea, select {
     /*

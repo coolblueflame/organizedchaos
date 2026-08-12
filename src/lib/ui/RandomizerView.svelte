@@ -373,7 +373,9 @@
         </label>
         <div class="triage-row">
           <label><span>deadline</span>
+            <!-- .empty: see the desktop-Safari ghost-date rule in app.css -->
             <input type="date" data-testid="triage-deadline" value={triage.deadline ?? ''}
+              class:empty={!triage.deadline}
               oninput={(e) => void app.patchTask(triage!.id, { deadline: e.currentTarget.value || undefined })} />
           </label>
           <label><span>estimate</span>
