@@ -3,7 +3,7 @@ import { type Priority, type Task } from './types';
 import {
   formatDurationLong,
   burdenChange, burdenSeries, burdenShift, completionCounts, completionSeries,
-  formatDuration, totalEstimateHours, winsList, estimateOutcome,
+  formatDuration, maxCompletionsInOneDay, totalEstimateHours, winsList, estimateOutcome,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -47,6 +47,31 @@ describe('completionCounts', () => {
     const open = task({ priority: 'low' });
     const ghost = { ...doneAt('2026-07-15T10:00:00'), deleted: true };
     expect(completionCounts([open, ghost], now, 4).lifetime).toBe(0);
+  });
+});
+
+describe('maxCompletionsInOneDay', () => {
+  it('finds the busiest app-day, splitting at the rollover hour', () => {
+    const tasks = [
+      doneAt('2026-07-15T10:00:00'), doneAt('2026-07-15T11:00:00'),
+      doneAt('2026-07-15T02:00:00'), // 2am → the 14th's app-day, not the 15th's
+      doneAt('2026-07-13T09:00:00'),
+    ];
+    expect(maxCompletionsInOneDay(tasks, 4, now.getTime())).toBe(2);
+  });
+
+  it('imported history, deleted rows and future-stamped repairs do not count', () => {
+    // The point of this lens: it decides whether a completions-in-a-day
+    // discovery was genuinely earned, so it must count exactly what the
+    // delight counters would have counted.
+    const tasks = [
+      { ...doneAt('2026-07-15T10:00:00'), importedHistory: true },
+      { ...doneAt('2026-07-15T10:30:00'), deleted: true },
+      { ...doneAt('2026-07-15T11:00:00'), completedAt: new Date('2050-01-01').getTime() },
+      doneAt('2026-07-15T09:00:00'),
+    ];
+    expect(maxCompletionsInOneDay(tasks, 4, now.getTime())).toBe(1);
+    expect(maxCompletionsInOneDay([], 4, now.getTime()), 'empty history is 0, not -Infinity').toBe(0);
   });
 });
 

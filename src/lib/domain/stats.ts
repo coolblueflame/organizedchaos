@@ -75,6 +75,25 @@ export function completionCounts(tasks: Task[], now: Date, rolloverHour: number)
   return counts;
 }
 
+/**
+ * The busiest single app-day on record, by completion count — the same lens
+ * the delight layer's daily counters use (imported history excluded), so it
+ * can answer "was a completions-in-a-day discovery ever genuinely earned?".
+ * Future-stamped rows are repair artifacts, not history (see standsInPileAt),
+ * and are ignored the same way here.
+ */
+export function maxCompletionsInOneDay(
+  tasks: Task[], rolloverHour: number, nowMs = Date.now(),
+): number {
+  const byDay = new Map<string, number>();
+  for (const t of scoredTasks(tasks)) {
+    if (t.completedAt! > nowMs) continue;
+    const key = appDayKey(new Date(t.completedAt!), rolloverHour);
+    byDay.set(key, (byDay.get(key) ?? 0) + 1);
+  }
+  return Math.max(0, ...byDay.values());
+}
+
 export interface SeriesPoint { key: string; label: string; count: number }
 
 export function completionSeries(

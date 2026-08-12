@@ -7,6 +7,7 @@
  * is intentionally undocumented elsewhere.
  */
 import { appDayKey } from '../domain/time';
+import { resolveHeldUnlocks } from '../sync/files';
 
 export type EggEvent =
   | 'taskCompleted' | 'drawAccepted' | 'drawSkipped'
@@ -93,6 +94,14 @@ export interface EggState {
   streakDays: number;
   /** High-water mark of the streak — the record survives the streak breaking. */
   bestStreakDays?: number;
+  /**
+   * Per-unlock ownership clocks (see DelightProgress.unlockGrants): newest of
+   * grant vs revoke wins, a clock-less held unlock counts as granted at 0.
+   * They exist so a wrongly-granted discovery can be taken back without the
+   * union merge restoring it from every other device.
+   */
+  unlockGrants?: Record<string, number>;
+  unlockRevokes?: Record<string, number>;
 }
 
 /** Factory, not a constant — nested objects must never be shared across instances. */
@@ -100,6 +109,7 @@ const freshState = (): EggState => ({
   seen: {}, presentedTodayBy: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
   lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
   lastCompletionDay: '', streakDays: 0, bestStreakDays: 0,
+  unlockGrants: {}, unlockRevokes: {},
 });
 
 export interface EngineDeps {
@@ -195,7 +205,11 @@ export class EggEngine {
           ...s,
           seen: { ...s.seen },
           trivia: { correct: s.trivia?.correct ?? 0, total: s.trivia?.total ?? 0 },
-          unlocks: [...(s.unlocks ?? [])],
+          unlockGrants: { ...s.unlockGrants },
+          unlockRevokes: { ...s.unlockRevokes },
+          // Re-resolve rather than trust the stored array, so a persisted
+          // revocation stays applied no matter what wrote the blob last.
+          unlocks: resolveHeldUnlocks(s.unlocks ?? [], s.unlockGrants, s.unlockRevokes),
         };
       }
     });
@@ -352,12 +366,24 @@ export class EggEngine {
     triviaCorrect: number; triviaTotal: number;
     streakDays: number; lastCompletionDay: string;
     bestStreakDays?: number;
+    unlockGrants?: Record<string, number>;
+    unlockRevokes?: Record<string, number>;
   }): boolean {
     const before = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
       this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
+      this.state.unlockGrants, this.state.unlockRevokes,
     ]);
-    this.state.unlocks = [...new Set([...this.state.unlocks, ...progress.unlocks])].sort();
+    const maxByKey = (a: Record<string, number> = {}, b: Record<string, number> = {}) => {
+      const out = { ...a };
+      for (const [k, v] of Object.entries(b)) out[k] = Math.max(out[k] ?? 0, v);
+      return out;
+    };
+    this.state.unlockGrants = maxByKey(this.state.unlockGrants, progress.unlockGrants);
+    this.state.unlockRevokes = maxByKey(this.state.unlockRevokes, progress.unlockRevokes);
+    this.state.unlocks = resolveHeldUnlocks(
+      [...new Set([...this.state.unlocks, ...progress.unlocks])],
+      this.state.unlockGrants, this.state.unlockRevokes);
     this.state.storyStage = Math.max(this.state.storyStage, progress.storyStage);
     this.state.trivia = {
       correct: Math.max(this.state.trivia.correct, progress.triviaCorrect),
@@ -380,6 +406,7 @@ export class EggEngine {
     const changed = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
       this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
+      this.state.unlockGrants, this.state.unlockRevokes,
     ]) !== before;
     if (changed) this.persist();
     return changed;
@@ -388,9 +415,34 @@ export class EggEngine {
   /** True if newly granted; false if already discovered. */
   grantUnlock(id: string): boolean {
     if (this.state.unlocks.includes(id)) return false;
-    this.state.unlocks.push(id);
+    // Stamped past any standing revocation, never merely "now": an earn is an
+    // eyewitness event and must win even against a skewed device clock.
+    const at = Math.max(this.now().getTime(), (this.state.unlockRevokes?.[id] ?? 0) + 1);
+    this.state.unlockGrants = { ...this.state.unlockGrants, [id]: at };
+    this.state.unlocks = resolveHeldUnlocks(
+      [...this.state.unlocks, id], this.state.unlockGrants, this.state.unlockRevokes);
     this.persist();
     return true;
+  }
+
+  /**
+   * Take back an unlock as of a specific moment — the repair path for one that
+   * was granted by accident (see DelightProgress.unlockGrants). The timestamp
+   * is the caller's, not the clock's, so every device revoking the same
+   * incident writes the same clock entry and converges. A grant NEWER than
+   * `atMs` still wins: revoking yesterday's accident can never confiscate a
+   * discovery genuinely earned since. Returns true when it removed something.
+   */
+  revokeUnlock(id: string, atMs: number): boolean {
+    const hadIt = this.state.unlocks.includes(id);
+    const prior = this.state.unlockRevokes?.[id] ?? 0;
+    if (atMs > prior) {
+      this.state.unlockRevokes = { ...this.state.unlockRevokes, [id]: atMs };
+      this.state.unlocks = resolveHeldUnlocks(
+        this.state.unlocks, this.state.unlockGrants, this.state.unlockRevokes);
+      this.persist();
+    }
+    return hadIt && !this.state.unlocks.includes(id);
   }
 
   /** Story only ever moves forward. */

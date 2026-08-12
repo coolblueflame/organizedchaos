@@ -6,6 +6,7 @@
  * (tombstones) propagate. Singletons (currentTask, settings) merge by their
  * kv stamps, so clearing the current task on one device propagates too.
  */
+import { resolveHeldUnlocks } from './files';
 import type { DelightProgress, RemoteSnapshot } from './files';
 
 export interface MergeResult {
@@ -98,6 +99,16 @@ function sameRows<T extends Row>(a: T[], b: T[]): boolean {
   });
 }
 
+/** Per-key maximum of two timestamp maps — the merge rule for unlock clocks. */
+function maxByKey(
+  a: Record<string, number> | undefined,
+  b: Record<string, number> | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = { ...(a ?? {}) };
+  for (const [k, v] of Object.entries(b ?? {})) out[k] = Math.max(out[k] ?? 0, v);
+  return out;
+}
+
 /**
  * Achievements merge by union and maximum, never by "newest wins".
  *
@@ -106,9 +117,12 @@ function sameRows<T extends Row>(a: T[], b: T[]): boolean {
  * and max are also idempotent and order-independent, so merging twice, or in
  * the other order, lands in the same place.
  *
- * The streak is the exception that needs a key: it is a single number whose
+ * Two exceptions carry their own keys. The streak is a single number whose
  * meaning depends on when it was last touched, so the side that completed
- * something more recently wins, with the larger streak breaking a tie.
+ * something more recently wins, with the larger streak breaking a tie. And an
+ * unlock with an ownership clock (see DelightProgress.unlockGrants) is held
+ * only while its newest grant beats its newest revocation — the one door out
+ * of "earned, full stop" for the unlock that was never really earned.
  */
 export function mergeDelight(
   a: DelightProgress | undefined,
@@ -120,8 +134,13 @@ export function mergeDelight(
     a.lastCompletionDay === b.lastCompletionDay
       ? (a.streakDays >= b.streakDays ? a : b)
       : (a.lastCompletionDay > b.lastCompletionDay ? a : b);
+  const unlockGrants = maxByKey(a.unlockGrants, b.unlockGrants);
+  const unlockRevokes = maxByKey(a.unlockRevokes, b.unlockRevokes);
   return {
-    unlocks: [...new Set([...a.unlocks, ...b.unlocks])].sort(),
+    unlocks: resolveHeldUnlocks(
+      [...new Set([...a.unlocks, ...b.unlocks])], unlockGrants, unlockRevokes),
+    ...(Object.keys(unlockGrants).length ? { unlockGrants } : {}),
+    ...(Object.keys(unlockRevokes).length ? { unlockRevokes } : {}),
     storyStage: Math.max(a.storyStage, b.storyStage),
     triviaCorrect: Math.max(a.triviaCorrect, b.triviaCorrect),
     triviaTotal: Math.max(a.triviaTotal, b.triviaTotal),

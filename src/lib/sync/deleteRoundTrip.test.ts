@@ -182,4 +182,37 @@ describe('discoveries travel between devices', () => {
     await phone.engine.syncNow();
     expect(phone.snap.delight!.unlocks).toEqual(['boxer']);
   });
+
+  it('a revocation beats the union from every stale device', async () => {
+    // 2026-08-12: an accidental bulk completion granted an unlock that was
+    // never earned. Union-only merging meant every stale copy kept restoring
+    // it; the ownership clocks are the one door out.
+    pc.snap.delight = withDelight({ unlocks: ['oops', 'real'] });
+    await pc.engine.syncNow();
+
+    phone.snap.delight = withDelight({
+      unlocks: ['real'], unlockRevokes: { oops: 1_000_000 },
+    });
+    await phone.engine.syncNow();
+    expect(phone.snap.delight!.unlocks, 'legacy grant loses to the revocation').toEqual(['real']);
+
+    await pc.engine.syncNow();
+    expect(pc.snap.delight!.unlocks).toEqual(['real']);
+    expect(pc.snap.delight!.unlockRevokes, 'the clock itself travels too')
+      .toEqual({ oops: 1_000_000 });
+  });
+
+  it('a grant newer than the revocation wins everywhere', async () => {
+    pc.snap.delight = withDelight({ unlocks: [], unlockRevokes: { prize: 5_000 } });
+    await pc.engine.syncNow();
+
+    // Genuinely re-earned later: the grant clock outranks the old revoke.
+    phone.snap.delight = withDelight({
+      unlocks: ['prize'], unlockGrants: { prize: 9_000 }, unlockRevokes: { prize: 5_000 },
+    });
+    await phone.engine.syncNow();
+    await pc.engine.syncNow();
+    expect(pc.snap.delight!.unlocks).toEqual(['prize']);
+    expect(phone.snap.delight!.unlocks).toEqual(['prize']);
+  });
 });

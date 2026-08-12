@@ -244,6 +244,93 @@ describe('absorbing progress from another device', () => {
   });
 });
 
+describe('unlock revocation (the ownership clocks)', () => {
+  it('revoking removes a held unlock and the union can no longer restore it', async () => {
+    // The 2026-08-12 shape: a legacy unlock (no grant clock) wrongly earned,
+    // still present on every other device and in the remote blob.
+    saved = {
+      seen: {}, trivia: { correct: 0, total: 0 }, unlocks: ['oops', 'real'],
+      storyStage: 0, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+      lastCompletionDay: '', streakDays: 0,
+    };
+    const e = makeEngine([0.99]);
+    await e.ready;
+    expect(e.revokeUnlock('oops', clock)).toBe(true);
+    expect(e.unlocks).toEqual(['real']);
+    // A stale device unions the old list straight back — it must stay gone.
+    const changed = e.absorb({
+      unlocks: ['oops', 'real'], storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+      streakDays: 0, lastCompletionDay: '',
+    });
+    expect(e.unlocks, 'legacy grant (epoch 0) loses to a real revocation').toEqual(['real']);
+    expect(changed, 'nothing actually changed, so the sync stays quiet').toBe(false);
+  });
+
+  it('a genuine re-earn after the revocation wins, even against stale remotes', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('prize');
+    e.revokeUnlock('prize', clock + 1000);
+    expect(e.unlocks).toEqual([]);
+    clock += 5000; // …days later, earned for real
+    expect(e.grantUnlock('prize'), 'revoked = not held, so it can be re-earned').toBe(true);
+    expect(e.unlocks).toEqual(['prize']);
+    // A device that only ever heard about the revocation cannot confiscate it.
+    e.absorb({
+      unlocks: [], unlockRevokes: { prize: clock - 5000 + 1000 },
+      storyStage: 0, triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+    });
+    expect(e.unlocks).toEqual(['prize']);
+  });
+
+  it('an incoming revocation via absorb takes a locally held unlock away', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('oops');
+    const grantedAt = clock;
+    const changed = e.absorb({
+      unlocks: [], unlockRevokes: { oops: grantedAt + 1 },
+      storyStage: 0, triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+    });
+    expect(changed).toBe(true);
+    expect(e.unlocks).toEqual([]);
+  });
+
+  it('a revocation OLDER than the grant is recorded but changes nothing', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('keeper');
+    expect(e.revokeUnlock('keeper', clock - 60_000)).toBe(false);
+    expect(e.unlocks).toEqual(['keeper']);
+  });
+
+  it('a fresh grant beats even a future-skewed revocation clock', async () => {
+    // Another device's wall clock ran ahead when it stamped the revoke; the
+    // user earning the unlock RIGHT NOW must still win.
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.absorb({
+      unlocks: [], unlockRevokes: { prize: clock + 3_600_000 },
+      storyStage: 0, triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+    });
+    expect(e.grantUnlock('prize')).toBe(true);
+    expect(e.unlocks).toEqual(['prize']);
+  });
+
+  it('a persisted revocation survives a reload that hands back a stale unlock array', async () => {
+    const e = makeEngine([0.99]);
+    await e.ready;
+    e.grantUnlock('oops');
+    e.revokeUnlock('oops', clock + 1);
+    // Simulate an old-format writer having re-unioned the array on disk while
+    // keeping the clocks: load must re-resolve rather than trust the array.
+    saved = { ...saved!, unlocks: ['oops'] };
+    const e2 = makeEngine([0.99]);
+    await e2.ready;
+    expect(e2.unlocks).toEqual([]);
+  });
+});
+
 describe('the streak record', () => {
   it('tracks the high-water mark and survives the streak breaking', async () => {
     const e = makeEngine([0.99, 0.99, 0.99, 0.99]);

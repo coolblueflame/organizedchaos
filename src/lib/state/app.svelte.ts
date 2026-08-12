@@ -31,7 +31,7 @@ import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
-import { completionCounts, estimateOutcome, MIN_TRACKED_MS } from '../domain/stats';
+import { completionCounts, estimateOutcome, maxCompletionsInOneDay, MIN_TRACKED_MS } from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
 import { openDb } from '../storage/db';
@@ -117,6 +117,7 @@ export class AppStore {
       save: (s) => this.repo.setKv('eggState', s),
     });
     await this.eggs.ready;
+    this.repairMisgrantedUnlocks();
     this.syncEggMirrors();
     // Replay anything the UI reported while the engine was still loading (the
     // app is interactive from `ready`, which lands two IndexedDB reads earlier).
@@ -126,6 +127,28 @@ export class AppStore {
   }
 
   // ── delight layer (spec §12) ─────────────────────────────────────────────
+
+  /**
+   * 2026-08-12: the bulk bar's "done" button (since renamed and armed) was
+   * mistaken for "close" and completed an entire 700-task library at once.
+   * The completions were undone, but the completions-in-a-day discovery the
+   * burst granted could not be — the sync merge only ever unions, so every
+   * device kept restoring it (that incident is why unlock revocation exists
+   * at all; see DelightProgress.unlockGrants).
+   *
+   * The check self-verifies against the logbook instead of hardcoding one
+   * account's accident: anyone whose history shows a real day at the bar
+   * keeps the discovery untouched. The revocation is stamped at the fixed
+   * incident time, so every device reaches the same verdict — and a genuine
+   * 50-completion day afterwards re-grants it with a newer clock, which wins.
+   * Runs each boot; once revoked (or once genuinely held) it is a no-op.
+   */
+  private repairMisgrantedUnlocks(): void {
+    if (!this.eggs || !this.eggs.unlocks.includes('landslide')) return;
+    const incidentMs = Date.UTC(2026, 7, 12, 16); // just after the accidental burst
+    if (maxCompletionsInOneDay(this.state.tasks, this.state.settings.rolloverHour) >= 50) return;
+    this.eggs.revokeUnlock('landslide', incidentMs);
+  }
 
   private syncEggMirrors(): void {
     if (!this.eggs) return;

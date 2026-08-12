@@ -26,6 +26,8 @@ interface StoredDelight {
   streakDays?: number;
   lastCompletionDay?: string;
   bestStreakDays?: number;
+  unlockGrants?: Record<string, number>;
+  unlockRevokes?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -39,6 +41,12 @@ function storedToProgress(stored: StoredDelight): DelightProgress {
     streakDays: stored.streakDays ?? 0,
     lastCompletionDay: stored.lastCompletionDay ?? '',
     bestStreakDays: Math.max(stored.bestStreakDays ?? 0, stored.streakDays ?? 0),
+    // The ownership clocks must travel or a revocation would be undone by this
+    // device's own next upload (uploads rebuild this object from scratch).
+    ...(stored.unlockGrants && Object.keys(stored.unlockGrants).length
+      ? { unlockGrants: { ...stored.unlockGrants } } : {}),
+    ...(stored.unlockRevokes && Object.keys(stored.unlockRevokes).length
+      ? { unlockRevokes: { ...stored.unlockRevokes } } : {}),
   };
 }
 
@@ -360,6 +368,8 @@ export class Repo {
             streakDays: won.streakDays,
             lastCompletionDay: won.lastCompletionDay,
             bestStreakDays: won.bestStreakDays ?? won.streakDays,
+            unlockGrants: won.unlockGrants ?? {},
+            unlockRevokes: won.unlockRevokes ?? {},
           },
         });
       }

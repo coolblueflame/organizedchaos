@@ -52,6 +52,40 @@ export interface DelightProgress {
   lastCompletionDay: string;
   /** High-water mark of the streak. Absent on remotes written before it existed. */
   bestStreakDays?: number;
+  /**
+   * Per-unlock ownership clocks (unlock id → ms timestamp), present only once
+   * something needed one. `unlocks` stays the held set so older builds keep
+   * working; these maps exist because the union merge alone can never TAKE
+   * BACK a discovery — an accidental mass-completion granted one that was
+   * never earned (2026-08-12), and every device kept restoring it.
+   *
+   * Rule, per id: the newest of grant vs revoke wins. A held unlock with no
+   * grant entry counts as granted at epoch 0, so any real revocation beats
+   * it — while a genuine later re-earn is stamped with a fresh grant, which
+   * beats the old revocation. See resolveHeldUnlocks.
+   */
+  unlockGrants?: Record<string, number>;
+  unlockRevokes?: Record<string, number>;
+}
+
+/**
+ * Which unlocks are actually held once the ownership clocks have their say.
+ * `unlocks` are the claimed ids (a legacy claim = granted at 0); ids that only
+ * appear in `grants` count too, so a re-earned unlock survives a merge with a
+ * side that had already dropped it from its array. Sorted for canonical order.
+ */
+export function resolveHeldUnlocks(
+  unlocks: string[],
+  grants: Record<string, number> = {},
+  revokes: Record<string, number> = {},
+): string[] {
+  const claimed = new Set([...unlocks, ...Object.keys(grants)]);
+  return [...claimed].filter((id) => {
+    const grantedAt = grants[id] ?? (unlocks.includes(id) ? 0 : undefined);
+    if (grantedAt === undefined) return false;
+    const revokedAt = revokes[id];
+    return revokedAt === undefined || grantedAt > revokedAt;
+  }).sort();
 }
 
 export interface RemoteSnapshot {
