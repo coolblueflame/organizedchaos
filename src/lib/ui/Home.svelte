@@ -70,7 +70,18 @@
   );
 
   const open = $derived(openTasks(app.state.tasks));
-  const countFor = (listId: string) => open.filter((t) => t.listId === listId).length;
+  /*
+    One pass, not a filter per row: this screen re-renders on every task
+    change, and countFor re-scanning the whole (proxied) library for each of
+    N list rows was lists × tasks trap-hits a render — the same class the
+    stats screen's snapshot rule exists for (2026-08-13 second pass).
+  */
+  const countsByList = $derived.by(() => {
+    const counts = new Map<string, number>();
+    for (const t of open) counts.set(t.listId, (counts.get(t.listId) ?? 0) + 1);
+    return counts;
+  });
+  const countFor = (listId: string) => countsByList.get(listId) ?? 0;
   const inProgressCount = $derived(open.filter((t) => t.inProgress).length);
 
   /**
@@ -80,9 +91,16 @@
    * is almost entirely completed tasks, so "percent done" would read as 99% for
    * everything and mean nothing. How much is left, relative to the fullest list,
    * is a thing you can actually act on.
+   *
+   * Only lists whose bars can RENDER set the scale — one heavy archived list
+   * was squashing every visible bar toward zero, and a shelved pile is
+   * abandoned, not a yardstick (2026-08-13, the day after archiving learned
+   * to mean that everywhere else).
    */
   const heaviestList = $derived(
-    Math.max(1, ...app.state.lists.map((l) => open.filter((t) => t.listId === l.id).length)),
+    Math.max(1, ...app.state.lists
+      .filter((l) => l.archived !== true)
+      .map((l) => countFor(l.id))),
   );
   const loadShare = (listId: string) =>
     Math.round((countFor(listId) / heaviestList) * 100);
@@ -317,16 +335,21 @@
   }
 
   async function createList() {
+    // Claim the draft BEFORE the await, or the commit runs twice: Enter
+    // starts this, and the input's blur (focus moving as navigation begins)
+    // calls it again while the first call is still inside the IndexedDB
+    // write — both saw the title, and "Solo" arrived as twins (2026-08-13
+    // second pass). Emptied first, the second call is a clean no-op.
     const title = newListTitle.trim();
-    if (!title) { newListOpen = false; return; }
+    newListTitle = '';
+    newListOpen = false;
+    if (!title) return;
     // New lists file under "Unsorted" (2026-08-05 ask) rather than the
     // ungrouped bucket at the TOP — the input sits at the bottom of the
     // screen, and the list should land where the typing happened, not
     // teleport above everything the user has deliberately arranged.
     // Filing it properly later is one drag, same as ever.
     const list = await app.addList(title, 'Unsorted');
-    newListTitle = '';
-    newListOpen = false;
     navigate({ name: 'list', id: list.id });
   }
 

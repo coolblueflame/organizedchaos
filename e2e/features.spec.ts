@@ -104,6 +104,49 @@ test('a checklist lives inside a task: button-built, tappable, counted', async (
   await expect(page.getByTestId('task-notes-input')).toHaveValue('- [ ] wool socks\n- [x] charger');
 });
 
+test('Enter racing the blur commits ONE new list, not two', async ({ page }) => {
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Solo');
+  // Both commit paths in the same synchronous burst — Enter starts the async
+  // create, blur lands while it is still inside the IndexedDB write. This is
+  // what really happens when focus moves as navigation begins; dispatching
+  // them together makes the race deterministic instead of timing-dependent.
+  await page.getByTestId('new-list-input').evaluate((el) => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    el.dispatchEvent(new FocusEvent('blur'));
+  });
+  await page.getByTestId('new-task').waitFor(); // landed in the new list
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId(/^list-row-/).filter({ hasText: 'Solo' })).toHaveCount(1);
+});
+
+test('archiving a heavy list stops it squashing every load bar', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Big');
+  for (const n of ['a', 'b', 'c']) await addTask(page, n);
+  await page.getByTestId('back').click();
+  await makeList(page, 'Small');
+  await addTask(page, 'only one');
+  await page.getByTestId('back').click();
+
+  const rowFor = (title: string) =>
+    page.getByTestId(/^list-row-/).filter({ hasText: title }).first();
+  const fillWidth = (title: string) =>
+    rowFor(title).locator('.load-fill').getAttribute('style');
+  expect(await fillWidth('Small'), '1 of 3 → a third of the bar').toContain('33%');
+
+  // Shelve the heavy list: the remaining list is now the heaviest thing on
+  // screen and its bar must say so — an ARCHIVED pile is abandoned, not a
+  // yardstick (2026-08-13 second-pass find).
+  const bigId = (await rowFor('Big').getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${bigId}`).click();
+  await page.getByTestId('list-settings-archive').click();
+  await expect
+    .poll(async () => fillWidth('Small'), { message: 'the survivor owns the scale' })
+    .toContain('100%');
+});
+
 test('list settings: shows the name, cancels cleanly, saves weekday hours', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Office');
