@@ -561,6 +561,17 @@ test('removing a tag in tag view keeps the relocated card on screen', async ({ p
   expect(box.y, 'the relocated card is inside the viewport').toBeLessThan(viewH - 40);
 });
 
+test('a list id that no longer exists bounces home instead of editing the void', async ({ page }) => {
+  // A stale bookmark, or a list deleted on another device mid-visit: the
+  // screen rendered with a "…" title and "+ new todo" happily filed tasks
+  // into a list that wasn't there (2026-08-14 second pass).
+  await reset(page);
+  await makeList(page, 'Real');
+  await page.getByTestId('back').click();
+  await page.goto('./#/list/no-such-list');
+  await expect(page.getByTestId('new-list'), 'home, not a ghost screen').toBeVisible();
+});
+
 test('moving the open task to another list follows it there', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Origin');

@@ -54,6 +54,16 @@
   }
 
   const list = $derived(app.state.lists.find((l) => l.id === id));
+
+  /*
+    A list can vanish mid-visit — deleted on another device, or a stale
+    deep link to an id that never loads. A screen with no subject must not
+    keep taking input: without this, "+ new todo" filed tasks into the void
+    under a "…" title (2026-08-14 second pass).
+  */
+  $effect(() => {
+    if (!list) navigate({ name: 'home' });
+  });
   const listTasks = $derived(app.state.tasks.filter((t) => t.listId === id));
   /** The list's own workload, same 1h-default math as the stats hero. */
   const workLeft = $derived(totalEstimateHours(listTasks));
@@ -67,18 +77,34 @@
     without opening anything — and the rows page in on scroll because an
     imported list can hold years of them.
   */
-  const completedHere = $derived(
-    app.state.tasks
-      .filter((t) => !t.deleted && t.listId === id && t.completedAt !== undefined)
-      .sort((a, b) => b.completedAt! - a.completedAt!),
-  );
-  const openCount = $derived(
-    app.state.tasks.filter((t) => !t.deleted && t.listId === id && t.completedAt === undefined).length,
-  );
   const DONE_PAGE = 60;
   let doneBudget = $state(DONE_PAGE);
   let doneOpenId = $state<string | null>(null);
   let doneOpen = $state(false);
+  /*
+    The count is a single cheap pass; the SORT is paid only while the shelf
+    is open. This screen recomputes on every task change — each keystroke in
+    an editor patches the task — and with an imported list the old always-on
+    sort dragged years of completed rows through proxy traps per keystroke
+    just to print a closed shelf's count (2026-08-14 second pass; same class
+    as the stats screen's snapshot rule).
+  */
+  const completedCount = $derived.by(() => {
+    let n = 0;
+    for (const t of app.state.tasks) {
+      if (!t.deleted && t.listId === id && t.completedAt !== undefined) n += 1;
+    }
+    return n;
+  });
+  const completedHere = $derived.by(() => {
+    if (!doneOpen) return [];
+    return app.state.tasks
+      .filter((t) => !t.deleted && t.listId === id && t.completedAt !== undefined)
+      .sort((a, b) => b.completedAt! - a.completedAt!);
+  });
+  const openCount = $derived(
+    app.state.tasks.filter((t) => !t.deleted && t.listId === id && t.completedAt === undefined).length,
+  );
 
   const groups = $derived.by(() => {
     const mode = list?.sortMode ?? 'priority';
@@ -274,11 +300,11 @@
     <div class="edit-scroll-room" aria-hidden="true"></div>
   {/if}
 
-  {#if completedHere.length > 0}
+  {#if completedCount > 0}
     <details class="done-shelf" data-testid="list-completed" bind:open={doneOpen}>
       <!-- done/lifetime, e.g. 40/120: the fraction is the point — "a third of
            this list is behind me" reads instantly where a bare count doesn't. -->
-      <summary>completed here · {completedHere.length}/{completedHere.length + openCount}</summary>
+      <summary>completed here · {completedCount}/{completedCount + openCount}</summary>
       <!-- Rendered only while open: a closed shelf must cost nothing and must
            not leave finished rows attached where tests and tooling would find
            them "still on the list". -->
@@ -288,9 +314,9 @@
           <TaskRow {task} completedMode showCompletedAt expanded={doneOpenId === task.id}
             ontoggle={() => (doneOpenId = doneOpenId === task.id ? null : task.id)} />
         {/each}
-        {#if completedHere.length > doneBudget}
+        {#if completedCount > doneBudget}
           <div class="done-more" use:revealOnApproach={() => (doneBudget += DONE_PAGE)}>
-            {doneBudget} of {completedHere.length} — scroll for more
+            {doneBudget} of {completedCount} — scroll for more
           </div>
         {/if}
       </div>
