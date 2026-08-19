@@ -248,6 +248,59 @@ test('scheduled hours keep an off-clock list out of the draw, with an override',
   await expect(page.getByTestId('draw-card')).toContainText('daytime task');
 });
 
+test('vacation mode: the hours toggle keeps off-schedule lists rolling', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+
+  await seed(page, ['evening self-care']);
+  const listRow = page.getByTestId(/^list-row-/).first();
+  const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await setHours(page, listId, '09:00', '17:00');
+
+  // Off the clock at 22:00 — but this time flip the PERSISTENT toggle
+  // (2026-08-19 ask: work-hour guards should stand down on vacation).
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible();
+  await page.getByTestId('draw-filters-toggle').click();
+  await page.getByTestId('draw-vacation-toggle').click();
+  await expect(page.getByTestId('draw-card')).toContainText('evening self-care');
+  // The summary owns the honesty: a mode this consequential is never silent.
+  await expect(page.getByTestId('draw-filters-toggle')).toContainText('hours ignored');
+
+  // It PERSISTS — a fresh visit still rolls freely (session flags don't).
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('evening self-care');
+
+  // And turning it back off restores the guard.
+  await page.getByTestId('draw-filters-toggle').click();
+  await page.getByTestId('draw-vacation-toggle').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible();
+});
+
+test('a hand-queued task outranks its list being off the clock', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+
+  await seed(page, ['after hours errand']);
+  const listRow = page.getByTestId(/^list-row-/).first();
+  const listId = (await listRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await setHours(page, listId, '09:00', '17:00');
+
+  await page.getByTestId(/^list-row-/).first().click();
+  await page.getByText('after hours errand', { exact: true }).click();
+  await page.getByTestId('task-queue-toggle').last().click();
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  // Queued by hand = meant for today, whatever the list's hours say — the
+  // plan outranks the clock (2026-08-19 report; pre-fix this was the
+  // off-the-clock empty state). Due rituals still outrank the queue.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-from-queue')).toBeVisible();
+  await expect(page.getByTestId('draw-card')).toContainText('after hours errand');
+});
+
 test('urgent override lets MAX-priority through while the list is off the clock', async ({ page }) => {
   await page.clock.setFixedTime(new Date(new Date().setHours(22, 0, 0, 0)));
   // Poke the app's shared clock to re-read the now-mocked date (the module

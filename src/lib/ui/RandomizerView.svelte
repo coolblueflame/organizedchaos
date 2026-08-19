@@ -39,6 +39,8 @@
   // ignores schedules entirely.
   // svelte-ignore state_referenced_locally
   let ignoringHours = $state(Boolean(listId));
+  /** Session choice OR the synced vacation-mode setting (2026-08-19 ask). */
+  const hoursIgnored = $derived(ignoringHours || app.state.settings.ignoreListHours === true);
 
   // Which lists are off the clock right now (for the 🌙 chip hints).
   // clock.now, not new Date(): a $derived's date freezes at its last dep
@@ -50,12 +52,18 @@
   /**
    * Tasks the clock is holding back. Computed per TASK, not per list, so a
    * list can be asleep while its urgent work still gets through.
+   *
+   * Hand-QUEUED tasks are exempt: queueing is an explicit "this, today", and
+   * the plan outranks the clock (2026-08-19 report — a queued errand on an
+   * off-hours list never surfaced). Due rituals still outrank the queue
+   * itself, so the full precedence reads: ritual window > plan > list hours.
    */
-  const blockedByHours = $derived(
-    ignoringHours
-      ? []
-      : tasksBlockedByHours(app.state.tasks, app.state.lists, app.state.settings, clock.now),
-  );
+  const blockedByHours = $derived.by(() => {
+    if (hoursIgnored) return [];
+    const queued = new Set(liveQueueIds(app.state.queueIds, app.state.tasks));
+    return tasksBlockedByHours(app.state.tasks, app.state.lists, app.state.settings, clock.now)
+      .filter((id) => !queued.has(id));
+  });
 
   // List filter is an OMIT set: empty = all lists in (Ben's "all minus a few").
   // Purely manual now — the schedule works through blockedByHours instead.
@@ -86,6 +94,10 @@
     const parts: string[] = [];
     if (omittedLists.length) parts.push(`${omittedLists.length} list${omittedLists.length > 1 ? 's' : ''} off`);
     if (filterTags.length) parts.push(`${filterTags.length} tag${filterTags.length > 1 ? 's' : ''}`);
+    // The persistent mode must never be silently on — same rule as the
+    // narrowing filters. (The session-scoped ignore announces itself by how
+    // you got here: a list's own dice, or the "roll anyway" button.)
+    if (app.state.settings.ignoreListHours === true) parts.push('hours ignored');
     return parts.length ? parts.join(' · ') : 'everything in';
   });
   let notNow = $state<string[]>([]);
@@ -267,6 +279,18 @@
   function ignoreHours() {
     ignoringHours = true;
     notNow = [];
+    redraw();
+  }
+
+  /**
+   * Vacation mode (2026-08-19 ask): flip the SYNCED setting, so personal
+   * lists guarded by work-hours schedules roll freely until it's turned
+   * back off — on every device, because a vacation isn't per-device. The
+   * settings mirror updates before the await returns; redraw sees it.
+   */
+  async function toggleVacation() {
+    await app.updateSettings({ ignoreListHours: app.state.settings.ignoreListHours !== true });
+    notNow = []; // the pool changed shape → fresh skip session
     redraw();
   }
 
@@ -506,7 +530,10 @@
     the one thing this screen exists to show. The summary line carries whatever
     is currently narrowing the pool, so a filter can never be silently on.
   -->
-  {#if app.state.lists.length > 1 || app.state.tags.length > 0}
+  <!-- Rendered whenever anything exists to roll from: the hours/vacation
+       toggle lives here, and a one-list library still deserves it. The
+       lists and tags rows keep their own thresholds below. -->
+  {#if app.state.lists.length > 0}
     <section class="filters" class:open={filtersOpen}>
       <button class="filter-toggle" data-testid="draw-filters-toggle"
         aria-expanded={filtersOpen} onclick={() => (filtersOpen = !filtersOpen)}>
@@ -515,6 +542,15 @@
       </button>
 
       {#if filtersOpen}
+        <div class="filter-row">
+          <span class="filter-label">hours</span>
+          <button class="chip" class:on={app.state.settings.ignoreListHours === true}
+            data-testid="draw-vacation-toggle" onclick={() => void toggleVacation()}>
+            {app.state.settings.ignoreListHours === true
+              ? 'ignored — every list rolls (vacation mode)'
+              : 'respected — off-schedule lists sleep'}
+          </button>
+        </div>
         {#if app.state.lists.length > 1}
           <div class="filter-row">
             <span class="filter-label">lists</span>
@@ -538,7 +574,7 @@
                   ? `scheduled ${describeWindow(l)}${l.urgentOverridesHours ? ' · urgent still gets through' : ''}`
                   : undefined}
                 onclick={() => toggleListFilter(l.id)}>
-                {#if asleepLists.includes(l.id) && !ignoringHours}<Glyph name="moon" size={11} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={11} />{/if}&nbsp;{/if}{l.title}
+                {#if asleepLists.includes(l.id) && !hoursIgnored}<Glyph name="moon" size={11} />{#if l.urgentOverridesHours}<Glyph name="bolt" size={11} />{/if}&nbsp;{/if}{l.title}
               </button>
             {/each}
             {#if shownLists.length === 0}<span class="filter-none">nothing matches “{listQuery}”</span>{/if}

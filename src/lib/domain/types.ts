@@ -266,6 +266,13 @@ export interface Settings {
    * Worker — and changing it means re-enabling reminders on every device.
    */
   vapidPublicKey?: string;
+  /**
+   * Vacation mode (2026-08-19 ask): the randomizer ignores every list's
+   * scheduled hours until this is turned back off. Synced like any setting —
+   * a vacation is a fact about the person, not about one device. Off/unset =
+   * hours behave as always.
+   */
+  ignoreListHours?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings =
