@@ -135,19 +135,23 @@ export const REGISTRY: EggDef[] = [
     present: (c) => ({ kind: 'moment', moment: pick(MOMENTS, c.rng) }),
   },
   // The slow-burn story: one beat per stage, days apart, only for engaged
-  // days. Retuned 2026-08-06 (Ben, 12 days / 235 completions / ONE beat):
-  // the flat weight-4 lottery paced the whole story across most of a year.
-  // Target: 2–3 beats in the first week so a new user learns something is
-  // coming, then at least one beat per week of regular use after that.
+  // days. Retuned 2026-08-06 (Ben, 12 days / 235 completions / ONE beat),
+  // and again 2026-08-19 (two beats total after weeks: beats this small,
+  // trickled days apart, lose their thread — "you forget the previous one").
+  // Target now: roughly one beat per day of regular use (the day gate below
+  // is the ceiling), never more than 2–3 silent days.
   ...STORY_BEATS.map((text, i): EggDef => ({
     id: `story-${i}`,
-    // The first three beats are the hook and compete like headlines. Later
-    // beats start shy and lean on a pity clock: every silent day past the
-    // second adds real weight, so a busy week can't end without the story
-    // speaking (by day 6 it outweighs everything else in a typical roll).
-    weight: (c) => (i < 3
-      ? 34
-      : 8 + Math.min(88, Math.max(0, (c.daysSinceStoryBeat ?? 0) - 2) * 16)),
+    // One dominant weight for EVERY stage: the day gate below is the pacing
+    // mechanism (one beat per app-day, full stop), so on the first eligible
+    // roll of a day the story should simply win — a beat a day is the
+    // INTENDED cadence, not the lucky one. The old two-tier version kept a
+    // "hook" at headline weight 34, and the sim showed hook beat #3 losing
+    // the lottery four days running. A never-seen story counts as hungry.
+    weight: (c) => {
+      const days = c.daysSinceStoryBeat ?? 2;
+      return 120 + Math.min(280, Math.max(0, days - 1) * 160);
+    },
     triggers: ['appOpened', 'taskCompleted'],
     exactStoryStage: i,
     // The per-id cooldown cannot space CONSECUTIVE beats (each stage is its

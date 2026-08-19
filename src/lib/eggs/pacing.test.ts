@@ -72,26 +72,33 @@ async function simulate(days: number, seed: number, perDay = 12) {
 }
 
 describe('story pacing over weeks of regular use', () => {
-  it('the first week hooks: at least 2 beats in days 0–6', async () => {
+  it('the first week hooks: at least 4 beats in days 0–6', async () => {
+    // 2026-08-19 retune: beats this small lose their thread days apart —
+    // the intended cadence is roughly one per day (the day gate is the cap).
     for (const seed of [1, 7, 42]) {
       const beatDays = await simulate(7, seed);
       expect(beatDays.filter((d) => d < 7).length, `seed ${seed}`)
-        .toBeGreaterThanOrEqual(2);
+        .toBeGreaterThanOrEqual(4);
     }
   });
 
-  it('after the hook, no regular week goes story-silent', async () => {
+  it('the story never goes quiet for more than 3 days while beats remain', async () => {
+    const { STORY_BEATS } = await import('./content/extras');
     for (const seed of [1, 7, 42]) {
       const beatDays = await simulate(35, seed);
-      // Gap between consecutive beats (and from the last beat to the end)
-      // never exceeds a week of regular use.
+      // Ben's stated ceiling (2026-08-19): "every 2–3 days max".
       let prev = beatDays[0]!;
-      expect(beatDays.length).toBeGreaterThanOrEqual(4);
+      expect(beatDays.length).toBeGreaterThanOrEqual(12);
       for (const d of beatDays.slice(1)) {
-        expect(d - prev, `seed ${seed}: gap ending day ${d}`).toBeLessThanOrEqual(7);
+        expect(d - prev, `seed ${seed}: gap ending day ${d}`).toBeLessThanOrEqual(3);
         prev = d;
       }
-      expect(35 - prev, `seed ${seed}: silent tail`).toBeLessThanOrEqual(7);
+      // A silent tail is only a failure while there is story LEFT to tell —
+      // at a beat a day the current arc runs out inside this window, and
+      // that quiet is the content ceiling, not a pacing bug.
+      if (beatDays.length < STORY_BEATS.length) {
+        expect(35 - prev, `seed ${seed}: silent tail`).toBeLessThanOrEqual(3);
+      }
     }
   });
 

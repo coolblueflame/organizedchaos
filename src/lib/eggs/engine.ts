@@ -6,7 +6,7 @@
  * lives in the randomizer, not here). Content itself lives in ./content/ and
  * is intentionally undocumented elsewhere.
  */
-import { appDayKey } from '../domain/time';
+import { appDayKey, daysUntilDeadline } from '../domain/time';
 import { resolveHeldUnlocks } from '../sync/files';
 
 export type EggEvent =
@@ -276,9 +276,15 @@ export class EggEngine {
       triviaCorrect: this.state.trivia.correct,
       triviaTotal: this.state.trivia.total,
       unlocks: [...this.state.unlocks],
+      // APP-DAYS between, not 24h floors. The rolling-24h version meant a
+      // beat shown at 12:40pm kept the next one gated until 12:40pm the
+      // FOLLOWING day — most of every day ineligible, and the intended
+      // beat-a-day cadence decayed into 3–4 day gaps no weight could fix
+      // (2026-08-19 retune). "A different day" is what the gate means.
       daysSinceStoryBeat: lastStoryAt === 0
         ? null
-        : Math.floor((now.getTime() - lastStoryAt) / 86_400_000),
+        : -daysUntilDeadline(
+            appDayKey(new Date(lastStoryAt), this.rolloverHour), now, this.rolloverHour),
       now,
       rng: this.rng,
     };
