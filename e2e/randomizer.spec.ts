@@ -112,6 +112,47 @@ test('"all off" plus one chip rolls from a single list', async ({ page }) => {
   }
 });
 
+test('the escalation badge can appear while the card sits on screen', async ({ page }) => {
+  // The ▲ mark derived its date once per draw, so a deadline crossing its
+  // escalation threshold while the screen sat idle went unnoticed — two
+  // lines below a comment warning about exactly that freeze (2026-08-18
+  // second pass). The tier label already used the live clock; the two
+  // halves of one line must agree.
+  await seed(page, ['the deadline creeps']);
+  await page.getByTestId(/^list-row-/).first().click();
+  await page.getByText('the deadline creeps', { exact: true }).click();
+  const tenDaysOut = new Date(Date.now() + 10 * 86_400_000);
+  await page.getByTestId('task-deadline-input')
+    .fill(tenDaysOut.toISOString().slice(0, 10));
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('the deadline creeps');
+  await expect(page.getByTestId('draw-card')).not.toContainText('deadline-escalated');
+
+  // The deadline arrives while the card is still up.
+  await page.clock.setFixedTime(new Date(tenDaysOut.setHours(12, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  await expect(page.getByTestId('draw-card')).toContainText('deadline-escalated');
+});
+
+test('skipping a draw closes the inline editor before the next card', async ({ page }) => {
+  // "Tweak it" left open + "not now" used to hand the NEXT card an already
+  // open editor (2026-08-18 second pass): the tweak was aimed at the task
+  // being skipped, not whatever the dice serve up next.
+  await seed(page, ['first', 'second']);
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toBeVisible();
+
+  await page.getByTestId('draw-edit-toggle').click();
+  await expect(page.getByTestId('task-notes-input')).toBeVisible();
+
+  await page.getByTestId('draw-not-now').click();
+  await expect(page.getByTestId('draw-card')).toContainText('tweak it');
+  await expect(page.getByTestId('task-notes-input')).toHaveCount(0);
+});
+
 test('not now cycles to a different task; exhausting pool offers skip reset', async ({ page }) => {
   await seed(page, ['one', 'two']);
   await page.getByTestId('big-button').click();

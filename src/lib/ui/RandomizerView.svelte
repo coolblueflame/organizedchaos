@@ -191,12 +191,22 @@
   );
 
   function redraw() {
+    // The inline editor belongs to the card being replaced: skipping while
+    // tweaking must not hand the NEXT card an already-open editor aimed at
+    // a task the dice just took away (2026-08-18 second pass).
+    editingDraw = false;
     drawn = drawTask(
       app.state.tasks, app.state.settings, new Date(), Math.random, scope(), projectTiers, lifts,
     );
     if (drawn) {
       drawSeq += 1;
-      shuffleReveal(drawn.name || 'untitled', (text) => (displayName = text));
+      // Chains have no cancellation, so a rapid re-roll would leave TWO of
+      // them interleaving writes into displayName — the seq check quietly
+      // retires the superseded one at its next frame.
+      const seq = drawSeq;
+      shuffleReveal(drawn.name || 'untitled', (text) => {
+        if (seq === drawSeq) displayName = text;
+      });
     }
     maybeOfferTriage();
     if (!triage) maybeOfferSelfCare();
@@ -303,7 +313,11 @@
       haptic('heavy');
     } catch { /* fx must never block accepting */ }
     setTimeout(
-      () => void app.acceptTask(id).then(() => navigate({ name: 'home' })),
+      () => void app.acceptTask(id)
+        .then(() => navigate({ name: 'home' }))
+        // A failed write must hand the buttons back — `accepting` otherwise
+        // stays true and the whole screen is dead until a reload.
+        .catch(() => (accepting = false)),
       motionOk() ? 350 : 0,
     );
   }
@@ -331,7 +345,11 @@
 
   const drawnList = $derived(drawn ? app.state.lists.find((l) => l.id === drawn!.listId) : undefined);
   const drawnTier = $derived(drawn ? effectivePriority(drawn, app.state.settings, clock.now) : null);
-  const drawnEscalated = $derived(drawn ? isEscalated(drawn, app.state.settings, new Date()) : false);
+  // clock.now, not new Date() — the freeze warned about at the top of this
+  // file: a deadline crossing its escalation threshold while the card sat on
+  // screen updated the tier label (live clock) but never showed the ▲ badge
+  // (frozen date), two halves of one line disagreeing (2026-08-18).
+  const drawnEscalated = $derived(drawn ? isEscalated(drawn, app.state.settings, clock.now) : false);
   const drawnTags = $derived(drawn
     ? drawn.tagIds.map((id) => app.state.tags.find((t) => t.id === id)).filter((t) => t !== undefined)
     : []);
