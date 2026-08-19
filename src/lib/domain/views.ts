@@ -47,15 +47,28 @@ export function openTasks(tasks: Task[]): Task[] {
   return tasks.filter((t) => !t.deleted && t.completedAt === undefined);
 }
 
+/** Effective priority desc; ties fall through to the deadline/age rule. */
 const byEffectiveDesc = (settings: Settings, now: Date) => (a: Task, b: Task) =>
-  priorityRank(effectivePriority(b, settings, now)) - priorityRank(effectivePriority(a, settings, now));
+  (priorityRank(effectivePriority(b, settings, now)) - priorityRank(effectivePriority(a, settings, now)))
+  || byDeadlineAsc(a, b);
 
-/** Deadline ascending, deadline-less last. */
+/**
+ * Deadline ascending, deadline-less last; ties break by AGE, oldest first.
+ *
+ * The tiebreak is load-bearing legibility: without it, ties kept the
+ * mirror's storage order — Dexie's primary-key order, i.e. the random id —
+ * so a new same-priority task landed at a random spot mid-list ("smart
+ * ordering really doesn't make sense to me", 2026-08-19). Now the rule is
+ * speakable: soonest deadline first, then oldest first — new tasks join at
+ * the bottom of their tier, like lines on paper.
+ */
 const byDeadlineAsc = (a: Task, b: Task) => {
-  if (a.deadline === b.deadline) return 0;
-  if (a.deadline === undefined) return 1;
-  if (b.deadline === undefined) return -1;
-  return a.deadline < b.deadline ? -1 : 1;
+  if (a.deadline !== b.deadline) {
+    if (a.deadline === undefined) return 1;
+    if (b.deadline === undefined) return -1;
+    return a.deadline < b.deadline ? -1 : 1;
+  }
+  return a.createdAt - b.createdAt;
 };
 
 /** Overdue → per-date ascending → 'No deadline' last; sub-sorted by effective priority desc. */

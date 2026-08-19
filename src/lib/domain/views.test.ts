@@ -52,6 +52,20 @@ describe('groupByPriority', () => {
   });
 });
 
+describe('the smart tie-break within a tier', () => {
+  it('deadline-less peers order by age, oldest first, whatever order they arrive in', () => {
+    // Pre-fix, ties kept the caller's array order — in the app that was
+    // Dexie's id order, i.e. RANDOM: a new same-priority task landed at a
+    // random spot mid-list (2026-08-19 report). The speakable rule now:
+    // soonest deadline first, then oldest first — new tasks join the bottom.
+    const oldest = { ...task({ priority: 'medium' }), createdAt: 100 };
+    const middle = { ...task({ priority: 'medium' }), createdAt: 200 };
+    const newest = { ...task({ priority: 'medium' }), createdAt: 300 };
+    const groups = groupByPriority([newest, oldest, middle], DEFAULT_SETTINGS, now);
+    expect(groups[0]!.tasks.map((t) => t.id)).toEqual([oldest.id, middle.id, newest.id]);
+  });
+});
+
 describe('groupByTag', () => {
   it('alphabetical sections, multi-tag duplication, Untagged last', () => {
     const zebra = tag('z', 'zebra');
