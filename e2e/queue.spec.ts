@@ -159,3 +159,40 @@ test('check-off drains the queue; clear is two-tap and undoable', async ({ page 
   await expect(page.getByTestId('queue-section')).toBeVisible();
   await expect.poll(() => queueNames(page)).toEqual(['two']);
 });
+
+test('tapping a queued task opens THAT task, expanded', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Plans');
+  await addTask(page, 'the one I queued');
+  await queueByEditor(page, 'the one I queued');
+  await page.getByTestId('back').click();
+
+  // Pre-fix this landed on the list with nothing open — you then had to go
+  // find the row you were just looking at (2026-08-19 report).
+  await page.locator('[data-queue-row] .q-main').first().click();
+  await expect(page.getByTestId('task-name-input')).toHaveValue('the one I queued');
+});
+
+test('a completed ritual leaves the day queue', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Daily');
+  await addTask(page, 'drink water');
+  await page.getByTestId(/^task-row-/).filter({ hasText: 'drink water' }).first().click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-queue-toggle').last().click();
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  const qRow = page.locator('[data-queue-row]').first();
+  const id = (await qRow.getAttribute('data-queue-row'))!;
+  await page.getByTestId(`queue-check-${id}`).click();
+  // A ritual's row stays open (rituals stamp the day, they don't close), so
+  // the queue held it forever (2026-08-19 report). Done for the day = the
+  // plan is served; the row leaves the queue but survives in its list.
+  await expect(page.getByTestId(`queue-row-${id}`)).toHaveCount(0);
+  await page.getByTestId(/^list-row-/).first().click();
+  await expect(page.getByText('drink water', { exact: true })).toBeVisible();
+});

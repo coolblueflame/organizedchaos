@@ -533,7 +533,10 @@
           <span class="q-pos">{i + 1}</span>
           <button class="q-check" data-testid="queue-check-{t.id}" aria-label="mark done"
             onclick={() => void app.completeTask(t.id)}><Glyph name="box" size={15} /></button>
-          <button class="q-main" onclick={() => navigate({ name: 'list', id: t.listId })}>
+          <!-- The deep link, not just the list: tapping a plan entry means
+               "show me THIS one" — landing on the list and hunting for the
+               row again was the whole trip twice (2026-08-19 report). -->
+          <button class="q-main" onclick={() => navigate({ name: 'list', id: t.listId, taskId: t.id })}>
             <span class="q-name">{t.name || 'untitled'}</span>
             <span class="q-list">{listTitle(t.listId)}</span>
           </button>

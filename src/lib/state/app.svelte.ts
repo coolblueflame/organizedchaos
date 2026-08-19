@@ -814,16 +814,29 @@ export class AppStore {
     };
     await this.patchTask(task.id, stamp);
 
+    // A ritual with nothing left owed today leaves the day's plan. Its row
+    // stays open — rituals stamp the day, they don't close — so the queue
+    // held it forever after completion (2026-08-19 report). A per-window
+    // ritual with windows still to come keeps its place in line.
+    const leavesQueue = this.state.queueIds.includes(task.id) && (dayComplete || !owed);
+    if (leavesQueue) await this.removeFromQueue(task.id);
+
     const ritualOutcome = estimateOutcome({ estimateHours: task.estimateHours, activeMs: tracked });
     const ritualTiming = ritualOutcome ? ` · ${ritualOutcome.actual} — ${ritualOutcome.verdict}` : '';
     this.pushUndo(`Completed "${task.name || 'task'}"${ritualTiming}`, async () => {
       await this.removeTask(record.id, { silent: true });
       await this.patchTask(task.id, unstamp);
+      // Back in line, at the end — the exact slot is not worth restoring.
+      // writeQueue directly: the silent primitive, no ceremony (no egg).
+      if (leavesQueue && !this.state.queueIds.includes(task.id)) {
+        await this.writeQueue([...this.state.queueIds, task.id]);
+      }
     }, async () => {
       // Resurrect the SAME history record (the undo only tombstoned it) and
       // re-stamp the day — identical state to the original completion.
       await this.restoreTask(record.id);
       await this.patchTask(task.id, stamp);
+      if (leavesQueue) await this.removeFromQueue(task.id);
     });
 
     if (this.state.currentTask?.taskId === task.id) await this.clearCurrent();
