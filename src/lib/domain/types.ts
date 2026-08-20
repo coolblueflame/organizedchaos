@@ -195,8 +195,8 @@ export type RecurrenceMode =
   /**
    * "Peppered in" (2026-08-20 ask): the task returns to the pool the moment
    * it completes, and the RANDOMIZER decides when it comes up — baseChance %
-   * per roll on re-add, climbing perRollBoost % after every roll that served
-   * a card, resetting to base on completion. Chance-ONLY by design: these
+   * per roll on re-add, climbing perRollBoost % with every ACCEPTED draw
+   * (see chanceRolls), resetting to base on completion. Chance-ONLY: these
    * never sit in a priority tier, so the numbers set here are the whole
    * story. Both are percent values (0–100).
    */
@@ -228,6 +228,15 @@ export interface RecurrenceTemplate extends Base {
   priority: Priority;
   estimateHours?: number;
   mode: RecurrenceMode;
+  /**
+   * Chance mode only: how many accepted draws this template has sat through
+   * since its task last completed — the "+N% per roll" climb. Lives on the
+   * SYNCED row (Ben's 2026-08-20 pushback: accepting already syncs, so the
+   * climb should travel too); the increment rides the accept's own push.
+   * Newest-wins can drop an increment when two devices accept before
+   * syncing — a rounding error for a mechanic about vibes, not ledgers.
+   */
+  chanceRolls?: number;
   /** When set, spawned tasks get `deadline = spawn day + offset` (spec §5). */
   deadlineOffsetDays?: number;
   paused: boolean;

@@ -9,7 +9,6 @@ import {
 } from '../domain/types';
 import { appDayKey, nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
-import { bumpPepperRolls, pepperRollsFor, resetPepperRolls } from './pepperRolls';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import {
@@ -1016,13 +1015,14 @@ export class AppStore {
       const next = scheduleAfterCompletion(tpl, new Date());
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
       if (tpl.mode.kind === 'chance') {
-        // Peppered: completion resets the climb, and the task returns to the
-        // pool NOW (the arm above is for this very moment — sweep it in).
+        // Peppered: completion resets the climb (on the synced row, so every
+        // device sees base chance again), and the task returns to the pool
+        // NOW (the arm above is for this very moment — sweep it in).
         // Honest limit: undoing this completion leaves the fresh copy too
         // (skip-if-open stops further spawns; the deterministic spawn id
         // means at most one extra row, deletable) — accepted trade for the
         // mechanic's whole point being immediacy (2026-08-20 ask).
-        resetPepperRolls(tpl.id);
+        await this.updateRecurring(tpl.id, { chanceRolls: 0 });
         void this.runSpawnSweep();
       }
     }
@@ -1046,8 +1046,8 @@ export class AppStore {
    */
   /**
    * The chance-mode ("peppered") tasks currently able to roll, with each
-   * one's live percentage: base + rolls-on-this-device × boost, capped at
-   * 100 (see RecurrenceMode kind 'chance' and state/pepperRolls).
+   * one's live percentage: base + synced accepted-roll count × boost,
+   * capped at 100 (see RecurrenceMode kind 'chance').
    */
   pepperCandidates(): Array<{ taskId: string; tplId: string; chancePct: number }> {
     const out: Array<{ taskId: string; tplId: string; chancePct: number }> = [];
@@ -1059,17 +1059,23 @@ export class AppStore {
       out.push({
         taskId: t.id,
         tplId: tpl.id,
-        chancePct: Math.min(100, baseChance + pepperRollsFor(tpl.id) * perRollBoost),
+        chancePct: Math.min(100, baseChance + (tpl.chanceRolls ?? 0) * perRollBoost),
       });
     }
     return out;
   }
 
-  /** Every draw that served a card ages every pepper — see state/pepperRolls. */
-  agePeppers(): void {
-    bumpPepperRolls(this.state.templates
-      .filter((t) => !t.deleted && !t.paused && t.mode.kind === 'chance')
-      .map((t) => t.id));
+  /**
+   * Every ACCEPTED draw ages every pepper — "a roll where we successfully
+   * select a task" (Ben's spec, taken at its word on the 2026-08-20
+   * pushback). Counted on the synced template row, riding the sync push the
+   * accept itself already causes; skips deliberately don't age the chance.
+   */
+  private async agePeppers(): Promise<void> {
+    for (const tpl of this.state.templates) {
+      if (tpl.deleted || tpl.paused || tpl.mode.kind !== 'chance') continue;
+      await this.updateRecurring(tpl.id, { chanceRolls: (tpl.chanceRolls ?? 0) + 1 });
+    }
   }
 
   async rollStraightIn(): Promise<boolean> {
@@ -1100,10 +1106,7 @@ export class AppStore {
         blockLifts(this.state.tasks, this.state.settings, now), this.state.tasks, this.state.settings, now,
       ),
     );
-    if (next) {
-      this.agePeppers();
-      await this.acceptTask(next.id);
-    }
+    if (next) await this.acceptTask(next.id); // acceptTask ages the peppers
   }
 
   async uncompleteTask(id: string): Promise<void> {
@@ -1294,6 +1297,9 @@ export class AppStore {
     const currentStamp = await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
     this.state.currentTaskUpdatedAt = currentStamp;
+    // An accepted draw ages every pepper's chance — the increments ride the
+    // requestSync this accept performs anyway (see agePeppers).
+    await this.agePeppers();
     this.requestSync();
     this.fireEgg('drawAccepted');
   }

@@ -219,7 +219,6 @@
     );
     drawnViaPepper = drawn !== null && rollScope.peppers.some((p) => p.taskId === drawn!.id);
     if (drawn) {
-      app.agePeppers(); // every served card ages every pepper by one roll
       drawSeq += 1;
       // Chains have no cancellation, so a rapid re-roll would leave TWO of
       // them interleaving writes into displayName — the seq check quietly
