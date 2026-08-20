@@ -193,6 +193,15 @@ export type RecurrenceMode =
   /** "Come back X after completion" — spec §5. */
   | { kind: 'afterCompletion'; interval: number; unit: 'days' | 'weeks' | 'months' }
   /**
+   * "Peppered in" (2026-08-20 ask): the task returns to the pool the moment
+   * it completes, and the RANDOMIZER decides when it comes up — baseChance %
+   * per roll on re-add, climbing perRollBoost % after every roll that served
+   * a card, resetting to base on completion. Chance-ONLY by design: these
+   * never sit in a priority tier, so the numbers set here are the whole
+   * story. Both are percent values (0–100).
+   */
+  | { kind: 'chance'; baseChance: number; perRollBoost: number }
+  /**
    * Fixed weekly cadence; weekday numbers follow JS Date#getDay (0=Sunday …
    * 6=Saturday). `everyWeeks` stretches it to every-2nd/3rd/… week
    * (2026-08-06 ask); `anchorMs` marks a moment inside an ON week, since

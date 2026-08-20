@@ -15,6 +15,9 @@ export function describeRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: nu
     case 'afterCompletion':
       base = `${mode.interval} ${mode.interval === 1 ? mode.unit.slice(0, -1) : mode.unit} after completion`;
       break;
+    case 'chance':
+      base = `peppered in — ${mode.baseChance}% per roll, +${mode.perRollBoost}% each miss`;
+      break;
     case 'weekly': {
       // Sunday-first, matching the picker above it.
       const order = [0, 1, 2, 3, 4, 5, 6];

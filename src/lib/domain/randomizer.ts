@@ -47,6 +47,16 @@ export interface DrawScope {
    * weighting run within the subset).
    */
   dueFirst?: string[];
+  /**
+   * "Peppered" tasks (2026-08-20 ask): chance-mode recurrences. Rolled AFTER
+   * due rituals and the day queue but BEFORE the tiers — each entry hits with
+   * its own chancePct (0–100), and a hit serves that task. Peppers are
+   * chance-ONLY: they never join the tier pool, so the configured number is
+   * their entire probability of appearing… with one honest exception: when
+   * peppers are ALL that's eligible, the draw serves one anyway — dice that
+   * come up empty while a task is visibly available read as broken, not rare.
+   */
+  peppers?: Array<{ taskId: string; chancePct: number }>;
 }
 
 /**
@@ -116,6 +126,27 @@ export function drawTask(
       const queued = byId.get(id);
       if (queued) return queued;
     }
+  }
+
+  // The pepper roll (see DrawScope.peppers). Each eligible pepper rolls
+  // independently; several hits pick uniformly among themselves. Misses fall
+  // through to the tiers — WITHOUT the peppers, which are chance-only.
+  if (scope?.peppers?.length) {
+    const byId = new Map(pool.map((t) => [t.id, t]));
+    const eligible = scope.peppers.filter((p) => byId.has(p.taskId));
+    const hits = eligible.filter((p) => rng() * 100 < p.chancePct);
+    if (hits.length > 0) {
+      return byId.get(hits[Math.floor(rng() * hits.length)]!.taskId)!;
+    }
+    const pepperIds = new Set(scope.peppers.map((p) => p.taskId));
+    const rest = pool.filter((t) => !pepperIds.has(t.id));
+    if (rest.length === 0) {
+      // Nothing but peppers left: serve one rather than an empty screen.
+      return eligible.length > 0
+        ? byId.get(eligible[Math.floor(rng() * eligible.length)]!.taskId)!
+        : null;
+    }
+    pool = rest;
   }
 
   const tierOf = (t: Task) =>

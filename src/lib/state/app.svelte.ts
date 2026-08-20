@@ -9,6 +9,7 @@ import {
 } from '../domain/types';
 import { appDayKey, nextRolloverTs } from '../domain/time';
 import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
+import { bumpPepperRolls, pepperRollsFor, resetPepperRolls } from './pepperRolls';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import {
@@ -1014,6 +1015,16 @@ export class AppStore {
     if (tpl) {
       const next = scheduleAfterCompletion(tpl, new Date());
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
+      if (tpl.mode.kind === 'chance') {
+        // Peppered: completion resets the climb, and the task returns to the
+        // pool NOW (the arm above is for this very moment — sweep it in).
+        // Honest limit: undoing this completion leaves the fresh copy too
+        // (skip-if-open stops further spawns; the deterministic spawn id
+        // means at most one extra row, deletable) — accepted trade for the
+        // mechanic's whole point being immediacy (2026-08-20 ask).
+        resetPepperRolls(tpl.id);
+        void this.runSpawnSweep();
+      }
     }
     // Auto-select (2026-07-26 request): finishing THE current task rolls the next one.
     if (wasCurrent && !opts.bulk && this.state.settings.autoSelectNext) await this.drawNext();
@@ -1033,6 +1044,34 @@ export class AppStore {
    * buttons put it back and this can run again. Returns false when the pool
    * is empty so the caller can show WHY instead of doing nothing.
    */
+  /**
+   * The chance-mode ("peppered") tasks currently able to roll, with each
+   * one's live percentage: base + rolls-on-this-device × boost, capped at
+   * 100 (see RecurrenceMode kind 'chance' and state/pepperRolls).
+   */
+  pepperCandidates(): Array<{ taskId: string; tplId: string; chancePct: number }> {
+    const out: Array<{ taskId: string; tplId: string; chancePct: number }> = [];
+    for (const t of this.state.tasks) {
+      if (t.deleted || t.completedAt !== undefined || !t.recurrenceId) continue;
+      const tpl = this.state.templates.find((x) => x.id === t.recurrenceId && !x.deleted && !x.paused);
+      if (!tpl || tpl.mode.kind !== 'chance') continue;
+      const { baseChance, perRollBoost } = tpl.mode;
+      out.push({
+        taskId: t.id,
+        tplId: tpl.id,
+        chancePct: Math.min(100, baseChance + pepperRollsFor(tpl.id) * perRollBoost),
+      });
+    }
+    return out;
+  }
+
+  /** Every draw that served a card ages every pepper — see state/pepperRolls. */
+  agePeppers(): void {
+    bumpPepperRolls(this.state.templates
+      .filter((t) => !t.deleted && !t.paused && t.mode.kind === 'chance')
+      .map((t) => t.id));
+  }
+
   async rollStraightIn(): Promise<boolean> {
     const before = this.state.currentTask?.taskId;
     await this.drawNext();
@@ -1054,13 +1093,17 @@ export class AppStore {
         ],
         queueFirst: liveQueueIds(this.state.queueIds, this.state.tasks),
         dueFirst: dueRitualIds(this.state.tasks, this.state.settings, now),
+        peppers: this.pepperCandidates(),
       },
       undefined,
       withRitualLifts(
         blockLifts(this.state.tasks, this.state.settings, now), this.state.tasks, this.state.settings, now,
       ),
     );
-    if (next) await this.acceptTask(next.id);
+    if (next) {
+      this.agePeppers();
+      await this.acceptTask(next.id);
+    }
   }
 
   async uncompleteTask(id: string): Promise<void> {
@@ -1571,7 +1614,10 @@ export class AppStore {
       this.state.lists.filter((l) => l.deleted || l.archived).map((l) => l.id));
     for (const tpl of this.state.templates) {
       if (tpl.deleted || tpl.paused || goneLists.has(tpl.listId) || tpl.nextSpawnAt !== undefined) continue;
-      const armed = tpl.mode.kind === 'afterCompletion'
+      // Chance mode heals exactly like afterCompletion: its resting state is
+      // unarmed-with-an-open-copy, and unarmed with NOTHING open is a rule
+      // waiting for a completion that cannot come.
+      const armed = tpl.mode.kind === 'afterCompletion' || tpl.mode.kind === 'chance'
         ? (openByRecurrence.has(tpl.id)
           ? null
           : nextRolloverTs(now.getTime(), this.state.settings.rolloverHour))

@@ -107,6 +107,8 @@
   let displayName = $state('');
   let drawSeq = $state(0);      // keys the card so the sheen replays per draw
   let accepting = $state(false);
+  /** The current card arrived via the pepper roll, not a tier. */
+  let drawnViaPepper = $state(false);
 
   const scope = () => ({
     listIds: omittedLists.length
@@ -114,6 +116,9 @@
       : undefined,
     tagIds: filterTags,
     excludeIds: [...notNow, ...blockedByHours, ...ritualsNotDue, ...onShelf, ...lockedOut],
+    // Chance-mode ("peppered") tasks and their live percentages — the draw
+    // rolls them after rituals and the queue, before the tiers.
+    peppers: app.pepperCandidates(),
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
     // The hand-planned order outranks the tiers (2026-07-29 request).
@@ -208,10 +213,13 @@
     // tweaking must not hand the NEXT card an already-open editor aimed at
     // a task the dice just took away (2026-08-18 second pass).
     editingDraw = false;
+    const rollScope = scope();
     drawn = drawTask(
-      app.state.tasks, app.state.settings, new Date(), Math.random, scope(), projectTiers, lifts,
+      app.state.tasks, app.state.settings, new Date(), Math.random, rollScope, projectTiers, lifts,
     );
+    drawnViaPepper = drawn !== null && rollScope.peppers.some((p) => p.taskId === drawn!.id);
     if (drawn) {
+      app.agePeppers(); // every served card ages every pepper by one roll
       drawSeq += 1;
       // Chains have no cancellation, so a rapid re-roll would leave TWO of
       // them interleaving writes into displayName — the seq check quietly
@@ -463,6 +471,8 @@
         <p class="tier ritual" data-testid="draw-ritual">⧗ daily ritual — its window is open</p>
       {:else if drawn && app.state.queueIds.includes(drawn.id)}
         <p class="tier queue" data-testid="draw-from-queue">≡ next in your queue</p>
+      {:else if drawnViaPepper}
+        <p class="tier pepper" data-testid="draw-pepper">⁘ peppered in — the dice felt like it</p>
       {:else if drawnTier}
         <p class="tier {drawnTier}">
           drawn from: {drawnTier.toUpperCase()}{#if drawnEscalated}&nbsp;▲ deadline-escalated{/if}
@@ -671,6 +681,7 @@
   .tier.high { color: var(--acc-orange); }
   .tier.max { color: var(--acc-magenta); }
   .tier.queue { color: var(--acc-cyan); }
+  .tier.pepper { color: var(--acc-yellow); }
   .tier.ritual { color: var(--acc-magenta); }
   .tier.bonus { color: var(--acc-yellow); }
   .selfcare { border-color: var(--acc-yellow); }

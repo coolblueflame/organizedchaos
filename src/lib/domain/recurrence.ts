@@ -27,6 +27,9 @@ function addMonthsClamped(d: Date, months: number): Date {
 /** afterCompletion: the moment the next instance should appear; null for scheduled modes. */
 export function scheduleAfterCompletion(tpl: RecurrenceTemplate, completedAt: Date): number | null {
   const m = tpl.mode;
+  // Chance mode re-arms the moment it completes — being immediately possible
+  // again (at its base chance) is the whole mechanic (2026-08-20 ask).
+  if (m.kind === 'chance') return completedAt.getTime();
   if (m.kind !== 'afterCompletion') return null;
   if (m.unit === 'months') return addMonthsClamped(completedAt, m.interval).getTime();
   const days = m.unit === 'weeks' ? m.interval * 7 : m.interval;

@@ -268,3 +268,35 @@ describe('drawTask — tier selection', () => {
     expect(seen.size).toBe(3);
   });
 });
+
+describe('the pepper roll (chance-mode tasks, 2026-08-20)', () => {
+  it('a hit serves the pepper before any tier; a miss falls through WITHOUT it', () => {
+    const pepper = task({ priority: 'low' });
+    const normal = task({ priority: 'max' });
+    const scope = { peppers: [{ taskId: pepper.id, chancePct: 50 }] };
+    // rng: first call is the pepper roll. 0.2 → 20 < 50 → hit.
+    expect(drawTask([pepper, normal], DEFAULT_SETTINGS, now, () => 0.2, scope)!.id)
+      .toBe(pepper.id);
+    // 0.9 → 90 ≥ 50 → miss: the MAX tier draws, and the pepper is chance-only
+    // — even a rigged rng can never produce it from the tiers.
+    expect(drawTask([pepper, normal], DEFAULT_SETTINGS, now, () => 0.9, scope)!.id)
+      .toBe(normal.id);
+  });
+
+  it('when peppers are all that is left, one is served rather than an empty screen', () => {
+    const pepper = task({ priority: 'low' });
+    const scope = { peppers: [{ taskId: pepper.id, chancePct: 5 }] };
+    expect(drawTask([pepper], DEFAULT_SETTINGS, now, () => 0.99, scope)!.id).toBe(pepper.id);
+  });
+
+  it('due rituals and the day queue both outrank the pepper roll', () => {
+    const pepper = task({ priority: 'low' });
+    const owed = task({ priority: 'low' });
+    const queued = task({ priority: 'low' });
+    const certain = { peppers: [{ taskId: pepper.id, chancePct: 100 }] };
+    expect(drawTask([pepper, owed], DEFAULT_SETTINGS, now, () => 0,
+      { ...certain, dueFirst: [owed.id] })!.id, 'a window closes; a chance does not').toBe(owed.id);
+    expect(drawTask([pepper, queued], DEFAULT_SETTINGS, now, () => 0,
+      { ...certain, queueFirst: [queued.id] })!.id, 'the plan outranks the dice').toBe(queued.id);
+  });
+});

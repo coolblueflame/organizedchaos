@@ -29,6 +29,12 @@ describe('scheduleAfterCompletion', () => {
       .toBe(at('2027-02-28T09:00:00').getTime());
   });
 
+  it('chance mode re-arms at the completion instant — immediacy IS the mechanic', () => {
+    const t = tpl({ mode: { kind: 'chance', baseChance: 20, perRollBoost: 1 } });
+    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00')))
+      .toBe(at('2026-07-10T15:00:00').getTime());
+  });
+
   it('returns null for scheduled modes', () => {
     expect(scheduleAfterCompletion(tpl({}), at('2026-07-10T15:00:00'))).toBeNull();
   });

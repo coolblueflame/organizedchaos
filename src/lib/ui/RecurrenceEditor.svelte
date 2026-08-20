@@ -42,6 +42,9 @@
   const willReAnchor = $derived(
     everyWeeks > 1 && (initialAnchor === undefined || everyWeeks !== initialEvery),
   );
+  /** Chance mode ("peppered", 2026-08-20): % per roll, and the climb per miss. */
+  let baseChance = $state(init?.kind === 'chance' ? init.baseChance : 20);
+  let perRollBoost = $state(init?.kind === 'chance' ? init.perRollBoost : 1);
   let monthday = $state<number | ''>(init?.kind === 'monthly' && !init.days?.length ? init.dayOfMonth : '');
   /** Extra month days beyond the input — chips; 'last' is the true month end. */
   let monthdays = $state<Array<number | 'last'>>(
@@ -90,6 +93,7 @@
 
   const valid = $derived(
     kind === 'afterCompletion' ? interval >= 1 :
+    kind === 'chance' ? baseChance >= 1 && baseChance <= 100 && perRollBoost >= 0 :
     kind === 'weekly' ? weekdays.length > 0 :
     allMonthdays.length > 0,
   );
@@ -98,6 +102,7 @@
     if (!valid) return;
     const mode: RecurrenceMode =
       kind === 'afterCompletion' ? { kind, interval, unit } :
+      kind === 'chance' ? { kind, baseChance, perRollBoost } :
       kind === 'weekly' ? {
         kind,
         weekdays: [...weekdays].sort(),
@@ -119,8 +124,10 @@
           : {}),
       };
     const off = parseInt(offset, 10);
-    // 0 is a real answer — "due the day it appears" — only blank/negative mean unset.
-    onsave(mode, Number.isFinite(off) && off >= 0 ? off : undefined);
+    // 0 is a real answer — "due the day it appears" — only blank/negative mean
+    // unset. Chance mode never carries one: peppers live outside the tiers, so
+    // a deadline would neither escalate nor mean anything.
+    onsave(mode, kind !== 'chance' && Number.isFinite(off) && off >= 0 ? off : undefined);
   }
 </script>
 
@@ -132,9 +139,22 @@
       onclick={() => (kind = 'weekly')}>weekly</button>
     <button class:active={kind === 'monthly'} data-testid="recur-mode-monthly"
       onclick={() => (kind = 'monthly')}>monthly</button>
+    <button class:active={kind === 'chance'} data-testid="recur-mode-chance"
+      onclick={() => (kind = 'chance')}>peppered</button>
   </div>
 
-  {#if kind === 'afterCompletion'}
+  {#if kind === 'chance'}
+    <div class="line">
+      <span>back in the pool the moment it's done —</span>
+    </div>
+    <div class="line">
+      <input type="number" min="1" max="100" data-testid="recur-chance-base" bind:value={baseChance} />
+      <span>% chance per roll, climbing</span>
+      <input type="number" min="0" max="100" data-testid="recur-chance-boost" bind:value={perRollBoost} />
+      <span>% with each roll it misses</span>
+    </div>
+    <div class="line"><em>(completing it resets the chance; it never sits in a priority tier)</em></div>
+  {:else if kind === 'afterCompletion'}
     <div class="line">
       <span>comes back</span>
       <input type="number" min="1" data-testid="recur-interval" bind:value={interval} />
@@ -184,11 +204,13 @@
     <div class="line"><em>(days past a short month clamp to its end)</em></div>
   {/if}
 
-  <div class="line">
-    <span>deadline</span>
-    <input type="number" min="0" placeholder="—" data-testid="recur-deadline-offset" bind:value={offset} />
-    <span>days after it appears <em>(optional; 0 = due that day)</em></span>
-  </div>
+  {#if kind !== 'chance'}
+    <div class="line">
+      <span>deadline</span>
+      <input type="number" min="0" placeholder="—" data-testid="recur-deadline-offset" bind:value={offset} />
+      <span>days after it appears <em>(optional; 0 = due that day)</em></span>
+    </div>
+  {/if}
 
   <div class="actions">
     {#if onremove}

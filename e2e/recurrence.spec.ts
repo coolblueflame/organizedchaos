@@ -275,3 +275,41 @@ test('an untouched reopen-save keeps a fortnight rule on ITS weeks', async ({ pa
   await page.waitForTimeout(300);
   await expect(row).toContainText('next: 8/24');
 });
+
+test('a peppered task respawns instantly and the dice announce it', async ({ page }) => {
+  // 2026-08-20 ask: chance-mode recurrence. Base 100% makes the lottery
+  // deterministic for the test; real use is the whole point of lower numbers.
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Spice');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('stretch a little');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-chance').click();
+  await page.getByTestId('recur-chance-base').fill('100');
+  await page.getByTestId('recur-chance-boost').fill('0');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  // A normal MAX task alongside — at 100% the pepper must beat even it.
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('important thing');
+  await page.getByTestId('priority-max').click();
+  await page.waitForTimeout(250);
+  await page.getByTestId('task-collapse').last().click();
+
+  // Complete the pepper: it returns to the pool IMMEDIATELY — no rollover,
+  // no reopen — that instant respawn is the mechanic (deterministic spawn
+  // id, so the row simply reappears).
+  const row = page.getByTestId(/^task-row-/).filter({ hasText: 'stretch a little' }).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'stretch a little' }),
+    'back in the pool the moment it completes').toHaveCount(1);
+
+  // And the randomizer serves it via the pepper roll, saying so.
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('stretch a little');
+  await expect(page.getByTestId('draw-pepper')).toBeVisible();
+});
