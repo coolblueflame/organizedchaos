@@ -24,6 +24,7 @@
   import Glyph from './Glyph.svelte';
   import { autogrow } from './autogrow';
   import EstimateField from './EstimateField.svelte';
+  import LinkChips from './LinkChips.svelte';
 
   let { task, oncollapse, compact = false }: {
     task: Task;
@@ -263,6 +264,9 @@
 <div class="editor">
   <textarea class="notes" data-testid="task-notes-input" placeholder="notes"
     rows="2" use:autogrow={notes} bind:value={notes} oninput={queueSave} onblur={flush}></textarea>
+  <!-- A textarea can't carry an anchor, so any URL in the notes gets a
+       tappable chip right below it (2026-08-20 ask). -->
+  <LinkChips {notes} testid="task-links-{task.id}" />
   <Checklist {notes} taskId={task.id} onchange={notesChanged} allowAdd />
 
   <PrioritySelect value={task.priority}

@@ -78,6 +78,7 @@
   import { motionOk } from './fx/particles';
   import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
+  import Linkify from './Linkify.svelte';
 
   let {
     task, expanded = false, ontoggle, onenter, showList = false, completedMode = false,
@@ -397,7 +398,7 @@
   {#if expanded && completedMode}
     <div class="done-detail" data-testid="done-detail-{task.id}">
       {#if task.notes.trim()}
-        <p class="done-notes">{task.notes}</p>
+        <p class="done-notes"><Linkify text={task.notes} /></p>
       {:else}
         <p class="done-notes dim">// no description</p>
       {/if}

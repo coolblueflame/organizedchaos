@@ -16,6 +16,7 @@
   import { lock } from './lock.svelte';
   import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
+  import LinkChips from './LinkChips.svelte';
 
   /**
    * The focus loop's missing hinge (2026-07-31, shortlist item 6): finishing
@@ -121,6 +122,9 @@
         <span class="check-progress" data-testid="current-check-progress">{progress.done}/{progress.total}</span>
       </div>
     {/if}
+    <!-- The card never shows notes prose, so a URL in them was invisible at
+         the exact moment it's needed — while doing the task (2026-08-20). -->
+    <LinkChips notes={task.notes} testid="current-links" />
     <div class="timebox-row">
       <Timebox {task} />
       {#if task.startedAt || task.activeAccumulatedMs}

@@ -561,6 +561,30 @@ test('removing a tag in tag view keeps the relocated card on screen', async ({ p
   expect(box.y, 'the relocated card is inside the viewport').toBeLessThan(viewH - 40);
 });
 
+test('a URL in the notes is tappable everywhere the note shows', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Reading');
+  await addTask(page, 'read the article');
+  await page.getByText('read the article', { exact: true }).click();
+  await page.getByTestId('task-notes-input').fill('see https://example.com/docs. later');
+  await page.waitForTimeout(300); // debounce save
+
+  // Editor: a textarea can't carry an anchor, so a chip appears below it —
+  // trailing sentence punctuation stays prose, target/rel harden the anchor.
+  const chip = page.locator('[data-testid^="task-links-"] a').first();
+  await expect(chip).toHaveAttribute('href', 'https://example.com/docs');
+  await expect(chip).toHaveAttribute('target', '_blank');
+  await expect(chip).toHaveAttribute('rel', /noopener/);
+  await expect(chip).toContainText('example.com');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  // Draw card: the notes prose itself carries the link.
+  await page.getByTestId('big-button').click();
+  const noteLink = page.getByTestId('draw-card').locator('a.note-link');
+  await expect(noteLink).toHaveAttribute('href', 'https://example.com/docs');
+});
+
 test('a list id that no longer exists bounces home instead of editing the void', async ({ page }) => {
   // A stale bookmark, or a list deleted on another device mid-visit: the
   // screen rendered with a "…" title and "+ new todo" happily filed tasks

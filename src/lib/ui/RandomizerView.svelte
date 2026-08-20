@@ -32,6 +32,7 @@
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
   import Glyph from './Glyph.svelte';
+  import Linkify from './Linkify.svelte';
 
   let { listId }: { listId?: string } = $props();
 
@@ -473,7 +474,7 @@
         <span class="edit-hint">{editingDraw ? '▴ done editing' : '✎ tweak it'}</span>
       </button>
       {#if drawnList}<p class="list-name">in {drawnList.title}</p>{/if}
-      {#if drawn.notes}<p class="notes">{drawn.notes.slice(0, 200)}</p>{/if}
+      {#if drawn.notes}<p class="notes"><Linkify text={drawn.notes.slice(0, 200)} /></p>{/if}
       <div class="meta">
         {#each drawnTags as t (t.id)}
           <span class="chip on" style="--c: {tagColor(t.colorIndex)}"><span class="dot"></span>{t.name}</span>

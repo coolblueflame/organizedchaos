@@ -22,6 +22,7 @@
   import EstimateField from './EstimateField.svelte';
   import { withoutLocked } from '../domain/lock';
   import { lock } from './lock.svelte';
+  import Linkify from './Linkify.svelte';
 
   /** Which sweep: 'triage' (the yellow dots) or 'estimates' (2026-07-29 ask). */
   const mode = $derived(
@@ -208,7 +209,7 @@
             <span class="age">· {age(current)}</span>
           </p>
           <h2 class="name">{current.name || 'untitled'}</h2>
-          {#if current.notes}<p class="est-notes">{current.notes.slice(0, 240)}</p>{/if}
+          {#if current.notes}<p class="est-notes"><Linkify text={current.notes.slice(0, 240)} /></p>{/if}
           <p class="assumed">no estimate — the app has been assuming <strong>1 hour</strong></p>
         </section>
 
