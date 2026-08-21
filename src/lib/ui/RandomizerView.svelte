@@ -33,6 +33,7 @@
   import { priorityRank } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import Linkify from './Linkify.svelte';
+  import VaultToggle from './VaultToggle.svelte';
 
   let { listId }: { listId?: string } = $props();
 
@@ -393,6 +394,9 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>✕</button>
     <h1>the randomizer</h1>
+    <!-- Vaults open or close RIGHT HERE, before the roll (2026-08-20 ask) —
+         either way the pool changes shape, so the dice roll again. -->
+    <span class="vault-slot"><VaultToggle onchange={() => { notNow = []; redraw(); }} /></span>
   </header>
 
   {#if triage}
@@ -622,6 +626,7 @@
 
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .vault-slot { margin-left: auto; display: inline-flex; }
   .back { background: none; border: none; color: var(--dim); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
   @media (hover: hover) { .back:hover { color: var(--text); } }
   h1 { font-family: var(--font-mono); font-size: 1.1rem; margin: 0; color: var(--acc-purple); }

@@ -31,6 +31,7 @@
   import WorkPeriod from './WorkPeriod.svelte';
   import { haptic } from './fx/haptics';
   import Glyph from './Glyph.svelte';
+  import VaultToggle from './VaultToggle.svelte';
 
   let quickAddOpen = $state(false);
 
@@ -411,6 +412,9 @@
     <button data-testid="sort-date" onclick={() => navigate({ name: 'sort', mode: 'date' })}>by date</button>
     <button data-testid="sort-priority" onclick={() => navigate({ name: 'sort', mode: 'priority' })}>by priority</button>
     <button data-testid="sort-tag" onclick={() => navigate({ name: 'sort', mode: 'tag' })}>by tag</button>
+    <!-- The vault padlock, one tap from the big button (2026-08-20 ask):
+         open the private lists BEFORE rolling, or snap them shut after. -->
+    <VaultToggle />
   </nav>
 
   {#if reviewCount > 0}

@@ -17,7 +17,7 @@
 <script lang="ts">
   type GlyphName =
     | 'notes' | 'blocked' | 'timebox' | 'period' | 'pause' | 'play'
-    | 'dice' | 'moon' | 'bolt' | 'install' | 'upload' | 'award' | 'locked'
+    | 'dice' | 'moon' | 'bolt' | 'install' | 'upload' | 'award' | 'locked' | 'unlocked'
     | 'flame' | 'settings' | 'escalate' | 'grip'
     | 'box' | 'box-checked' | 'box-all' | 'check' | 'plus';
 
@@ -102,6 +102,11 @@
   {:else if name === 'locked'}
     <rect x="2.4" y="5.4" width="7.2" height="5.8" rx="1.2" />
     <path d="M4.2 5.4 V3.9 a1.8 1.8 0 0 1 3.6 0 V5.4" />
+  {:else if name === 'unlocked'}
+    <!-- The same padlock with its shackle swung open — the vault toggle's
+         "open" face; a color change alone can't be read at a glance. -->
+    <rect x="2.4" y="5.4" width="7.2" height="5.8" rx="1.2" />
+    <path d="M6.9 5.4 V3.6 a1.8 1.8 0 0 1 3.6 0 V4.8" />
   {:else if name === 'flame'}
     <!-- Leans and licks to one side; a symmetrical one just reads as a
          raindrop, which is the opposite of "on fire". -->

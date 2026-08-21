@@ -96,3 +96,40 @@ test('a locked list hides its contents everywhere until the PIN opens it', async
   await secretsRow.locator('.list-main').click();
   await expect(page.getByTestId('lock-gate')).toBeVisible();
 });
+
+test('the vault padlock opens and shuts the private lists right at the dice', async ({ page }) => {
+  // 2026-08-20 ask: unlocking used to mean navigating INTO a locked list
+  // first; the padlock now sits beside the sort row and the randomizer
+  // title, one tap from the roll.
+  await seedList(page, 'Secrets', 'plan the surprise party');
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-pin-input').fill('1234');
+  await page.getByTestId('settings-pin-save').click();
+  await page.getByTestId('back').click();
+  const secretsRow = page.getByTestId(/^list-row-/).filter({ hasText: 'Secrets' });
+  const listId = (await secretsRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId('list-settings-lock').click();
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-lock-now').click();
+  await page.getByTestId('back').click();
+
+  // Locked: the dice can't serve the vault's only task.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible();
+
+  // The padlock in the randomizer's own header opens the gate; the pool
+  // refreshes the moment the PIN lands — no leaving the screen.
+  await page.getByTestId('vault-toggle').click();
+  await page.getByTestId('lock-pin-input').fill('1234');
+  await page.getByTestId('lock-unlock').click();
+  await expect(page.getByTestId('draw-card')).toContainText('surprise party');
+
+  // One tap shuts it again, and the pool empties with it.
+  await page.getByTestId('vault-toggle').click();
+  await expect(page.getByTestId('draw-empty')).toBeVisible();
+
+  // Home carries the same padlock, beside the sort row.
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('vault-toggle')).toBeVisible();
+});
