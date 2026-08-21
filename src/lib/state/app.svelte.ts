@@ -1285,14 +1285,11 @@ export class AppStore {
       ...(minutes ? { timeboxEndsAt: Date.now() + minutes * 60_000 } : {}),
     });
     // Displacement is a put-down for whoever was current: their box stops
-    // with their work, or its alarm would fire for a task nobody is doing.
+    // and their stretch banks with their work (see putDownWork), or the
+    // alarm would fire — and the clock would keep counting — for a task
+    // nobody is doing.
     const displaced = this.state.currentTask?.taskId;
-    if (displaced && displaced !== taskId) {
-      const d = this.state.tasks.find((x) => x.id === displaced);
-      if (d && !d.deleted && d.completedAt === undefined && d.timeboxEndsAt !== undefined) {
-        await this.patchTask(displaced, { timeboxEndsAt: undefined });
-      }
-    }
+    if (displaced && displaced !== taskId) await this.putDownWork(displaced);
     const ref = { taskId, acceptedAt: Date.now() };
     const currentStamp = await this.repo.setCurrentTask(ref);
     this.state.currentTask = ref;
@@ -1312,8 +1309,11 @@ export class AppStore {
     const task = this.state.tasks.find((t) => t.id === taskId);
     const priorSnooze = task?.notTodayUntil;
     // Captured BEFORE any patch (the mirror mutates in place): snoozing a
-    // current task stops its box via clearCurrent, and undo puts it back.
+    // current task stops its box AND banks its clock via clearCurrent's
+    // put-down, and undo puts both back exactly as they ran.
     const priorTimebox = task?.timeboxEndsAt;
+    const priorStartedAt = task?.startedAt;
+    const priorAccumulated = task?.activeAccumulatedMs;
     const priorCurrent = this.state.currentTask;
     const wasCurrent = priorCurrent?.taskId === taskId;
 
@@ -1326,7 +1326,9 @@ export class AppStore {
     this.pushUndo(`Snoozed "${task?.name || 'task'}"`, async () => {
       await this.patchTask(taskId, {
         notTodayUntil: priorSnooze,
-        ...(wasCurrent ? { timeboxEndsAt: priorTimebox } : {}),
+        ...(wasCurrent
+          ? { timeboxEndsAt: priorTimebox, startedAt: priorStartedAt, activeAccumulatedMs: priorAccumulated }
+          : {}),
       });
       if (wasCurrent) {
         this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
@@ -1342,22 +1344,36 @@ export class AppStore {
     });
   }
 
-  async clearCurrent(): Promise<void> {
-    /*
-      Putting the task down stops its timebox — pauseWork's own principle:
-      the clock stops with the work. Without this, the card's ✕ left the box
-      ticking and the app-wide watcher (built precisely to fire on every
-      screen) faithfully alarmed for a task already walked away from
-      (2026-08-06 report). Guarded so completeTask's tail — which clears the
-      box itself first — costs no extra write here.
-    */
-    const prior = this.state.currentTask?.taskId;
-    if (prior) {
-      const t = this.state.tasks.find((x) => x.id === prior);
-      if (t && !t.deleted && t.completedAt === undefined && t.timeboxEndsAt !== undefined) {
-        await this.patchTask(prior, { timeboxEndsAt: undefined });
-      }
+  /**
+   * "The clock stops with the work", the whole principle in one place: when a
+   * task stops being actively worked, its timebox dies AND its running
+   * stretch is BANKED into activeAccumulatedMs (2026-08-20 ask — before
+   * this, only the timebox stopped, so a task put down overnight counted the
+   * night as work and a three-session task reported days of wall time).
+   * `inProgress` survives: it's still in progress, just not being worked
+   * this minute. Re-accepting stamps a fresh startedAt and the tally resumes.
+   * Guarded field-by-field so completeTask's tail — which consumes the
+   * stretch itself first — costs no extra write here.
+   */
+  private async putDownWork(taskId: string): Promise<void> {
+    const t = this.state.tasks.find((x) => x.id === taskId);
+    if (!t || t.deleted || t.completedAt !== undefined) return;
+    const patch: Partial<Task> = {};
+    if (t.timeboxEndsAt !== undefined) patch.timeboxEndsAt = undefined;
+    if (t.startedAt !== undefined) {
+      const banked = (t.activeAccumulatedMs ?? 0) + (Date.now() - t.startedAt);
+      patch.startedAt = undefined;
+      patch.activeAccumulatedMs = banked > 0 ? banked : undefined;
     }
+    if (Object.keys(patch).length > 0) await this.patchTask(taskId, patch);
+  }
+
+  async clearCurrent(): Promise<void> {
+    // Putting the task down = box stops AND the stretch banks (see
+    // putDownWork; the box half dates to the 2026-08-06 phantom-alarm
+    // report, the clock half to 2026-08-20).
+    const prior = this.state.currentTask?.taskId;
+    if (prior) await this.putDownWork(prior);
     const clearedStamp = await this.repo.setCurrentTask(null);
     this.state.currentTask = null;
     this.state.currentTaskUpdatedAt = clearedStamp;

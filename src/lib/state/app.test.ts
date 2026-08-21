@@ -1467,3 +1467,40 @@ describe('the work clock', () => {
     expect(row.startedAt).toBe(new Date('2026-08-08T10:30:00').getTime());
   });
 });
+
+describe('the work clock tallies ACTIVE sessions, not wall time (2026-08-20 ask)', () => {
+  it('putting the current task down banks the stretch; re-accepting resumes the tally', async () => {
+    vi.setSystemTime(new Date('2026-08-20T09:00:00'));
+    const list = await store.addList('Deep');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { name: 'long essay' });
+    await store.acceptTask(t.id);
+
+    vi.setSystemTime(new Date('2026-08-20T09:05:00')); // five minutes of work
+    await store.clearCurrent();
+    const paused = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(paused.startedAt, 'the clock stops with the work').toBeUndefined();
+    expect(paused.activeAccumulatedMs).toBe(5 * 60_000);
+    expect(paused.inProgress, 'still in progress — just not being worked').toBe(true);
+
+    vi.setSystemTime(new Date('2026-08-21T14:00:00')); // a whole DAY later…
+    await store.acceptTask(t.id);
+    vi.setSystemTime(new Date('2026-08-21T14:03:00')); // …three more minutes
+    await store.completeTask(t.id);
+    const done = store.state.tasks.find((x) => x.id === t.id)!;
+    expect(done.activeMs, '5m + 3m; the day in between never counted').toBe(8 * 60_000);
+  });
+
+  it('accepting a different task puts the displaced one down the same way', async () => {
+    vi.setSystemTime(new Date('2026-08-20T10:00:00'));
+    const list = await store.addList('Swap');
+    const a = await store.addTask(list.id);
+    const b = await store.addTask(list.id);
+    await store.acceptTask(a.id);
+    vi.setSystemTime(new Date('2026-08-20T10:02:00'));
+    await store.acceptTask(b.id); // displaces a
+    const displaced = store.state.tasks.find((x) => x.id === a.id)!;
+    expect(displaced.startedAt).toBeUndefined();
+    expect(displaced.activeAccumulatedMs).toBe(2 * 60_000);
+  });
+});
