@@ -111,3 +111,48 @@ describe('TimeboxAlarm', () => {
     expect((await obj.fetch(post({ action: 'set', at: 1 }))).status).toBe(400);
   });
 });
+
+describe('alarm retries (2026-08-22: "I got two pushes, one soon after the other")', () => {
+  it('a send that dies mid-flight is never repeated — one alarm, one push', async () => {
+    // Durable Object alarms RETRY on throw, and a send that fails after the
+    // push service already accepted it looks exactly like one that failed
+    // before. Retrying that is a duplicate notification; the box only
+    // finishes once, so at-most-once wins over at-least-once here.
+    const ctx = fakeCtx();
+    const sent: unknown[] = [];
+    class Flaky extends TimeboxAlarm {
+      async sendPush(subscription: unknown) {
+        sent.push(subscription);
+        throw new Error('connection reset while reading the response');
+      }
+    }
+    const obj = new Flaky(ctx, ENV);
+    await obj.fetch(post({ action: 'set', at: 1000, subscription: SUB, title: 'T', body: 'B' }));
+
+    await expect(obj.alarm()).rejects.toThrow(); // the throw reaches the runtime…
+    await obj.alarm();                           // …which retries
+    expect(sent, 'the unknown outcome is not retried').toHaveLength(1);
+  });
+
+  it('a push the service REJECTED does retry — that one certainly never landed', async () => {
+    const ctx = fakeCtx();
+    const sent: unknown[] = [];
+    let failFirst = true;
+    class Rejecting extends TimeboxAlarm {
+      async sendPush(subscription: unknown) {
+        sent.push(subscription);
+        if (failFirst) {
+          failFirst = false;
+          const err = new Error('push rejected: 500') as Error & { rejected?: boolean };
+          err.rejected = true; // the push service answered, and said no
+          throw err;
+        }
+      }
+    }
+    const obj = new Rejecting(ctx, ENV);
+    await obj.fetch(post({ action: 'set', at: 1000, subscription: SUB, title: 'T', body: 'B' }));
+    await expect(obj.alarm()).rejects.toThrow();
+    await obj.alarm();
+    expect(sent, 'a known rejection is worth another go').toHaveLength(2);
+  });
+});

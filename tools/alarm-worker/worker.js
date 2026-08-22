@@ -56,16 +56,38 @@ export class TimeboxAlarm {
       have found no subscription and returned quietly — the alarm firing
       correctly, on time, and doing nothing, with no error anywhere to say so.
     */
-    const stored = await this.ctx.storage.get(['subscription', 'title', 'body']);
+    const stored = await this.ctx.storage.get(['subscription', 'title', 'body', 'attempted']);
     const subscription = stored.get('subscription');
     if (!subscription) return; // cancelled and emptied; a late alarm is not an error
 
-    // Deleted only after a successful send: alarms retry on throw, and losing
-    // the subscription first would turn one failure into silence forever.
-    await this.sendPush(subscription, {
-      title: stored.get('title'),
-      body: stored.get('body'),
-    });
+    /*
+      Alarms RETRY on throw, and an attempt that died mid-flight cannot tell
+      you whether the push service already accepted it — so retrying one is
+      how a single finished timebox announces itself twice (reported
+      2026-08-22, two pushes seconds apart). A box finishes once, and the
+      in-app watcher still announces it on return, so at-most-once beats
+      at-least-once here: an attempt of unknown outcome is never repeated.
+
+      Marked BEFORE the send, because the whole point is to survive an
+      attempt that never comes back to write anything.
+    */
+    if (stored.get('attempted')) {
+      await this.ctx.storage.deleteAll();
+      return;
+    }
+    await this.ctx.storage.put({ attempted: true });
+
+    try {
+      await this.sendPush(subscription, {
+        title: stored.get('title'),
+        body: stored.get('body'),
+      });
+    } catch (err) {
+      // A REJECTION is different: the service answered, so that push
+      // certainly never landed and a retry cannot duplicate it.
+      if (err && err.rejected) await this.ctx.storage.put({ attempted: false });
+      throw err;
+    }
     await this.ctx.storage.deleteAll();
   }
 
@@ -92,7 +114,11 @@ export class TimeboxAlarm {
     // would drop the alarm silently, which is the failure mode this whole
     // feature exists to avoid.
     if (!res.ok && res.status !== 410) {
-      throw new Error(`push rejected: ${res.status}`);
+      // Flagged as a definite rejection so alarm() knows a retry is safe —
+      // an exception thrown anywhere else has an unknowable outcome.
+      const err = new Error(`push rejected: ${res.status}`);
+      err.rejected = true;
+      throw err;
     }
   }
 }
