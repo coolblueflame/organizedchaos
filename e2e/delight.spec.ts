@@ -130,3 +130,32 @@ test('a tap that was already in flight cannot wipe a note unread', async ({ page
   await page.getByTestId('back').click();
   await expect(page.getByTestId('delight-note')).toBeVisible();
 });
+
+test('a story beat counts as told even when you tap away instead of closing it', async ({ page }) => {
+  // THE stall behind three pacing retunes (found 2026-08-22): every beat is
+  // gated on the exact stage before it AND may fire once in a lifetime, so a
+  // beat that showed without advancing the stage burned itself and left the
+  // arc deadlocked — silent forever, whatever the weights say.
+  await reset(page, 'story-0');
+  await completeOne(page);
+  await expect(page.getByTestId('delight-story')).toBeVisible();
+
+  // Dismiss the way a busy person does: get on with the next thing. The
+  // capture-phase listener clears the card without its own close handler —
+  // after the presenter's 3s protected window, which exists so a tap already
+  // in flight can't wipe a card unread.
+  await page.waitForTimeout(3200);
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('delight-story')).toHaveCount(0);
+
+  const stage = await page.evaluate(() => new Promise<number>((resolve, reject) => {
+    const open = indexedDB.open('organizedchaos');
+    open.onsuccess = () => {
+      const req = open.result.transaction('kv').objectStore('kv').get('eggState');
+      req.onsuccess = () => resolve((req.result?.value as { storyStage?: number })?.storyStage ?? 0);
+      req.onerror = () => reject(req.error);
+    };
+    open.onerror = () => reject(open.error);
+  }));
+  expect(stage, 'the beat was told, so the story moved on').toBe(1);
+});

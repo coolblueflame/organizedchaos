@@ -364,3 +364,35 @@ describe('the streak record', () => {
     expect(e.bestStreakDays).toBe(9);
   });
 });
+
+describe('the story-stage heal (2026-08-22 stall repair)', () => {
+  it('steps the stage past beats already SHOWN, and stops at the first unread one', async () => {
+    // Ben's live shape: two beats told, but a tap-away dismissal left the
+    // stage behind — with each beat gated on the one before it AND capped at
+    // one lifetime showing, the arc could never resume.
+    saved = {
+      seen: {
+        'story-0': { count: 1, lastAt: 1000, day: '2026-08-01', dayCount: 1 },
+        'story-1': { count: 1, lastAt: 2000, day: '2026-08-02', dayCount: 1 },
+      },
+      trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 1,
+      lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+      lastCompletionDay: '', streakDays: 0,
+    };
+    const e = makeEngine([0.99]);
+    await e.ready;
+    expect(e.storyStage, 'both told beats are behind us now').toBe(2);
+  });
+
+  it('never skips a beat that was never shown', async () => {
+    saved = {
+      seen: { 'story-0': { count: 1, lastAt: 1000, day: '2026-08-01', dayCount: 1 } },
+      trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
+      lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+      lastCompletionDay: '', streakDays: 0,
+    };
+    const e = makeEngine([0.99]);
+    await e.ready;
+    expect(e.storyStage, 'story-1 is unread, so it stays next').toBe(1);
+  });
+});

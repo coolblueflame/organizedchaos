@@ -211,8 +211,26 @@ export class EggEngine {
           // revocation stays applied no matter what wrote the blob last.
           unlocks: resolveHeldUnlocks(s.unlocks ?? [], s.unlockGrants, s.unlockRevokes),
         };
+        this.healStoryStage();
       }
     });
+  }
+
+  /**
+   * Walk the stage past beats that were already SHOWN.
+   *
+   * Repair for libraries stalled by the advance-on-close bug (fixed
+   * 2026-08-22 in DelightLayer): a beat dismissed by tapping away recorded
+   * itself as seen without moving the stage, and since each beat is gated on
+   * the stage before it and fires once per lifetime, the arc could never
+   * resume — the next beat waits for a stage that will never arrive.
+   *
+   * Self-verifying, so it can never skip unread content: it only steps over
+   * ids the `seen` map proves were presented, and stops at the first that
+   * wasn't. Runs at load, costs one map lookup per healed beat.
+   */
+  private healStoryStage(): void {
+    while (this.state.seen[`story-${this.state.storyStage}`]) this.state.storyStage += 1;
   }
 
   get streakDays(): number { return this.state.streakDays; }

@@ -27,9 +27,27 @@
   }
 
   function closeStory() {
-    if (current?.kind === 'story') app.advanceStory(current.stage);
-    presenter.dismiss();
+    presenter.dismiss(); // the stage already advanced when the beat appeared
   }
+
+  /*
+    A beat that reaches the screen HAS been told — so the stage advances on
+    presentation, not on one particular way of dismissing it.
+
+    The stall behind three pacing retunes (found 2026-08-22, with Ben three
+    weeks into an arc that never moved past its second beat): advanceStory
+    lived only in the close handler, but tapping on with your work dismisses
+    the card through the presenter's away-listener instead. Since every beat
+    is gated `exactStoryStage` on the one before it AND may fire once in a
+    lifetime, a beat shown that way burned itself while leaving the stage
+    behind — the next beat could never be eligible, and the story went
+    silent forever no matter how heavily the weights favoured it. (The
+    pacing sim modelled advance-on-presentation all along, which is why it
+    kept reporting a healthy cadence the app could never deliver.)
+  */
+  $effect(() => {
+    if (current?.kind === 'story') app.advanceStory(current.stage);
+  });
 
   // On unlock display: confetti-adjacent celebration.
   $effect(() => {
