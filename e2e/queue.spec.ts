@@ -196,3 +196,31 @@ test('a completed ritual leaves the day queue', async ({ page }) => {
   await page.getByTestId(/^list-row-/).first().click();
   await expect(page.getByText('drink water', { exact: true })).toBeVisible();
 });
+
+test('ticking a queued task celebrates like every other checkbox', async ({ page }) => {
+  await reset(page);
+  await makeList(page, 'Party');
+  await addTask(page, 'the queued one');
+  await queueByEditor(page, 'the queued one');
+  await page.getByTestId('back').click();
+
+  // The queue's checkbox finished in silence while list rows and the
+  // current-task card both threw confetti (2026-08-22 report). Bursts are
+  // drawn to a shared canvas, so the count is the only honest witness.
+  const bursts = () => page.evaluate(
+    () => (window as unknown as { __ocBurstsEmitted?: () => number }).__ocBurstsEmitted?.() ?? 0);
+  // Wait for the row to EXIST before reading it: count()/getAttribute() don't
+  // auto-wait, and home renders its queue a beat after the mirror loads.
+  const row = page.locator('[data-queue-row]').first();
+  await row.waitFor();
+  const before = await bursts();
+  const id = (await row.getAttribute('data-queue-row'))!;
+  await page.getByTestId(`queue-check-${id}`).click();
+  await expect.poll(bursts, { message: 'the queue throws confetti too' })
+    .toBeGreaterThan(before);
+
+  // …and the completion itself still lands, animation gate and all.
+  await expect(page.getByTestId(`queue-row-${id}`)).toHaveCount(0);
+  await page.getByTestId('completed-link').click();
+  await expect(page.getByText('the queued one', { exact: true })).toBeVisible();
+});

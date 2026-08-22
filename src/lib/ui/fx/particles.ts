@@ -43,6 +43,19 @@ let ctx: CanvasRenderingContext2D | null = null;
 let rafId = 0;
 let lastTs = 0;
 
+/*
+  Test seam, same idea as clock.svelte's __ocTickClock: particles live in a
+  module-private pool drawn to one shared canvas, so "did that click
+  celebrate?" is otherwise unobservable from the DOM. Counts bursts over the
+  page's LIFETIME, not live particles: a check running after the confetti has
+  faded would otherwise read zero and call a real celebration missing.
+*/
+let lifetimeBursts = 0;
+if (typeof window !== 'undefined') {
+  (window as unknown as { __ocBurstsEmitted?: () => number }).__ocBurstsEmitted =
+    () => lifetimeBursts;
+}
+
 let reduced = false;
 if (typeof window !== 'undefined' && 'matchMedia' in window) {
   const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -138,6 +151,7 @@ export function burstAt(x: number, y: number, opts: BurstOptions = {}): void {
     count = 14, colors = ACCENTS, power = 1,
     sizeScale = 1, lifeScale = 1, ring = false, upward = 150, shape,
   } = opts;
+  lifetimeBursts += 1; // one burst = one countable celebration (see the seam)
   for (let i = 0; i < count && pool.length < MAX_PARTICLES; i++) {
     // A ring wants even spacing; everything else looks better scattered.
     const angle = ring

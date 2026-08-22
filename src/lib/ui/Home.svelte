@@ -32,6 +32,8 @@
   import { haptic } from './fx/haptics';
   import Glyph from './Glyph.svelte';
   import VaultToggle from './VaultToggle.svelte';
+  import { celebrateFromElement } from './fx/celebrate';
+  import { completionCounts } from '../domain/stats';
 
   let quickAddOpen = $state(false);
 
@@ -322,6 +324,27 @@
   // no idea the component is gone and would keep scrolling the next screen.
   $effect(() => () => abortDrags());
 
+  /**
+   * Ticking a queue row finishes a task, so it earns the same moment the
+   * list rows and the current-task card give (2026-08-22 report: the queue
+   * completed in silence). Same shape as TaskRow.complete: juice is garnish
+   * — the completion runs even if fx throw — and the mutation waits out the
+   * animation so the burst isn't cut off by the row leaving.
+   */
+  let queueCompleting = $state<string | null>(null);
+  function completeFromQueue(e: MouseEvent, taskId: string) {
+    if (queueCompleting) return;
+    queueCompleting = taskId;
+    try {
+      const done = completionCounts(app.state.tasks, new Date(), app.state.settings.rolloverHour);
+      celebrateFromElement(e.currentTarget as Element, { completionsToday: done.today + 1 });
+      haptic('success');
+    } catch { /* never block completion on fx */ }
+    setTimeout(() => {
+      void app.completeTask(taskId).finally(() => (queueCompleting = null));
+    }, motionOk() ? 280 : 0);
+  }
+
   let clearArmed = $state(false);
   let clearTimer: ReturnType<typeof setTimeout> | undefined;
   function clearQueueTap() {
@@ -535,8 +558,10 @@
             <Glyph name="grip" size={12} />
           </button>
           <span class="q-pos">{i + 1}</span>
+          <!-- Celebrated like every other checkbox in the app (2026-08-22
+               report: the queue was the one that finished in silence). -->
           <button class="q-check" data-testid="queue-check-{t.id}" aria-label="mark done"
-            onclick={() => void app.completeTask(t.id)}><Glyph name="box" size={15} /></button>
+            onclick={(e) => completeFromQueue(e, t.id)}><Glyph name="box" size={15} /></button>
           <!-- The deep link, not just the list: tapping a plan entry means
                "show me THIS one" — landing on the list and hunting for the
                row again was the whole trip twice (2026-08-19 report). -->
