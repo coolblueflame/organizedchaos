@@ -222,23 +222,48 @@ describe('drawTask — tier selection', () => {
     expect(drawTask([overdueLow, plainHigh], DEFAULT_SETTINGS, now, firstRng)!.id).toBe(overdueLow.id);
   });
 
-  it('weights in-progress tasks heavily but not absolutely', () => {
+  it('favours started work heavily but not absolutely', () => {
     const fresh = task({ priority: 'high' });
     const started = task({ priority: 'high', inProgress: true });
     const pool = [fresh, started];
 
-    // Weights are 1 (fresh) then 5 (started) over a total of 6: a roll below
-    // 1/6 lands on the fresh task, anything above it on the started one.
-    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.05)!.id).toBe(fresh.id);
+    // The group roll comes first: under STARTED_FIRST_CHANCE picks from what
+    // is already open, at or above it from the untouched pile.
     expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.5)!.id).toBe(started.id);
+    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.95)!.id).toBe(fresh.id);
 
-    // Over many uniform draws the started task should dominate ~5:1.
     let startedHits = 0;
     for (let i = 0; i < 600; i++) {
       if (drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id === started.id) startedHits += 1;
     }
-    expect(startedHits).toBeGreaterThan(420); // ≈83% expected, allow slack
-    expect(startedHits).toBeLessThan(600);    // but never a hard lock
+    expect(startedHits).toBeGreaterThan(420); // ≈80% expected, allow slack
+    expect(startedHits).toBeLessThan(560);    // but never a hard lock
+  });
+
+  it('the promise holds when the untouched pile dwarfs the started one', () => {
+    // THE 2026-08-24 measurement: a real tier held 12 started tasks against
+    // 824 untouched, where the old per-task 5:1 came to ~7% — the whole
+    // reason this became a group-level roll. Population must not dilute it.
+    const started = Array.from({ length: 12 }, () => task({ priority: 'high', inProgress: true }));
+    const cold = Array.from({ length: 824 }, () => task({ priority: 'high' }));
+    const pool = [...cold, ...started];
+    const startedIds = new Set(started.map((t) => t.id));
+
+    let hits = 0;
+    for (let i = 0; i < 500; i++) {
+      if (startedIds.has(drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id)) hits += 1;
+    }
+    expect(hits / 500, 'roughly four draws in five, whatever the ratio').toBeGreaterThan(0.7);
+    expect(hits / 500).toBeLessThan(0.9);
+  });
+
+  it('a tier of only untouched work still draws every one of them', () => {
+    // The group roll must not strand anyone when there is nothing started:
+    // no bucket to prefer means an ordinary uniform pick over the tier.
+    const pool = [task({ priority: 'high' }), task({ priority: 'high' }), task({ priority: 'high' })];
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) seen.add(drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id);
+    expect(seen.size).toBe(3);
   });
 
   it('priority still beats in-progress across tiers', () => {

@@ -84,12 +84,20 @@ export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Ta
 }
 
 /**
- * How much likelier an already-started task is to be drawn than an untouched
- * one in the same tier. Weighted rather than absolute so a long-running task
- * can't monopolise the draw forever — you still get variety, you just get
- * nudged hard toward finishing what you started.
+ * How often the dice reach for work you have ALREADY STARTED, when the
+ * winning tier holds both started and untouched tasks.
+ *
+ * A GROUP-level roll, not a per-task weight (2026-08-24 ask, after the
+ * per-task version was measured against a real library). The old rule made
+ * one started task five times likelier than one untouched task — which
+ * sounds strong until the tier holds 12 started and 824 untouched, where
+ * 5:1 per task still comes to about one draw in fifteen. Weighting the
+ * CHOICE instead of the tasks makes the promise independent of how lopsided
+ * the pile is: four draws in five come from what's already open, however
+ * many of each there are. Not 100%, because sometimes the honest answer is
+ * that the started pile is stale and something fresh deserves a look.
  */
-export const IN_PROGRESS_WEIGHT = 5;
+export const STARTED_FIRST_CHANCE = 0.8;
 
 export function drawTask(
   tasks: Task[],
@@ -168,22 +176,31 @@ export function drawTask(
   /*
     An intrinsic-empty tier is here purely on PROJECT pressure (task-level
     lifts count as intrinsic above), and project pressure is about FINISHING
-    the list: started tasks are served absolutely first, not merely 5:1
-    weighted (2026-07-30 ask) — completing one shrinks the remaining estimate;
-    starting another just spreads the work thinner. Ordinary draws keep the
-    weighted preference so no single task can monopolise the dice.
+    the list: started tasks are served ABSOLUTELY first here, not merely
+    preferred (2026-07-30 ask) — completing one shrinks the remaining
+    estimate; starting another just spreads the work thinner. Ordinary draws
+    keep the softer preference below, so no single task owns the dice.
   */
   if (intrinsic.length === 0) {
     const started = candidates.filter((t) => t.inProgress);
     if (started.length > 0) candidates = started;
   }
 
-  const weightOf = (t: Task) => (t.inProgress ? IN_PROGRESS_WEIGHT : 1);
-  const total = candidates.reduce((sum, t) => sum + weightOf(t), 0);
-  let roll = rng() * total;
-  for (const task of candidates) {
-    roll -= weightOf(task);
-    if (roll <= 0) return task;
-  }
-  return candidates[candidates.length - 1] ?? null;
+  /*
+    Pick the GROUP first, then a task inside it (see STARTED_FIRST_CHANCE).
+    Rolling the group is what keeps the promise honest when the two sides are
+    wildly different sizes — the alternative, weighting each started task
+    against each untouched one, quietly collapses to nothing in a tier that
+    holds hundreds of untouched tasks.
+  */
+  const started = candidates.filter((t) => t.inProgress);
+  const untouched = candidates.filter((t) => !t.inProgress);
+  const bucket = started.length > 0 && untouched.length > 0
+    ? (rng() < STARTED_FIRST_CHANCE ? started : untouched)
+    : candidates;
+
+  const pick = bucket[Math.floor(rng() * bucket.length)];
+  // Math.floor(rng() * n) is n only if rng() ever returns exactly 1; fall
+  // back rather than hand back undefined.
+  return pick ?? bucket[bucket.length - 1] ?? null;
 }
