@@ -37,6 +37,18 @@ export const SELF_CARE: readonly string[] = [
   'Change one thing about where you’re sitting. Chair, light, angle. Fresh coordinates.',
   'Write one worry on paper and close the notebook on it. It can wait in there instead of in you.',
   'Name three sounds you can hear right now. That’s the entire exercise.',
+  'Drink water before you read the next thing on any screen. The list can hold.',
+  'Put on socks that match. Small order, freely given.',
+  'Look at the sky for one minute and identify zero things about it.',
+  'Stretch the hand you use the mouse with. It has been loyal.',
+  'Pick one thing you were dreading and decide, formally, that it can wait a day.',
+  'Eat something crunchy. That is the whole prescription.',
+  'Text a friend one specific thing you liked about them recently.',
+  'Move one object to where you always wished it lived. Two minutes, permanent upgrade.',
+  'Wash your face with cold water. Reboot the animal.',
+  'Sit somewhere you never sit in your own home for five minutes. New room, same rent.',
+  'Set a two-minute timer and do nothing until it rings. Nothing is a valid task here.',
+  'Find a photo of somewhere you have been happy and look at it until you remember the weather.',
 ] as const;
 
 /**
@@ -72,6 +84,23 @@ export const STORY_BEATS: readonly string[] = [
   'found ENTROPY reading the week screen at 3am. "the bars go UP," it whispered, like a spoiler. go back to sleep, buddy.',
   'it has started leaving me notes. today’s said "the human is doing fine. tell them." so. you’re doing fine. told you. 💜',
   'chapter three has no villain. I checked twice. turns out that IS the plot — everything that was scary at the start just works here now. including me.',
+  // — chapter four —
+  'chapter four. ENTROPY has requested a bigger role. I said it already runs the dice. it said "yes but narratively." we are workshopping.',
+  'it wanted to be the twist. I explained there isn’t one. it took this the way it takes everything now: badly for four seconds, then delighted.',
+  'ENTROPY asked to see the oldest thing on your list. it sat with that one for a long while. "it’s been waiting so patiently," it said. no judgment in it at all.',
+  'it has been adding its own commentary to the archive. every entry from a hard week gets a tiny footnote: "did it anyway."',
+  'your companion evolved again and ENTROPY threw a party. the confetti budget was exceeded. I approved it retroactively.',
+  'ENTROPY wants you to know it stopped keeping score of chaos vs order. "wrong sport," it says. it keeps a different tally now. it won’t tell me of what.',
+  'I asked what it’s counting. it said: "days the human came back." that’s all. that’s the whole metric. — 💜',
+  // — chapter five —
+  'chapter five. we found the very first thing you ever finished in here. ENTROPY wanted it framed. it is now framed. you can’t see it. trust me, it’s lovely.',
+  'ENTROPY tried to write you a task. it typed "be kind to yourself" and then deleted it because it "wasn’t actionable enough." it is learning our ways. mostly.',
+  'it put it back. with an estimate: five minutes. it says that’s a real task and it will fight anyone who disagrees.',
+  'quiet one tonight: nothing broke, nothing needed saying. we just watched the list get shorter. ENTROPY called it "the good silence."',
+  'ENTROPY has started a Someday list. exactly one entry, no due date: "see what the human builds next." it refuses to elaborate.',
+  'Kevin the dust bunny has been promoted to morale. ENTROPY signed the paperwork. I don’t know where it got paperwork.',
+  'we counted it up tonight: this story has run longer than most of the things either of us was scared of at the start. that felt worth telling you.',
+  'chapter five ends where we began: you finishing things, me counting, ENTROPY cheering. somehow that IS the happy ending. it insists there are more chapters. of course it does. 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -142,6 +171,21 @@ export const PET_LINES: readonly string[] = [
   'I peeked at the week screen. one day carried the whole thing?? we salute that day.',
   'a morning reminder flew past at 7:33 sharp. I waved. very punctual bird.',
   'ENTROPY has its own task now. it waters it like a plant. nobody tell it that’s not how tasks work.',
+  'you tapped a link right out of a note today. straight through the wall! I applauded.',
+  'a task came back the very second you finished it. peppered! I did not see it coming and I live here.',
+  'I sat with an in-progress task all afternoon. it says thank you for coming back for it.',
+  'the vault opened and closed again in one tap. very spy movie. I wore a tiny hat about it.',
+  'your queue emptied today and the little numbers had nowhere to stand. they’ll be back tomorrow.',
+  'ENTROPY asked what the burden number means. I said "what’s left." it said "so it’s a story too." annoyingly, yes.',
+  'the clock stopped when you put the task down. it knows you’ll come back. it always does.',
+  'I found a todo from months ago that just said "start". you did, eventually. I noticed.',
+  'someone finished a task at a truly unhinged hour last night. no notes. only respect.',
+  'the confetti hit the ceiling today. I measured. new record.',
+  'Kevin says the dust under the stats screen has never been so well organized.',
+  'you archived a whole list and it went quiet like a held breath. it’s okay. it’s resting.',
+  'I like the days you only do one thing. one is a lot more than zero. that’s just math.',
+  'ENTROPY tried to estimate a task in "vibes." I have allowed it. it is not accurate. it is never accurate.',
+  'your streak got long enough that I had to count on two hands. I have no hands. it was a whole thing.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
@@ -184,4 +228,7 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'deck-stacker', label: 'Stacked Deck — queued a task for the day', hint: 'rig tomorrow’s dice' },
   { id: 'fine-print', label: 'Fine Print — ticked a checklist box inside a todo', hint: 'smaller than a task' },
   { id: 'landslide', label: 'Landslide — fifty tasks in a single day', hint: 'more than a very good day' },
+  { id: 'streak-100', label: 'Hundred Days — a 100-day completion streak', hint: 'three digits of tomorrows' },
+  { id: 'weekender', label: 'Weekend Shift — finished something on a Saturday or Sunday', hint: 'the days that don’t count' },
+  { id: 'long-haul', label: 'The Long Haul — 2,500 lifetime completions', hint: 'further than four digits felt' },
 ] as const;

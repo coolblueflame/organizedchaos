@@ -187,6 +187,12 @@ export const REGISTRY: EggDef[] = [
     const h = c.now.getHours();
     return h >= 0 && h < 2;
   }),
+  unlockEgg('streak-100', ['taskCompleted'], (c) => c.streakDays >= 100),
+  unlockEgg('long-haul', ['taskCompleted'], (c) => c.lifetimeCompletions >= 2500),
+  unlockEgg('weekender', ['taskCompleted'], (c) => {
+    const d = c.now.getDay();
+    return d === 0 || d === 6;
+  }),
   // quiz-whiz, quiz-master, konami, chaos-word, hatchling, sweeper, clairvoyant,
   // gardener and clockwork are granted directly by their own flows (grantUnlockAndShow).
 ];

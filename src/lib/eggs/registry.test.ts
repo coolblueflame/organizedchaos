@@ -52,6 +52,25 @@ describe('registry shape', () => {
     }
   });
 
+  /*
+    The other direction, which the test below cannot see: an unlock DEFINED
+    but wired to nothing shows in the discoveries list as ??? forever, and
+    nobody finds out until a user asks why they can't earn it. Anything not
+    driven by a registry entry must be granted by an explicit flow instead
+    (the codes, the trivia milestones, the one-shot feature discoveries).
+  */
+  it('every defined unlock is actually earnable', () => {
+    const DIRECT_GRANTS = new Set([
+      'chaos-word', 'clairvoyant', 'clockwork', 'gardener', 'hatchling',
+      'konami', 'load-bearing', 'quiz-master', 'quiz-whiz', 'sweeper',
+    ]);
+    const wired = new Set(
+      REGISTRY.filter((r) => r.id.startsWith('unlock-')).map((r) => r.id.slice('unlock-'.length)),
+    );
+    const orphans = UNLOCKS.map((u) => u.id).filter((id) => !wired.has(id) && !DIRECT_GRANTS.has(id));
+    expect(orphans, 'defined but unearnable — wire it or drop it').toEqual([]);
+  });
+
   it('unlock ids are unique and every registry unlock references a real one', () => {
     const ids = UNLOCKS.map((u) => u.id);
     expect(new Set(ids).size).toBe(ids.length);
