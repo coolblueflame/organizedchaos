@@ -20,14 +20,29 @@ export interface AlarmPlan {
 }
 
 /**
- * @param scheduled what we have already told the server, taskId → fire time
+ * One line of the ledger: when the box was said to fire, and whether the
+ * server actually confirmed it.
+ *
+ * `confirmed` exists because the two questions the ledger answers pull in
+ * opposite directions. "Should I schedule this?" wants to know what the
+ * server DEFINITELY has, so an unconfirmed attempt must be retried. "Should
+ * I cancel this?" wants to know what the server MIGHT have — and a request
+ * sent with keepalive can land after the page stops listening for the
+ * answer, so an unconfirmed attempt must still be cancellable. Recording
+ * only confirmed sends made those alarms invisible to the cancel pass and
+ * they fired over finished work (2026-08-27, the fourth report of it).
+ */
+export interface AlarmRecord { at: number; confirmed: boolean }
+
+/**
+ * @param scheduled what we have TRIED to tell the server, taskId → record
  * @param now boxes already past are not worth scheduling; the local watcher
  *        announces those the moment the app is looking, and a push for a
  *        deadline that has gone is just noise arriving late.
  */
 export function alarmPlan(
   tasks: Task[],
-  scheduled: ReadonlyMap<string, number>,
+  scheduled: ReadonlyMap<string, AlarmRecord>,
   now: number,
 ): AlarmPlan {
   const wanted = new Map<string, Task>();
@@ -39,10 +54,16 @@ export function alarmPlan(
 
   const schedule: AlarmPlan['schedule'] = [];
   for (const [taskId, task] of wanted) {
-    if (scheduled.get(taskId) === task.timeboxEndsAt) continue; // already correct
+    const known = scheduled.get(taskId);
+    // Only a CONFIRMED record at the right time counts as done; an attempt
+    // whose answer never arrived is repeated until one does.
+    if (known?.confirmed && known.at === task.timeboxEndsAt) continue;
     schedule.push({ taskId, at: task.timeboxEndsAt!, name: task.name });
   }
 
+  // Every id the ledger mentions, confirmed or not: taking back an alarm that
+  // was never scheduled costs one no-op request; missing one alarms over
+  // work already finished.
   const cancel: string[] = [];
   for (const taskId of scheduled.keys()) {
     if (!wanted.has(taskId)) cancel.push(taskId);

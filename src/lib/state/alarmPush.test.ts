@@ -180,6 +180,44 @@ describe('syncAlarms', () => {
     expect(after.sent[0]!.body).toMatchObject({ taskId: t.id, action: 'cancel' });
   });
 
+  it('a schedule the server may have taken is still cancellable, confirmed or not', async () => {
+    /*
+      THE fourth report of "I completed it early and it still alarmed"
+      (2026-08-27, Mac, one device, started and finished there). A scheduling
+      POST rides keepalive precisely so it survives the page going away — so
+      the SERVER can accept an alarm the browser never saw confirmed (tab
+      hidden mid-flight, response never read, connection dropped after the
+      request landed). The ledger only recorded confirmed sends, and the
+      cancel list is built from the ledger, so that alarm became invisible:
+      no entry, no cancel, and it fired at the original expiry.
+    */
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const lost = harness();
+    lost.send = async () => { throw new Error('page went away mid-flight'); };
+    await syncAlarms([t], [], SETTINGS, NOW, lost.send);
+
+    // The box is finished well before it would fire. The device must still
+    // try to take back an alarm it cannot prove was never scheduled.
+    const done = harness();
+    await syncAlarms([{ ...t, timeboxEndsAt: undefined, completedAt: NOW + 1000 }],
+      [], SETTINGS, NOW + 1000, done.send);
+    expect(done.sent.map((b) => b.body.action)).toEqual(['cancel']);
+    expect(done.sent[0]!.body.taskId).toBe(t.id);
+  });
+
+  it('an unconfirmed schedule is retried, not mistaken for done', async () => {
+    // The other half of the same contract: recording the attempt must not
+    // make the diff think the server is already correct.
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const lost = harness();
+    lost.send = async () => { throw new Error('lost'); };
+    await syncAlarms([t], [], SETTINGS, NOW, lost.send);
+
+    const ok = harness();
+    await syncAlarms([t], [], SETTINGS, NOW + 1000, ok.send);
+    expect(ok.sent.map((b) => b.body.action)).toEqual(['set']);
+  });
+
   it('a failed send is retried by the next sweep, a confirmed one is not', async () => {
     const t = task({ timeboxEndsAt: NOW + 60_000 });
     const fail = harness(500);

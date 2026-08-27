@@ -12,7 +12,7 @@
  * The Worker being down costs exactly the feature it provides and nothing
  * else — which is what keeps the app's no-hosting promise honest.
  */
-import { alarmBody, alarmPlan } from '../domain/alarmPlan';
+import { alarmBody, alarmPlan, type AlarmRecord } from '../domain/alarmPlan';
 import { lockedListIds } from '../domain/lock';
 import type { List, Settings, Task } from '../domain/types';
 
@@ -28,7 +28,7 @@ import type { List, Settings, Task } from '../domain/types';
  * task ids and timestamps only, never names.
  */
 const STORAGE_KEY = 'oc-alarms-told';
-const told = new Map<string, number>();
+const told = new Map<string, AlarmRecord>();
 let hydrated = false;
 
 function hydrate(): void {
@@ -37,8 +37,13 @@ function hydrate(): void {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     if (!raw) return;
-    for (const [id, at] of Object.entries(JSON.parse(raw) as Record<string, unknown>)) {
-      if (typeof at === 'number') told.set(id, at);
+    for (const [id, v] of Object.entries(JSON.parse(raw) as Record<string, unknown>)) {
+      // Rows written before the ledger recorded attempts are bare numbers;
+      // they describe sends the server confirmed, so they read as confirmed.
+      if (typeof v === 'number') told.set(id, { at: v, confirmed: true });
+      else if (v && typeof v === 'object' && typeof (v as AlarmRecord).at === 'number') {
+        told.set(id, { at: (v as AlarmRecord).at, confirmed: (v as AlarmRecord).confirmed === true });
+      }
     }
   } catch { /* unreadable — degrades to the old session-local behaviour */ }
 }
@@ -102,6 +107,16 @@ export async function syncAlarms(
     const locked = lockedListIds(lists, false);
     for (const s of plan.schedule) {
       const task = tasks.find((t) => t.id === s.taskId);
+      /*
+        Written BEFORE the request, deliberately. keepalive means this POST
+        can outlive the page that sent it, so the server may end up holding
+        an alarm whose answer nobody was left to hear. An unrecorded alarm is
+        one the cancel pass cannot see, and it fires over finished work — the
+        exact shape of four separate reports. Recorded unconfirmed, it stays
+        cancellable, and the diff still retries it until the server agrees.
+      */
+      told.set(s.taskId, { at: s.at, confirmed: false });
+      flush();
       try {
         const res = await send(url, {
           method: 'POST',
@@ -120,7 +135,7 @@ export async function syncAlarms(
             body: alarmBody(s.name, task ? locked.has(task.listId) : false),
           }),
         });
-        if (res.ok) { told.set(s.taskId, s.at); flush(); } // only a confirmed send updates the ledger
+        if (res.ok) { told.set(s.taskId, { at: s.at, confirmed: true }); flush(); }
       } catch { /* worker unreachable — the next diff retries by convergence */ }
     }
   }
@@ -135,6 +150,44 @@ export async function syncAlarms(
       });
       if (res.ok) { told.delete(taskId); flush(); }
     } catch { /* ditto */ }
+  }
+}
+
+/**
+ * What this device believes the Worker is holding for it — the readout behind
+ * the Settings line. Exists because "I completed it early and it still
+ * alarmed" has been reported four times and every fix before this one was
+ * reasoned about without ever being able to SEE the ledger (2026-08-27).
+ */
+export function scheduledAlarms(): Array<{ taskId: string; at: number; confirmed: boolean }> {
+  hydrate();
+  return [...told.entries()]
+    .map(([taskId, r]) => ({ taskId, at: r.at, confirmed: r.confirmed }))
+    .sort((a, b) => a.at - b.at);
+}
+
+/**
+ * Take back every alarm this device knows about — the manual escape hatch
+ * beside the readout. Convergent like the sweep: entries survive a failed
+ * send and the next diff tries them again.
+ */
+export async function cancelAllAlarms(
+  settings: Settings, send: typeof fetch = fetch,
+): Promise<void> {
+  const url = settings.alarmWorkerUrl?.trim();
+  const secret = settings.alarmWorkerSecret;
+  if (!url || !secret) return;
+  hydrate();
+  for (const taskId of [...told.keys()]) {
+    try {
+      const res = await send(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${secret}` },
+        keepalive: true,
+        body: JSON.stringify({ taskId, action: 'cancel' }),
+      });
+      if (res.ok) { told.delete(taskId); flush(); }
+    } catch { /* the sweep will keep trying */ }
   }
 }
 

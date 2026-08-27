@@ -11,6 +11,10 @@
   import Glyph from './Glyph.svelte';
   import LockGate from './LockGate.svelte';
   import { hasPin, lock, setPin } from './lock.svelte';
+  import { cancelAllAlarms, scheduledAlarms } from '../state/alarmPush.svelte';
+
+  /** The alarm readout, re-read on mount and on demand (see the ledger line). */
+  let alarmRows = $state(scheduledAlarms());
 
   let howToOpen = $state(false);
   let pinDraft = $state('');
@@ -286,6 +290,27 @@
         <button class="link" data-testid="alarm-secret-clear"
           onclick={() => setting({ alarmWorkerSecret: undefined })}>forget the saved secret</button>
       {/if}
+      <!-- The readout: what this device believes the Worker is holding. A
+           ghost alarm used to be invisible from inside the app, which is how
+           the same report survived three fixes. -->
+      <p class="hint alarm-ledger" data-testid="alarm-ledger">
+        {#if alarmRows.length === 0}
+          nothing scheduled from this device right now.
+        {:else}
+          {alarmRows.length} alarm{alarmRows.length === 1 ? '' : 's'} scheduled from this device
+          — next at {new Date(alarmRows[0]!.at).toLocaleTimeString()}{#if alarmRows.some((r) => !r.confirmed)}, {alarmRows.filter((r) => !r.confirmed).length} unconfirmed{/if}.
+        {/if}
+      </p>
+      <div class="alarm-tools">
+        <button class="link" data-testid="alarm-ledger-refresh"
+          onclick={() => (alarmRows = scheduledAlarms())}>refresh</button>
+        {#if alarmRows.length > 0}
+          <button class="link" data-testid="alarm-cancel-all"
+            onclick={() => void cancelAllAlarms(app.state.settings).then(() => (alarmRows = scheduledAlarms()))}>
+            cancel them all
+          </button>
+        {/if}
+      </div>
     </section>
   {/if}
 
