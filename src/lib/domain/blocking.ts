@@ -116,9 +116,15 @@ export function blockLifts(tasks: Task[], settings: Settings, now: Date): Map<st
  * already somewhere up blockerId's own chain of blockers — the UI uses this to
  * keep impossible dependencies out of the picker instead of catching them later.
  */
-export function wouldCycle(taskId: string, blockerId: string, tasks: Task[]): boolean {
+export function wouldCycle(
+  taskId: string,
+  blockerId: string,
+  tasks: Task[],
+  /** A prebuilt index, for callers testing many candidates against one graph. */
+  prebuilt?: Map<string, Task>,
+): boolean {
   if (taskId === blockerId) return true;
-  const index = byId(tasks);
+  const index = prebuilt ?? byId(tasks);
   const seen = new Set<string>();
   const stack = [blockerId];
   while (stack.length > 0) {
@@ -150,4 +156,43 @@ export function newlyUnblocked(completedId: string, tasks: Task[]): Task[] {
       (t.blockedBy ?? []).includes(completedId) &&
       openBlockerIds(t, index).every((id) => id === completedId),
   );
+}
+
+/**
+ * Blockers worth offering for `task`, given what has been typed.
+ *
+ * Two rules make bad states unreachable rather than merely detected: a
+ * finished task is never offered (it would block nothing), and neither is
+ * anything that already waits on THIS task, which would close a loop.
+ *
+ * The ORDER of the work is the whole point. Reported 2026-08-28: typing here
+ * froze the editor on a real library while the main search stayed fast,
+ * because the cycle check ran against every candidate and each call rebuilt
+ * an index of every task — quadratic, millions of operations per keystroke.
+ * Cheap tests come first, the graph is indexed once, and the walk runs only
+ * for rows about to be shown: `limit` of them, not thousands.
+ */
+export function blockerSuggestions(
+  tasks: Task[],
+  task: Pick<Task, 'id'> & { blockedBy?: string[] },
+  query: string,
+  limit = 6,
+): Task[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [];
+  const already = new Set(task.blockedBy ?? []);
+  const index = byId(tasks);
+
+  const out: Task[] = [];
+  for (const t of tasks) {
+    if (t.deleted || t.completedAt !== undefined) continue;
+    if (t.id === task.id || already.has(t.id)) continue;
+    if (!(t.name || 'untitled').toLowerCase().includes(q)) continue;
+    // Last, and only for rows that survived everything else. The shared index
+    // keeps a rare cycle-heavy library from re-walking the graph per check.
+    if (wouldCycle(task.id, t.id, tasks, index)) continue;
+    out.push(t);
+    if (out.length >= limit) break;
+  }
+  return out;
 }

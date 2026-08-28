@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockLifts, isBlocked, newlyUnblocked, openBlockerIds, wouldCycle } from './blocking';
+import { blockerSuggestions, blockLifts, isBlocked, newlyUnblocked, openBlockerIds, wouldCycle } from './blocking';
 import { drawTask, eligibleForDraw } from './randomizer';
 import { DEFAULT_SETTINGS, type Task } from './types';
 
@@ -111,6 +111,41 @@ describe('blocking', () => {
     expect(wouldCycle('a', 'a', [a, b, c])).toBe(true);
     expect(wouldCycle('a', 'c', [a, b, c])).toBe(true); // c already waits on a
     expect(wouldCycle('c', 'a', [a, b, c])).toBe(false); // c waiting on a is fine
+  });
+
+  it('blockerSuggestions offers only usable blockers, newest query wins', () => {
+    const self = task({ id: 'self', name: 'write the talk' });
+    const ok = task({ id: 'ok', name: 'book the room' });
+    const done = task({ id: 'done', name: 'book the flight', completedAt: 1 });
+    const gone = task({ id: 'gone', name: 'book nothing', deleted: true } as Partial<Task>);
+    const loop = task({ id: 'loop', name: 'book the loop', blockedBy: ['self'] });
+    const pool = [self, ok, done, gone, loop];
+
+    const got = blockerSuggestions(pool, self, 'book');
+    expect(got.map((t) => t.id), 'no finished, deleted, self, or cycle-making rows')
+      .toEqual(['ok']);
+    expect(blockerSuggestions(pool, self, '   ')).toEqual([]);
+    expect(blockerSuggestions(pool, { id: 'self', blockedBy: ['ok'] }, 'book')
+      .map((t) => t.id), 'already chosen drops out').toEqual([]);
+  });
+
+  it('stays responsive on a real-sized library', () => {
+    /*
+      Reported 2026-08-28: typing in the blocked-by picker froze the editor
+      while the main search stayed fast. The picker ran a cycle check per
+      CANDIDATE, and each one rebuilt an index of every task — quadratic on a
+      2,500-task library. The bound here is ~1000x looser than the fixed cost
+      and still far under the old one, so it fails loudly if that returns.
+    */
+    const many = Array.from({ length: 5000 }, (_, i) => task({ id: `m${i}`, name: `thing ${i}` }));
+    const subject = task({ id: 'subject', name: 'the one being edited' });
+    const pool = [subject, ...many];
+
+    const started = performance.now();
+    const got = blockerSuggestions(pool, subject, 'thing');
+    const took = performance.now() - started;
+    expect(got).toHaveLength(6);
+    expect(took, `blockerSuggestions took ${took.toFixed(0)}ms`).toBeLessThan(150);
   });
 
   it('newlyUnblocked reports only tasks with nothing else outstanding', () => {

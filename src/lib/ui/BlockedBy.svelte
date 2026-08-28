@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { wouldCycle } from '../domain/blocking';
+  import { blockerSuggestions } from '../domain/blocking';
   import Glyph from './Glyph.svelte';
   import type { Task } from '../domain/types';
 
@@ -28,21 +28,25 @@
 
   const MAX_SUGGESTIONS = 6;
 
+  /*
+    Typed text is answered a beat later, exactly like the main search screen:
+    a keystroke should never wait on a scan of the whole library. Paired with
+    blockerSuggestions doing its expensive cycle check last, this is what
+    turned a frozen editor back into a search box (2026-08-28 report).
+  */
+  let scanned = $state('');
+  $effect(() => {
+    const typed = query;
+    const timer = setTimeout(() => (scanned = typed), 120);
+    return () => clearTimeout(timer);
+  });
+
   const suggestions = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const already = new Set(task.blockedBy ?? []);
-    return app.state.tasks
-      .filter(
-        (t) =>
-          !t.deleted &&
-          t.completedAt === undefined &&
-          t.id !== task.id &&
-          !already.has(t.id) &&
-          (t.name || 'untitled').toLowerCase().includes(q) &&
-          !wouldCycle(task.id, t.id, app.state.tasks),
-      )
-      .slice(0, MAX_SUGGESTIONS);
+    // Snapshot first: matching runs over every task, and reading thousands of
+    // rows through the mirror's reactive proxies is itself the slow part
+    // (the same rule the stats screen carries).
+    const pool = $state.snapshot(app.state.tasks) as typeof app.state.tasks;
+    return blockerSuggestions(pool, task, scanned, MAX_SUGGESTIONS);
   });
 
   const listName = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '';
@@ -50,6 +54,7 @@
   async function add(blocker: Task) {
     const next = [...(task.blockedBy ?? []), blocker.id];
     query = '';
+    scanned = ''; // the list empties with the box, not 120ms later
     await app.patchTask(task.id, { blockedBy: next });
     input?.focus();
   }
