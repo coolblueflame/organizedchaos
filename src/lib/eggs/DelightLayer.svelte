@@ -8,6 +8,7 @@
   import { presenter } from './presenter.svelte';
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
+  import { focusOnMount } from '../ui/focusOnMount';
 
   let picked = $state<number | null>(null);
 
@@ -26,28 +27,22 @@
     presenter.dismiss();
   }
 
+  /**
+   * The reader pressed OK: only now is the beat told.
+   *
+   * Advancing merely because a beat APPEARED would lose one to any glance
+   * away — the story is finite, ordered, and each beat fires once, so a beat
+   * that vanishes unread can never come back. Two things make acknowledgement
+   * safe as the only trigger: the presenter refuses to clear a story card
+   * incidentally, and the engine remembers an unacknowledged beat across
+   * restarts and re-tells it. Without both, advancing here strands the arc —
+   * a beat marked seen while the stage stays put gates every later beat
+   * behind a stage that can never arrive.
+   */
   function closeStory() {
-    presenter.dismiss(); // the stage already advanced when the beat appeared
-  }
-
-  /*
-    A beat that reaches the screen HAS been told — so the stage advances on
-    presentation, not on one particular way of dismissing it.
-
-    The stall behind three pacing retunes (found 2026-08-22, with Ben three
-    weeks into an arc that never moved past its second beat): advanceStory
-    lived only in the close handler, but tapping on with your work dismisses
-    the card through the presenter's away-listener instead. Since every beat
-    is gated `exactStoryStage` on the one before it AND may fire once in a
-    lifetime, a beat shown that way burned itself while leaving the stage
-    behind — the next beat could never be eligible, and the story went
-    silent forever no matter how heavily the weights favoured it. (The
-    pacing sim modelled advance-on-presentation all along, which is why it
-    kept reporting a healthy cadence the app could never deliver.)
-  */
-  $effect(() => {
     if (current?.kind === 'story') app.advanceStory(current.stage);
-  });
+    presenter.dismiss();
+  }
 
   // On unlock display: confetti-adjacent celebration.
   $effect(() => {
@@ -68,7 +63,9 @@
    * protected window, so a tap already in flight can't wipe it unread.
    */
   $effect(() => {
-    if (!current || current.kind === 'trivia' || current.kind === 'moment') return;
+    // Story beats own the screen until acknowledged (see closeStory), so they
+    // do not listen for the tap that dismisses everything else.
+    if (!current || current.kind === 'trivia' || current.kind === 'moment' || current.kind === 'story') return;
     const away = () => presenter.dismissAway();
     document.addEventListener('pointerdown', away, true);
     return () => document.removeEventListener('pointerdown', away, true);
@@ -169,10 +166,30 @@
       <span>{current.text}</span>
     </button>
   {:else if current.kind === 'story'}
-    <button class="note story" data-testid="delight-story" onclick={closeStory}>
-      <span class="emoji">▚</span>
-      <span class="glitch-text">{current.text}</span>
-    </button>
+    <!--
+      A beat gets a WINDOW, not a tooltip (2026-08-29 ask): the story is the
+      one thing here that can only ever be told once, so it waits to be
+      acknowledged instead of yielding to the next tap. Dressed as a system
+      dialog from an older machine, because the teller is supposedly the app
+      itself and this is the only surface where it speaks as software.
+    -->
+    <div class="story-backdrop" data-testid="delight-story">
+      <div class="xp-window">
+        <div class="xp-title">
+          <span class="xp-name">organizedchaos.exe</span>
+          <span class="xp-buttons" aria-hidden="true">
+            <span class="xp-btn">_</span><span class="xp-btn">□</span><span class="xp-btn x">✕</span>
+          </span>
+        </div>
+        <div class="xp-body">
+          <span class="xp-icon" aria-hidden="true">▚</span>
+          <p class="glitch-text">{current.text}</p>
+        </div>
+        <div class="xp-actions">
+          <button class="xp-ok" data-testid="delight-story-ok" use:focusOnMount onclick={closeStory}>OK</button>
+        </div>
+      </div>
+    </div>
   {:else if current.kind === 'unlock'}
     <button class="note unlock" data-testid="delight-unlock" onclick={() => presenter.dismiss()}>
       <span class="emoji">🏆</span>
@@ -233,7 +250,61 @@
   .emoji { flex: none; }
   .unlock { border-color: var(--acc-yellow); }
   .unlock b { color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.7rem; }
-  .story { border-color: var(--acc-green); background: #0a1208; }
+  .story-backdrop {
+    position: fixed; inset: 0; z-index: 400;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: rgb(0 0 0 / 0.45);
+  }
+  /*
+    Deliberately square where the rest of the app is round: this is the app
+    talking as a program, and the join is the joke. Green throughout, so it
+    still reads as this app's own voice rather than a borrowed screenshot.
+  */
+  .xp-window {
+    width: min(92vw, 420px);
+    background: #0a1208;
+    border: 2px solid var(--acc-green);
+    border-radius: 6px 6px 4px 4px;
+    box-shadow: 0 18px 50px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(126 231 135 / 0.15);
+    animation: xp-open 0.16s ease-out;
+  }
+  @keyframes xp-open { from { opacity: 0; transform: scale(0.94); } }
+  @media (prefers-reduced-motion: reduce) { .xp-window { animation: none; } }
+  .xp-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 5px 6px 5px 10px;
+    background: linear-gradient(180deg, #1c3a1c, #0f2410);
+    border-bottom: 1px solid var(--acc-green);
+    border-radius: 4px 4px 0 0;
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--acc-green);
+  }
+  .xp-name { letter-spacing: 0.04em; }
+  .xp-buttons { display: inline-flex; gap: 4px; }
+  .xp-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 14px; font-size: 0.6rem; line-height: 1;
+    background: #14261a; border: 1px solid rgb(126 231 135 / 0.5); border-radius: 2px;
+    color: rgb(126 231 135 / 0.75);
+  }
+  /* Inert chrome, and it says so: the OK button is the only way out. */
+  .xp-btn.x { color: rgb(126 231 135 / 0.4); }
+  .xp-body { display: flex; gap: 10px; padding: 16px 14px 12px; align-items: flex-start; }
+  .xp-icon { color: var(--acc-green); font-size: 1.4rem; line-height: 1; flex: none; }
+  .xp-body p { margin: 0; color: var(--text); font-size: 0.9rem; line-height: 1.5; }
+  .xp-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 0 14px 14px;
+  }
+  .xp-ok {
+    min-width: 84px; padding: 6px 14px; cursor: pointer;
+    background: linear-gradient(180deg, #1c3a1c, #102a12);
+    border: 1px solid var(--acc-green); border-radius: 3px;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.8rem;
+    box-shadow: inset 0 1px 0 rgb(126 231 135 / 0.25);
+  }
+  .xp-ok:focus-visible { outline: 2px solid var(--acc-green); outline-offset: 2px; }
+  @media (hover: hover) { .xp-ok:hover { background: var(--acc-green); color: var(--bg0); } }
+  .xp-ok:active { transform: translateY(1px); }
   .glitch-text { font-family: var(--font-mono); color: var(--acc-green); font-size: 0.8rem; }
 
   .trivia-backdrop {

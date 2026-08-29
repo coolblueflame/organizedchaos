@@ -126,6 +126,7 @@ export class AppStore {
     await this.eggs.ready;
     this.repairMisgrantedUnlocks();
     this.syncEggMirrors();
+    this.retellPendingStory();
     // Replay anything the UI reported while the engine was still loading (the
     // app is interactive from `ready`, which lands two IndexedDB reads earlier).
     const buffered = this.pendingEggs.splice(0);
@@ -155,6 +156,30 @@ export class AppStore {
     const incidentMs = Date.UTC(2026, 7, 12, 16); // just after the accidental burst
     if (maxCompletionsInOneDay(this.state.tasks, this.state.settings.rolloverHour) >= 50) return;
     this.eggs.revokeUnlock('landslide', incidentMs);
+  }
+
+  /**
+   * Re-tell a beat that was shown but never acknowledged.
+   *
+   * The story is a finite ordered set told once each, so a beat interrupted
+   * by backgrounding the app used to be gone for good (2026-08-29 report).
+   * The engine remembers the debt across restarts; this pays it on the next
+   * open, before any ambient content can take the slot.
+   */
+  private retellPendingStory(): void {
+    // Not gated on automation like the lottery is: re-telling a beat the
+    // reader is owed involves no dice, and suppressing it would make the
+    // debt itself untestable.
+    const owed = this.eggs?.pendingStory;
+    if (owed === undefined) return;
+    const def = REGISTRY.find((r) => r.id === `story-${owed}`);
+    if (!def) return;
+    presenter.show(def.present({
+      event: 'appOpened', completionsToday: 0, lifetimeCompletions: 0,
+      streakDays: this.eggs!.streakDays, storyStage: this.eggs!.storyStage,
+      triviaCorrect: 0, triviaTotal: 0, unlocks: [],
+      daysSinceStoryBeat: null, now: new Date(), rng: Math.random,
+    }));
   }
 
   private syncEggMirrors(): void {
@@ -192,13 +217,17 @@ export class AppStore {
       const def = force ? REGISTRY.find((r) => r.id === force && r.triggers.includes(event)) : undefined;
       if (def) {
         localStorage.removeItem('OC_EGG_FORCE'); // one-shot: a forced entry fires once
-        presenter.show(def.present({
+        const forced = def.present({
           event, screen: extra.screen,
           completionsToday: counts.today, lifetimeCompletions: counts.lifetime,
           streakDays: this.eggs.streakDays, storyStage: this.eggs.storyStage,
           triviaCorrect: this.eggs.triviaStats.correct, triviaTotal: this.eggs.triviaStats.total,
           unlocks: this.eggs.unlocks, daysSinceStoryBeat: null, now: new Date(), rng: Math.random,
-        }));
+        });
+        // Same bookkeeping the picker does, so a forced beat behaves like a
+        // real one — including owing an acknowledgement.
+        if (forced.kind === 'story') this.eggs.noteStoryShown(forced.stage);
+        presenter.show(forced);
       }
       return;
     }

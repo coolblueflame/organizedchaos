@@ -365,6 +365,41 @@ describe('the streak record', () => {
   });
 });
 
+describe('a beat is told only when the reader says so', () => {
+  const STORY: EggDef[] = [
+    { id: 'story-0', weight: 1, triggers: ['taskCompleted'], exactStoryStage: 0, maxLifetime: 1,
+      present: () => ({ kind: 'story', text: 'beat one', stage: 1 }) },
+    { id: 'story-1', weight: 1, triggers: ['taskCompleted'], exactStoryStage: 1, maxLifetime: 1,
+      present: () => ({ kind: 'story', text: 'beat two', stage: 2 }) },
+  ];
+
+  it('showing a beat owes an acknowledgement; only that advances the stage', async () => {
+    const e = makeEngine([0, 0], STORY);
+    await e.ready;
+    expect(e.handle('taskCompleted', {})?.kind).toBe('story');
+    expect(e.pendingStory, 'owed until acknowledged').toBe(0);
+    expect(e.storyStage, 'not told yet').toBe(0);
+
+    e.advanceStory(1);
+    expect(e.pendingStory).toBeUndefined();
+    expect(e.storyStage).toBe(1);
+  });
+
+  it('a beat interrupted before it was read survives a restart', async () => {
+    // 2026-08-29: a beat appeared, the app was backgrounded, and it was gone
+    // for good — seen once, never told, and every later beat waits on a stage
+    // that can no longer arrive.
+    const e = makeEngine([0, 0], STORY);
+    await e.ready;
+    e.handle('taskCompleted', {}); // shown, never acknowledged
+
+    const reloaded = makeEngine([0, 0], STORY); // same saved state
+    await reloaded.ready;
+    expect(reloaded.pendingStory, 'the debt outlives the session').toBe(0);
+    expect(reloaded.storyStage, 'and the heal does not step over it').toBe(0);
+  });
+});
+
 describe('the story-stage heal (2026-08-22 stall repair)', () => {
   it('steps the stage past beats already SHOWN, and stops at the first unread one', async () => {
     // Ben's live shape: two beats told, but a tap-away dismissal left the

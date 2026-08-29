@@ -91,6 +91,12 @@ export class PresenterStore {
    * usually one that was already in flight when the thing appeared.
    */
   dismissAway(): void {
+    // A story beat is never dismissed by accident. It is one of a finite,
+    // ordered set that can only ever be told once, so losing one to a stray
+    // tap loses it for good — which is exactly what happened (2026-08-29).
+    // Everything else here is ambient and reproducible, and yielding to the
+    // work is the whole point of it.
+    if (this.current?.kind === 'story') return;
     if (this.settled) this.clear();
   }
 

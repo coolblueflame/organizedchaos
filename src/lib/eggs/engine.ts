@@ -95,6 +95,16 @@ export interface EggState {
   /** High-water mark of the streak — the record survives the streak breaking. */
   bestStreakDays?: number;
   /**
+   * A story beat that has been SHOWN but not yet acknowledged, as its index.
+   *
+   * Beats are finite, ordered and once-only, so "shown" is not good enough:
+   * an app backgrounded or reloaded before the reader taps OK would burn one
+   * forever (2026-08-29 report — a beat vanished mid-read and could never
+   * return). This survives with the rest of the delight state, and the app
+   * re-presents it on the next open until it is genuinely acknowledged.
+   */
+  pendingStory?: number;
+  /**
    * Per-unlock ownership clocks (see DelightProgress.unlockGrants): newest of
    * grant vs revoke wins, a clock-less held unlock counts as granted at 0.
    * They exist so a wrongly-granted discovery can be taken back without the
@@ -230,7 +240,12 @@ export class EggEngine {
    * wasn't. Runs at load, costs one map lookup per healed beat.
    */
   private healStoryStage(): void {
-    while (this.state.seen[`story-${this.state.storyStage}`]) this.state.storyStage += 1;
+    while (this.state.seen[`story-${this.state.storyStage}`]) {
+      // Stop at a beat that was shown but never acknowledged: it is owed to
+      // the reader and is about to be presented again, not walked past.
+      if (this.state.pendingStory === this.state.storyStage) break;
+      this.state.storyStage += 1;
+    }
   }
 
   get streakDays(): number { return this.state.streakDays; }
@@ -364,7 +379,10 @@ export class EggEngine {
     this.state.lastPresentedAt = ts;
     this.state.presentedDay = day;
     this.state.presentedToday = presentedToday + 1;
-    return chosen.present(ctx);
+    const shown = chosen.present(ctx);
+    // A beat is owed an acknowledgement from the moment it appears.
+    if (shown.kind === 'story') this.state.pendingStory = shown.stage - 1;
+    return shown;
   }
 
   recordTrivia(correct: boolean): void {
@@ -469,11 +487,30 @@ export class EggEngine {
     return hadIt && !this.state.unlocks.includes(id);
   }
 
-  /** Story only ever moves forward. */
+  /**
+   * The reader acknowledged a beat: the story moves on and the debt clears.
+   * Only ever forward — and only this settles pendingStory, which is what
+   * makes an unread beat come back instead of vanishing.
+   */
   advanceStory(toStage: number): void {
-    if (toStage > this.state.storyStage) {
-      this.state.storyStage = toStage;
-      this.persist();
-    }
+    const owed = this.state.pendingStory;
+    const settles = owed !== undefined && toStage >= owed + 1;
+    if (toStage <= this.state.storyStage && !settles) return;
+    if (toStage > this.state.storyStage) this.state.storyStage = toStage;
+    if (settles) this.state.pendingStory = undefined;
+    this.persist();
+  }
+
+  /** The beat still owed an acknowledgement, if any (see EggState.pendingStory). */
+  get pendingStory(): number | undefined { return this.state.pendingStory; }
+
+  /**
+   * Record the same debt for a beat shown outside the picker (the forced
+   * entry automation uses). Bookkeeping must not depend on which door the
+   * beat came through, or tests exercise a story the app never really tells.
+   */
+  noteStoryShown(stage: number): void {
+    this.state.pendingStory = stage - 1;
+    this.persist();
   }
 }

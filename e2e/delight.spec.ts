@@ -131,23 +131,28 @@ test('a tap that was already in flight cannot wipe a note unread', async ({ page
   await expect(page.getByTestId('delight-note')).toBeVisible();
 });
 
-test('a story beat counts as told even when you tap away instead of closing it', async ({ page }) => {
-  // THE stall behind three pacing retunes (found 2026-08-22): every beat is
-  // gated on the exact stage before it AND may fire once in a lifetime, so a
-  // beat that showed without advancing the stage burned itself and left the
-  // arc deadlocked — silent forever, whatever the weights say.
+test('a story beat waits for OK — nothing else can take it', async ({ page }) => {
+  // 2026-08-29: a beat appeared, the app was backgrounded, and it was gone
+  // for good. Beats are finite and once-only, so this one holds the screen
+  // until it is acknowledged. (The forced beat fires on app-open, so the
+  // dialog is already up — and everything behind it is deliberately
+  // unreachable, which is the feature.)
   await reset(page, 'story-0');
-  await completeOne(page);
   await expect(page.getByTestId('delight-story')).toBeVisible();
 
-  // Dismiss the way a busy person does: get on with the next thing. The
-  // capture-phase listener clears the card without its own close handler —
-  // after the presenter's 3s protected window, which exists so a tap already
-  // in flight can't wipe a card unread.
+  // Every other delight surface yields to the next tap anywhere; this must
+  // not — not even a tap on its own backdrop, well past the protected window.
   await page.waitForTimeout(3200);
-  await page.getByTestId('back').click();
-  await expect(page.getByTestId('delight-story')).toHaveCount(0);
+  await page.getByTestId('delight-story').click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId('delight-story'), 'still there, still unread').toBeVisible();
 
+  // A reload cannot swallow it either: the debt outlives the session.
+  await page.reload();
+  await expect(page.getByTestId('delight-story')).toBeVisible();
+
+  // OK is the only way out, and only then does the story move on.
+  await page.getByTestId('delight-story-ok').click();
+  await expect(page.getByTestId('delight-story')).toHaveCount(0);
   const stage = await page.evaluate(() => new Promise<number>((resolve, reject) => {
     const open = indexedDB.open('organizedchaos');
     open.onsuccess = () => {
@@ -157,5 +162,5 @@ test('a story beat counts as told even when you tap away instead of closing it',
     };
     open.onerror = () => reject(open.error);
   }));
-  expect(stage, 'the beat was told, so the story moved on').toBe(1);
+  expect(stage, 'acknowledged, so the story moved on').toBe(1);
 });

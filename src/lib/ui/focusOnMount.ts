@@ -1,5 +1,6 @@
 /**
- * Focus an input the moment it mounts, caret at the end.
+ * Focus an element the moment it mounts; a text field also gets its caret
+ * placed at the end.
  *
  * The `autofocus` ATTRIBUTE is not this: Chromium honours it only for
  * elements present at document load, so every dynamically-inserted inline
@@ -9,8 +10,11 @@
  * dismiss. (Caught because keyboard.type in an e2e types into the real
  * activeElement; fill() focuses explicitly and masked it for months.)
  */
-export function focusOnMount(node: HTMLInputElement): void {
+export function focusOnMount(node: HTMLElement): void {
   node.focus();
+  // Caret placement is for text fields; anything else (a dialog's OK button)
+  // just wants the focus, so it can be answered from the keyboard.
+  if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) return;
   const end = node.value.length;
   try {
     node.setSelectionRange(end, end);
