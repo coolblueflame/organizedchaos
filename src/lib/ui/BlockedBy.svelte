@@ -11,6 +11,8 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { blockerSuggestions } from '../domain/blocking';
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import Glyph from './Glyph.svelte';
   import type { Task } from '../domain/types';
 
@@ -45,7 +47,14 @@
     // Snapshot first: matching runs over every task, and reading thousands of
     // rows through the mirror's reactive proxies is itself the slow part
     // (the same rule the stats screen carries).
-    const pool = $state.snapshot(app.state.tasks) as typeof app.state.tasks;
+    // Locked lists are excluded before matching: this box searches by name,
+    // so offering their tasks would read hidden titles back out a letter at
+    // a time — the loudest version of the leak the recurring screen had.
+    const pool = withoutLocked(
+      $state.snapshot(app.state.tasks) as typeof app.state.tasks,
+      $state.snapshot(app.state.lists) as typeof app.state.lists,
+      lock.unlocked,
+    );
     return blockerSuggestions(pool, task, scanned, MAX_SUGGESTIONS);
   });
 

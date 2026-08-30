@@ -3,6 +3,8 @@
   pause/resume, edit (inline RecurrenceEditor), delete with undo.
 -->
 <script lang="ts">
+  import { lockedListIds } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { toast } from './toast.svelte';
@@ -34,7 +36,15 @@
     requestAnimationFrame(() => node.scrollIntoView({ block: 'center', behavior: 'smooth' }));
   }
 
-  const templates = $derived(app.state.templates.filter((t) => !t.deleted));
+  /*
+    A rule names its task as plainly as the task does, so a locked list's
+    rules are hidden exactly like its tasks (2026-08-30 report). Same rule
+    the search screen already followed; this screen had been missed.
+  */
+  const templates = $derived.by(() => {
+    const locked = lockedListIds(app.state.lists, lock.unlocked);
+    return app.state.templates.filter((t) => !t.deleted && !locked.has(t.listId));
+  });
 
   /** Template id → its live spawned copy, when one exists. */
   const openByTpl = $derived(

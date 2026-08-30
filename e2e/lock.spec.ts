@@ -133,3 +133,63 @@ test('the vault padlock opens and shuts the private lists right at the dice', as
   await page.getByTestId('back').click();
   await expect(page.getByTestId('vault-toggle')).toBeVisible();
 });
+
+test('a locked list keeps its names out of the recurring, rituals and blocker surfaces', async ({ page }) => {
+  // Reported 2026-08-30: recurring rules from a locked list showed their
+  // names on the Recurring screen while the app was locked. The same gap
+  // existed in two siblings — the rituals screen and the blocked-by picker,
+  // where typing letters would have searched hidden titles outright.
+  await seedList(page, 'Errands', 'buy milk');
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Secrets');
+  await page.getByTestId('new-list-input').press('Enter');
+
+  // A recurring rule and a ritual, both inside what will become the vault.
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('the secret weekly thing');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('3');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').last().click();
+
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('the secret daily thing');
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill('00:00');
+  await page.getByTestId('ritual-to').fill('23:59');
+  await page.getByTestId('ritual-save').click();
+  await page.getByTestId('task-collapse').last().click();
+  await page.getByTestId('back').click();
+
+  // Set the PIN, lock the list, then relock the session.
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-pin-input').fill('1234');
+  await page.getByTestId('settings-pin-save').click();
+  await page.getByTestId('back').click();
+  const secrets = page.getByTestId(/^list-row-/).filter({ hasText: 'Secrets' });
+  const listId = (await secrets.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId('list-settings-lock').click();
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-lock-now').click();
+  await page.getByTestId('back').click();
+
+  // Recurring screen: the rule is hidden while locked.
+  await page.getByTestId('recurring-link').click();
+  await expect(page.getByText('the secret weekly thing')).toHaveCount(0);
+  await page.getByTestId('back').click();
+
+  // Rituals screen: same rule, same silence.
+  await page.getByTestId('rituals-link').click();
+  await expect(page.getByText('the secret daily thing')).toHaveCount(0);
+  await page.getByTestId('back').click();
+
+  // And the blocked-by picker must not search what the PIN is hiding.
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Errands' }).click();
+  await page.getByText('buy milk', { exact: true }).click();
+  await page.getByTestId('blocked-by-toggle').click();
+  await page.getByTestId('blocked-by-input').fill('secret');
+  await page.waitForTimeout(300); // the picker answers a beat after typing
+  await expect(page.getByTestId(/^blocked-by-pick-/)).toHaveCount(0);
+});

@@ -8,6 +8,8 @@
   up, not permission.
 -->
 <script lang="ts">
+  import { withoutLocked } from '../domain/lock';
+  import { lock } from './lock.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { describeRitualTask, isRitualTask, ritualProgress, ritualState } from '../domain/ritual';
@@ -36,7 +38,8 @@
   });
 
   const rituals = $derived(
-    app.state.tasks.filter((t) => !t.deleted && isRitualTask(t)),
+    withoutLocked(app.state.tasks, app.state.lists, lock.unlocked)
+      .filter((t) => !t.deleted && isRitualTask(t)),
   );
 
   const stateOf = (t: Task) => ritualState(t, new Date(), app.state.settings.rolloverHour);
