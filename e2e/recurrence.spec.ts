@@ -313,3 +313,46 @@ test('a peppered task respawns instantly and the dice announce it', async ({ pag
   await expect(page.getByTestId('draw-card')).toContainText('stretch a little');
   await expect(page.getByTestId('draw-pepper')).toBeVisible();
 });
+
+test('the recurring screen can be re-ordered, and remembers which order', async ({ page }) => {
+  // 2026-08-30 ask. Before this the rules arrived in storage order — which is
+  // to say the order their random ids happened to land in.
+  const rule = async (list: string, name: string) => {
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.getByTestId('task-recur-row').click();
+    await page.getByTestId('recur-mode-afterCompletion').click();
+    await page.getByTestId('recur-interval').fill('2');
+    await page.getByTestId('recur-save').click();
+    await page.getByTestId('task-collapse').last().click();
+    void list;
+  };
+
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Alpha');
+  await page.getByTestId('new-list-input').press('Enter');
+  await rule('Alpha', 'zebra rule');
+  await page.getByTestId('back').click();
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Beta');
+  await page.getByTestId('new-list-input').press('Enter');
+  await rule('Beta', 'apple rule');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('recurring-link').click();
+  // Default groups by list, with the list's own name as the heading.
+  await expect(page.getByTestId('recurring-sort')).toContainText('by list');
+  await expect(page.getByTestId('recurring-group-Alpha')).toBeVisible();
+  await expect(page.getByTestId('recurring-group-Beta')).toBeVisible();
+
+  // Cycling to a–z drops the headings and sorts across every list.
+  await page.getByTestId('recurring-sort').click();
+  await expect(page.getByTestId('recurring-sort')).toContainText('a–z');
+  await expect(page.getByTestId('recurring-group-Alpha')).toHaveCount(0);
+  const names = page.locator('[data-testid^="recurring-open-"] .name');
+  await expect(names.first()).toHaveText('apple rule');
+
+  // The choice is a setting, so it survives a reload.
+  await page.reload();
+  await expect(page.getByTestId('recurring-sort')).toContainText('a–z');
+});

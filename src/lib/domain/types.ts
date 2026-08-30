@@ -285,6 +285,12 @@ export interface Settings {
    */
   vapidPublicKey?: string;
   /**
+   * How the Recurring screen arranges its rules (see domain/recurringOrder).
+   * Synced like any preference: an order you chose once should still be
+   * there tomorrow, and on the other device.
+   */
+  recurringSort?: 'list' | 'alpha' | 'next' | 'kept';
+  /**
    * Vacation mode (2026-08-19 ask): the randomizer ignores every list's
    * scheduled hours until this is turned back off. Synced like any setting —
    * a vacation is a fact about the person, not about one device. Off/unset =

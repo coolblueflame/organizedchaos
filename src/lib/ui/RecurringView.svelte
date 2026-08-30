@@ -9,6 +9,9 @@
   import { navigate } from './router.svelte';
   import { toast } from './toast.svelte';
   import { describeRecurrence } from './recurrenceText';
+  import {
+    groupRecurring, RECURRING_SORT_CYCLE, RECURRING_SORT_LABELS, type RecurringSort,
+  } from '../domain/recurringOrder';
   import type { RecurrenceMode, RecurrenceTemplate } from '../domain/types';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import Glyph from './Glyph.svelte';
@@ -45,6 +48,20 @@
     const locked = lockedListIds(app.state.lists, lock.unlocked);
     return app.state.templates.filter((t) => !t.deleted && !locked.has(t.listId));
   });
+
+  /*
+    The rules used to arrive in storage order — which is to say the order
+    their random ids happened to land in (2026-08-30 ask). The chosen order
+    is a synced setting, because it is a preference rather than a mood.
+  */
+  const sort = $derived<RecurringSort>(app.state.settings.recurringSort ?? 'list');
+  const grouped = $derived(groupRecurring(templates, sort, app.state.lists));
+  const cycleSort = () => {
+    const next = RECURRING_SORT_CYCLE[
+      (RECURRING_SORT_CYCLE.indexOf(sort) + 1) % RECURRING_SORT_CYCLE.length
+    ]!;
+    void app.updateSettings({ recurringSort: next });
+  };
 
   /** Template id → its live spawned copy, when one exists. */
   const openByTpl = $derived(
@@ -90,10 +107,16 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Recurring</h1>
+    <button class="sort" data-testid="recurring-sort" onclick={cycleSort}
+      title="how these are arranged">sort: {RECURRING_SORT_LABELS[sort]}</button>
   </header>
 
   <section class="rows">
-    {#each templates as tpl (tpl.id)}
+    {#each grouped as section (section.group)}
+    {#if section.group !== ''}
+      <h2 class="group-header" data-testid="recurring-group-{section.group}">{section.group}</h2>
+    {/if}
+    {#each section.templates as tpl (tpl.id)}
       <div class="row" data-testid="recurring-row-{tpl.id}"
         use:revealRow={tpl.id === revealId}>
         <div class="line">
@@ -144,6 +167,7 @@
         {/if}
       </div>
     {/each}
+    {/each}
     {#if templates.length === 0}
       <p class="empty">// no recurring tasks yet — set one up from any task's editor</p>
     {/if}
@@ -156,6 +180,19 @@
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
   .rows { display: flex; flex-direction: column; gap: 6px; }
+  /* Same section heading the home screen and the sort views use, so a
+     grouped surface reads the same wherever it appears. */
+  .group-header {
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 2px; font-weight: 600;
+  }
+  .sort {
+    margin-left: auto;
+    background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 6px 10px; cursor: pointer;
+  }
+  @media (hover: hover) { .sort:hover { border-color: var(--acc-cyan); } }
   .row { background: var(--bg1); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
   .line { display: flex; align-items: center; gap: 8px; }
   .info {
