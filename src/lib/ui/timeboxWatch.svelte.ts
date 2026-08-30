@@ -23,6 +23,15 @@ const announced = new Map<string, number>();
 function notify(task: Task, lists: List[]): void {
   try {
     if (!('Notification' in window)) return;
+    /*
+      A system notification is for reaching someone who is NOT looking. With
+      the app on screen it is redundant at best — and beside the scheduled
+      push, which lands as its own banner, it is a second alert for one
+      finished box (2026-08-30 report, iOS, app open at expiry). On screen
+      the alarm still announces itself the way the app does: the chime, the
+      confetti, the haptic and its own line.
+    */
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
     // No prompt here: permission was asked for when the box started (a real
     // gesture); a backgrounded app cannot raise a prompt at fire time anyway.
     if (Notification.permission !== 'granted') return;

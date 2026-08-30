@@ -710,15 +710,16 @@ test('a timebox alarm fires from another screen, not just the home card', async 
   await page.getByTestId('big-button').click();
   await page.getByTestId('draw-accept').click();
 
-  // Count the alarms the app raises, whichever screen is showing.
-  await page.evaluate(() => {
-    (window as unknown as { __alarms: number }).__alarms = 0;
-    const w = window as unknown as { Notification: unknown };
-    w.Notification = class {
-      static permission = 'granted';
-      constructor() { (window as unknown as { __alarms: number }).__alarms += 1; }
-    };
-  });
+  /*
+    The alarm is counted by its BURST, not by a system notification: with the
+    app on screen the watcher deliberately raises no banner (the scheduled
+    push already lands as one, and two alerts for one finished box is the
+    2026-08-30 report). Watching the notification here would have been
+    watching the thing that is now correctly absent.
+  */
+  const bursts = () => page.evaluate(
+    () => (window as unknown as { __ocBurstsEmitted?: () => number }).__ocBurstsEmitted?.() ?? 0);
+  const before = await bursts();
 
   await page.getByTestId('timebox-open').click();
   await page.getByTestId('timebox-5').click();
@@ -731,9 +732,8 @@ test('a timebox alarm fires from another screen, not just the home card', async 
   // Jump past the deadline. The watcher sweeps every second.
   await page.clock.install();
   await page.clock.fastForward('06:00');
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __alarms: number }).__alarms))
-    .toBeGreaterThan(0);
+  await expect.poll(bursts, { message: 'the alarm fires wherever you are' })
+    .toBeGreaterThan(before);
 });
 
 test('a completed task records how long it took', async ({ page }) => {
