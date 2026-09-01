@@ -3,6 +3,7 @@
  * cooldowns are the tuning surface — content lives in ./content/ (spoiler zone).
  */
 import type { EggDef } from './engine';
+import { pickFresh } from './freshPick';
 import { FACTS } from './content/facts';
 import {
   BULK_LINES, CHECKLIST_LINES, NIGHT_NOTES, QUEUE_LINES, QUIPS, RITUAL_LINES, STREAK_LINES,
@@ -11,6 +12,13 @@ import {
 import { TRIVIA } from './content/trivia';
 import { STORY_BEATS, UNLOCKS } from './content/extras';
 
+/**
+ * Content is DEALT, not rolled: every line in a pool is used once before any
+ * repeats (see freshPick). Each pool passes its own key so the bags stay
+ * independent. Moments keep the plain roll — seeing a good one again is the
+ * point of them, and there are few enough that a cycle would be a schedule.
+ */
+const deal = <T>(key: string, arr: readonly T[], rng: () => number): T => pickFresh(key, arr, rng);
 const pick = <T>(arr: readonly T[], rng: () => number): T => arr[Math.floor(rng() * arr.length)]!;
 
 const HOUR = 3600_000;
@@ -18,6 +26,7 @@ const HOUR = 3600_000;
 export const MOMENTS = [
   'rainbow-wave', 'matrix-rain', 'crt-flicker', 'confetti-storm',
   'disco', 'starfield', 'invert-blip', 'friendly-bsod', 'aurora',
+  'fireworks', 'bubbles', 'ticker-tape', 'sunrise',
 ] as const;
 export type MomentName = (typeof MOMENTS)[number];
 
@@ -41,15 +50,15 @@ export const REGISTRY: EggDef[] = [
     // Also on screenVisited: trivia used to be the ONLY entry that could fire
     // while browsing, so every single browse-triggered surprise was a quiz.
     id: 'fact', weight: 50, triggers: ['taskCompleted', 'screenVisited'],
-    present: (c) => ({ kind: 'note', emoji: '💡', text: pick(FACTS, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '💡', text: deal('facts', FACTS, c.rng) }),
   },
   {
     id: 'quip', weight: 40, triggers: ['taskCompleted', 'drawAccepted'],
-    present: (c) => ({ kind: 'note', emoji: '✨', text: pick(QUIPS, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '✨', text: deal('quips', QUIPS, c.rng) }),
   },
   {
     id: 'streak-line', weight: 25, triggers: ['taskCompleted'], minStreak: 3, cooldownMs: 3 * HOUR,
-    present: (c) => ({ kind: 'note', emoji: '🔥', text: pick(STREAK_LINES, c.rng), accent: 'orange' }),
+    present: (c) => ({ kind: 'note', emoji: '🔥', text: deal('streak', STREAK_LINES, c.rng), accent: 'orange' }),
   },
   {
     id: 'grind-note', weight: 30, triggers: ['taskCompleted'], minCompletionsToday: 5, maxPerDay: 1,
@@ -61,19 +70,19 @@ export const REGISTRY: EggDef[] = [
   // The newer surfaces get their own voices.
   {
     id: 'timebox-line', weight: 60, triggers: ['timeboxFinished'],
-    present: (c) => ({ kind: 'note', emoji: '⏰', accent: 'orange', text: pick(TIMEBOX_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '⏰', accent: 'orange', text: deal('timebox', TIMEBOX_LINES, c.rng) }),
   },
   {
     id: 'work-period-line', weight: 60, triggers: ['workPeriodStarted'], cooldownMs: HOUR / 2,
-    present: (c) => ({ kind: 'note', emoji: '⏱', accent: 'cyan', text: pick(WORK_PERIOD_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '⏱', accent: 'cyan', text: deal('period', WORK_PERIOD_LINES, c.rng) }),
   },
   {
     id: 'bulk-line', weight: 60, triggers: ['bulkActed'], cooldownMs: HOUR / 4,
-    present: (c) => ({ kind: 'note', emoji: '💥', accent: 'cyan', text: pick(BULK_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '💥', accent: 'cyan', text: deal('bulk', BULK_LINES, c.rng) }),
   },
   {
     id: 'unblock-line', weight: 60, triggers: ['taskUnblocked'],
-    present: (c) => ({ kind: 'note', emoji: '🗝', accent: 'green', text: pick(UNBLOCK_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🗝', accent: 'green', text: deal('unblock', UNBLOCK_LINES, c.rng) }),
   },
   {
     // Cooldown + cap (2026-08-11, "candles at noon"): this is the ONLY voice
@@ -83,19 +92,19 @@ export const REGISTRY: EggDef[] = [
     // ordinary variety instead.
     id: 'ritual-line', weight: 60, triggers: ['ritualCompleted'],
     cooldownMs: 3 * HOUR, maxPerDay: 2,
-    present: (c) => ({ kind: 'note', emoji: '🕯️', accent: 'green', text: pick(RITUAL_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🕯️', accent: 'green', text: deal('ritual', RITUAL_LINES, c.rng) }),
   },
   {
     id: 'sweep-line', weight: 60, triggers: ['sweepActed'],
-    present: (c) => ({ kind: 'note', emoji: '🧹', accent: 'cyan', text: pick(SWEEP_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🧹', accent: 'cyan', text: deal('sweep', SWEEP_LINES, c.rng) }),
   },
   {
     id: 'queue-line', weight: 60, triggers: ['queuePlanned'], cooldownMs: HOUR / 4,
-    present: (c) => ({ kind: 'note', emoji: '🃏', accent: 'cyan', text: pick(QUEUE_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🃏', accent: 'cyan', text: deal('queue', QUEUE_LINES, c.rng) }),
   },
   {
     id: 'checklist-line', weight: 60, triggers: ['checklistTicked'], cooldownMs: HOUR / 4,
-    present: (c) => ({ kind: 'note', emoji: '☑️', accent: 'green', text: pick(CHECKLIST_LINES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '☑️', accent: 'green', text: deal('checklist', CHECKLIST_LINES, c.rng) }),
   },
   unlockEgg('ritualist', ['ritualCompleted'], () => true),
   unlockEgg('boxer', ['timeboxFinished'], () => true),
@@ -113,20 +122,20 @@ export const REGISTRY: EggDef[] = [
       const h = c.now.getHours();
       return h >= 21 || h < 2;
     },
-    present: (c) => ({ kind: 'note', emoji: '🌙', accent: 'purple', text: pick(NIGHT_NOTES, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🌙', accent: 'purple', text: deal('night', NIGHT_NOTES, c.rng) }),
   },
   // Occasionally-useful notes; sparse — unsolicited advice charms in small doses.
   {
     id: 'tip', weight: 14, triggers: ['taskCompleted', 'screenVisited'],
     cooldownMs: 5 * HOUR, maxPerDay: 2,
-    present: (c) => ({ kind: 'note', emoji: '🧭', accent: 'cyan', text: pick(TIPS, c.rng) }),
+    present: (c) => ({ kind: 'note', emoji: '🧭', accent: 'cyan', text: deal('tips', TIPS, c.rng) }),
   },
 
   // Trivia — persistent score, sparse by design.
   {
     id: 'trivia', weight: 8, triggers: ['taskCompleted', 'screenVisited'],
     cooldownMs: 2 * HOUR, maxPerDay: 3,
-    present: (c) => ({ kind: 'trivia', q: pick(TRIVIA, c.rng) }),
+    present: (c) => ({ kind: 'trivia', q: deal('trivia', TRIVIA, c.rng) }),
   },
   // Visual moments — rare, loud, short.
   {

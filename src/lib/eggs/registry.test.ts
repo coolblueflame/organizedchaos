@@ -2,8 +2,9 @@
  * Shape validation for the content registry — checks structure, never content
  * (content-specific tests would spoil the pool in CI output).
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { REGISTRY } from './registry';
+import { MOMENTS, REGISTRY } from './registry';
 import { FACTS } from './content/facts';
 import { QUIPS, STREAK_LINES } from './content/quips';
 import { TRIVIA } from './content/trivia';
@@ -59,6 +60,21 @@ describe('registry shape', () => {
     driven by a registry entry must be granted by an explicit flow instead
     (the codes, the trivia milestones, the one-shot feature discoveries).
   */
+  it('every moment is actually drawn by something', () => {
+    /*
+      A moment is just a name until the layer knows what to do with it: an
+      unhandled one shows an empty overlay that has to be tapped away, which
+      reads as a bug rather than a surprise. The layer draws each either on
+      the canvas (a branch keyed by name) or in CSS (an .m-<name> rule), so
+      the source must mention every name in one of those two ways.
+    */
+    const layer = readFileSync(
+      new URL('./DelightLayer.svelte', import.meta.url), 'utf8');
+    const unhandled = MOMENTS.filter(
+      (m) => !layer.includes(`.m-${m}`) && !layer.includes(`moment === '${m}'`));
+    expect(unhandled, 'listed but never drawn').toEqual([]);
+  });
+
   it('every defined unlock is actually earnable', () => {
     const DIRECT_GRANTS = new Set([
       'chaos-word', 'clairvoyant', 'clockwork', 'gardener', 'hatchling',

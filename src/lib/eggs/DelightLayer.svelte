@@ -147,6 +147,67 @@
         raf = requestAnimationFrame(draw);
       };
       draw();
+    } else if (current.moment === 'fireworks') {
+      // Shells launch, arc, and burst into the particle layer — the burst is
+      // the app's own confetti, so the two effects share a look.
+      let shells = 0;
+      const launch = () => {
+        const x = W * (0.2 + Math.random() * 0.6);
+        const peak = H * (0.15 + Math.random() * 0.25);
+        const start = performance.now();
+        const rise = () => {
+          const t = (performance.now() - start) / 700;
+          if (t >= 1) {
+            burstAt(x / (window.devicePixelRatio || 1), peak / (window.devicePixelRatio || 1),
+              { count: 26, power: 1.5, ring: true, upward: 0 });
+            return;
+          }
+          ctx.fillStyle = 'rgba(11,14,20,0.25)';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = '#ffd479';
+          const y = H - (H - peak) * t;
+          ctx.fillRect(x, y, 3, 8);
+          requestAnimationFrame(rise);
+        };
+        rise();
+      };
+      launch();
+      const interval = setInterval(() => {
+        launch();
+        if (++shells >= 4) clearInterval(interval);
+      }, 520);
+      return () => clearInterval(interval);
+    } else if (current.moment === 'bubbles') {
+      // Slow and quiet on purpose: the loud moments are loud, and a rare
+      // calm one makes the loud ones land harder.
+      const bubbles = Array.from({ length: 60 }, () => ({
+        x: Math.random() * W,
+        y: H + Math.random() * H,
+        r: 4 + Math.random() * 22,
+        speed: 20 + Math.random() * 45,
+        drift: (Math.random() - 0.5) * 18,
+      }));
+      let last = performance.now();
+      const draw = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        for (const b of bubbles) {
+          b.y -= b.speed * dt;
+          b.x += b.drift * dt;
+          if (b.y + b.r < 0) { b.y = H + b.r; b.x = Math.random() * W; }
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(121,192,255,0.55)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(121,192,255,0.07)';
+          ctx.fill();
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     } else if (current.moment === 'confetti-storm') {
       let bursts = 0;
       const interval = setInterval(() => {
@@ -219,8 +280,12 @@
     </div>
   {:else if current.kind === 'moment'}
     <button class="moment m-{current.moment}" data-testid="delight-moment" aria-label="dismiss" onclick={() => presenter.dismiss()}>
-      {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm'}
+      {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm' || current.moment === 'fireworks' || current.moment === 'bubbles'}
         <canvas bind:this={canvasEl}></canvas>
+      {:else if current.moment === 'ticker-tape'}
+        <div class="ticker">
+          <span>&nbsp;★&nbsp;ANOTHER ONE DONE&nbsp;★&nbsp;THE LIST GROWS SHORTER&nbsp;★&nbsp;WITNESSED AND RECORDED&nbsp;★&nbsp;ANOTHER ONE DONE&nbsp;★&nbsp;THE LIST GROWS SHORTER&nbsp;★&nbsp;WITNESSED AND RECORDED&nbsp;★&nbsp;</span>
+        </div>
       {:else if current.moment === 'friendly-bsod'}
         <div class="bsod">
           <p class="bsod-face">:)</p>
@@ -368,6 +433,35 @@
   @keyframes aurora-drift {
     from { background-position: 0% 100%, 100% 100%, 50% 100%, 0 0; }
     to { background-position: 60% 40%, 30% 55%, 70% 45%, 0 0; }
+  }
+  .m-fireworks, .m-bubbles { background: rgba(11, 14, 20, 0.82); }
+  /* A dawn that arrives in two seconds: the warm band climbs and the dark
+     lifts off it. The quiet counterpart to the loud ones. */
+  .m-sunrise {
+    background:
+      radial-gradient(120% 80% at 50% 120%, rgba(255, 214, 121, 0.55), transparent 62%),
+      radial-gradient(150% 90% at 50% 130%, rgba(247, 120, 186, 0.35), transparent 68%),
+      linear-gradient(180deg, rgba(11, 14, 20, 0.85), rgba(11, 14, 20, 0.25));
+    animation: sunrise-climb 2.4s ease-out forwards;
+  }
+  @keyframes sunrise-climb {
+    from { background-position: 0 40%, 0 40%, 0 0; opacity: 0.2; }
+    to { background-position: 0 0%, 0 0%, 0 0; opacity: 1; }
+  }
+  .m-ticker-tape { background: rgba(11, 14, 20, 0.88); display: grid; place-items: center; overflow: hidden; }
+  .ticker {
+    width: 100%; white-space: nowrap; overflow: hidden;
+    border-top: 2px solid var(--acc-green); border-bottom: 2px solid var(--acc-green);
+    background: #06120a; padding: 14px 0;
+  }
+  .ticker span {
+    display: inline-block; color: var(--acc-green);
+    font-family: var(--font-mono); font-size: 1.4rem; letter-spacing: 0.12em;
+    animation: ticker-run 6s linear infinite;
+  }
+  @keyframes ticker-run { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .ticker span, .m-sunrise { animation: none; }
   }
   .m-friendly-bsod { background: #1533b8; display: grid; place-items: center; }
   .bsod { color: #fff; font-family: var(--font-mono); text-align: left; max-width: 420px; padding: 20px; }
