@@ -121,6 +121,30 @@ describe('delight distribution over a realistic day', () => {
     expect(byEvent.taskCompleted).toBeGreaterThanOrEqual(byEvent.screenVisited * 2);
   });
 
+  it('trivia turns up about once a day for a regular user (2026-08-30 ask)', async () => {
+    /*
+      Reported: "I really like them but only see them once every 2-3 days."
+      Weight is the whole lever here — trivia's own 2h cooldown and daily cap
+      were never the binding constraint, it was simply losing the roll to the
+      facts and quips beside it. The bounds are deliberately wide: this pins
+      a CADENCE, not a number, so ordinary drift in the other pools does not
+      fail the suite.
+    */
+    const DAYS = 7;
+    let trivia = 0;
+    for (let day = 0; day < DAYS; day += 1) {
+      const { kindsByEvent } = await simulate({
+        completions: 12, navsPerCompletion: 2, seed: 1000 + day,
+      });
+      trivia += (kindsByEvent.taskCompleted?.trivia ?? 0)
+        + (kindsByEvent.screenVisited?.trivia ?? 0);
+    }
+    expect(trivia, `${trivia} quizzes in ${DAYS} days — should be roughly daily`)
+      .toBeGreaterThanOrEqual(5);
+    expect(trivia, 'but a quiz on every other completion would be a quiz app')
+      .toBeLessThanOrEqual(20);
+  });
+
   it('a ritual-heavy day is not wall-to-wall candles (2026-08-11 report)', async () => {
     // The ritual voice is the ONLY entry on its event; uncapped, six daily
     // rituals meant a candle on most completions — cozy register, noon or

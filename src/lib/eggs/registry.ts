@@ -131,9 +131,16 @@ export const REGISTRY: EggDef[] = [
     present: (c) => ({ kind: 'note', emoji: '🧭', accent: 'cyan', text: deal('tips', TIPS, c.rng) }),
   },
 
-  // Trivia — persistent score, sparse by design.
+  /*
+    Trivia — persistent score. Raised from 8 to 45 (2026-08-30 ask: "I really
+    like them but only see them once every 2-3 days"). The simulation put the
+    old rate at ONE quiz per seven days of regular use, which is exactly what
+    was reported; 45 lands at about one a day and then plateaus, because the
+    2h cooldown and the daily cap take over from the weight. It cannot become
+    a quiz app no matter how the other pools drift.
+  */
   {
-    id: 'trivia', weight: 8, triggers: ['taskCompleted', 'screenVisited'],
+    id: 'trivia', weight: 45, triggers: ['taskCompleted', 'screenVisited'],
     cooldownMs: 2 * HOUR, maxPerDay: 3,
     present: (c) => ({ kind: 'trivia', q: deal('trivia', TRIVIA, c.rng) }),
   },
