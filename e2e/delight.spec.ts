@@ -44,8 +44,9 @@ test('a forced note appears on completion and dismisses on tap', async ({ page }
 
 test('trivia records the score and shows in discoveries', async ({ page }) => {
   await reset(page, 'trivia');
-  // trivia triggers on screen visits — the first post-boot navigation fires it
-  await page.getByTestId('settings-link').click();
+  // Finishing something is what earns a quiz — navigation no longer summons
+  // anything at all (2026-09-02).
+  await completeOne(page);
   await expect(page.getByTestId('delight-trivia')).toBeVisible();
   await page.getByTestId('trivia-choice-0').click(); // right or wrong — both record
   await page.getByTestId('trivia-close').click();
@@ -57,6 +58,23 @@ test('trivia records the score and shows in discoveries', async ({ page }) => {
   await page.getByTestId('stats-strip').click();
   await expect(page.getByText(/Quiz score: [01]\/1/)).toBeVisible();
   await expect(page.getByTestId('discoveries')).toContainText('???');
+});
+
+test('wandering around the app summons nothing', async ({ page }) => {
+  // 2026-09-02: "reserve them for completing tasks — it feels odd when they
+  // pop up randomly". A forced fact is the strongest possible test: even the
+  // entry that automation is TOLD to fire cannot ride a screen visit.
+  await reset(page, 'fact');
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Wander');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').click();
+  await page.getByTestId('back').click();
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('delight-note'), 'browsing is not a completion')
+    .toHaveCount(0);
 });
 
 test('unforced automation runs stay completely delight-free', async ({ page }) => {

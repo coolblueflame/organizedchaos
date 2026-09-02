@@ -44,12 +44,18 @@ const unlockEgg = (
   present: () => ({ kind: 'unlock', unlockId: id, label: unlockDef(id).label }),
 });
 
+/*
+  Nothing here fires on screenVisited (2026-09-02 ask: "reserve them for
+  completing tasks — it feels odd when they pop up randomly"). Delight is
+  payment for finishing something, not a toll on walking around the app.
+  The exceptions are deliberate and not navigation: a visual moment on the
+  big button or on opening the app, and the story, which is allowed to greet
+  you at the door.
+*/
 export const REGISTRY: EggDef[] = [
   // The bread and butter: facts + quips on completions.
   {
-    // Also on screenVisited: trivia used to be the ONLY entry that could fire
-    // while browsing, so every single browse-triggered surprise was a quiz.
-    id: 'fact', weight: 50, triggers: ['taskCompleted', 'screenVisited'],
+    id: 'fact', weight: 50, triggers: ['taskCompleted'],
     present: (c) => ({ kind: 'note', emoji: '💡', text: deal('facts', FACTS, c.rng) }),
   },
   {
@@ -116,7 +122,7 @@ export const REGISTRY: EggDef[] = [
   // The evening voice: late hours only, at most once a night-ish. The app
   // dims with the day — a warmer register when a completion lands after dark.
   {
-    id: 'night-note', weight: 45, triggers: ['taskCompleted', 'screenVisited'],
+    id: 'night-note', weight: 45, triggers: ['taskCompleted'],
     maxPerDay: 1, cooldownMs: 6 * HOUR,
     condition: (c) => {
       const h = c.now.getHours();
@@ -126,7 +132,7 @@ export const REGISTRY: EggDef[] = [
   },
   // Occasionally-useful notes; sparse — unsolicited advice charms in small doses.
   {
-    id: 'tip', weight: 14, triggers: ['taskCompleted', 'screenVisited'],
+    id: 'tip', weight: 14, triggers: ['taskCompleted'],
     cooldownMs: 5 * HOUR, maxPerDay: 2,
     present: (c) => ({ kind: 'note', emoji: '🧭', accent: 'cyan', text: deal('tips', TIPS, c.rng) }),
   },
@@ -138,9 +144,14 @@ export const REGISTRY: EggDef[] = [
     was reported; 45 lands at about one a day and then plateaus, because the
     2h cooldown and the daily cap take over from the weight. It cannot become
     a quiz app no matter how the other pools drift.
+
+    Dropping the browse trigger (2026-09-02) costs it one of its two event
+    streams: about five days in seven rather than seven. Raising the weight
+    further buys nothing — completions, not the roll, are the ceiling now —
+    so it stays here rather than crowding the facts and quips for no gain.
   */
   {
-    id: 'trivia', weight: 45, triggers: ['taskCompleted', 'screenVisited'],
+    id: 'trivia', weight: 45, triggers: ['taskCompleted'],
     cooldownMs: 2 * HOUR, maxPerDay: 3,
     present: (c) => ({ kind: 'trivia', q: deal('trivia', TRIVIA, c.rng) }),
   },

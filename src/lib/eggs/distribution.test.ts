@@ -102,13 +102,17 @@ describe('delight distribution over a realistic day', () => {
     expect(shown).toBeGreaterThanOrEqual(3);
   });
 
-  it('screen visits have more than one possible outcome', () => {
-    // Trivia used to be the ONLY entry that could trigger on a screen visit,
-    // so every browse-triggered surprise was necessarily a quiz. That is a
-    // property of the registry, not of any one sampled day, so assert it there.
+  it('walking around the app is never interrupted', () => {
+    /*
+      Delight is payment for finishing something, not a toll on navigation
+      (2026-09-02 ask: "it feels a little odd when they pop up randomly").
+      This is a property of the registry rather than of any sampled day, so
+      it is asserted there — the older worry was that trivia was the ONLY
+      browse-triggered entry, which the same change settles by removing the
+      trigger entirely.
+    */
     const onBrowse = REGISTRY.filter((e) => e.triggers.includes('screenVisited'));
-    expect(onBrowse.length).toBeGreaterThan(1);
-    expect(new Set(onBrowse.map((e) => e.id)).size).toBeGreaterThan(1);
+    expect(onBrowse.map((e) => e.id), 'nothing fires on a screen visit').toEqual([]);
   });
 
   it('browsing stays a rare garnish next to finishing things', async () => {
@@ -139,8 +143,10 @@ describe('delight distribution over a realistic day', () => {
       trivia += (kindsByEvent.taskCompleted?.trivia ?? 0)
         + (kindsByEvent.screenVisited?.trivia ?? 0);
     }
-    expect(trivia, `${trivia} quizzes in ${DAYS} days — should be roughly daily`)
-      .toBeGreaterThanOrEqual(5);
+    // Most days, not every day: trivia rides completions only since
+    // 2026-09-02, so five in seven is the measured ceiling.
+    expect(trivia, `${trivia} quizzes in ${DAYS} days — should be most days`)
+      .toBeGreaterThanOrEqual(4);
     expect(trivia, 'but a quiz on every other completion would be a quiz app')
       .toBeLessThanOrEqual(20);
   });
