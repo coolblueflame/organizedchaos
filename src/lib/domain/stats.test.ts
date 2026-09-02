@@ -3,7 +3,7 @@ import { type Priority, type Task } from './types';
 import {
   formatDurationLong,
   burdenChange, burdenSeries, burdenShift, burdenTasks, completionCounts, completionSeries,
-  formatDuration, maxCompletionsInOneDay, totalEstimateHours, winsList, estimateOutcome,
+  formatDuration, maxCompletionsInOneDay, shouldRecordBurden, totalEstimateHours, winsList, estimateOutcome,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -351,5 +351,35 @@ describe('estimateOutcome', () => {
     expect(o.estimate).toBe('2h 30m');
     expect(o.actual).toBe('1h 40m');
     expect(o.verdict).toBe('50m under the estimate');
+  });
+});
+
+describe('shouldRecordBurden — the day opens on a refreshed view', () => {
+  const DAY_START = new Date('2026-09-02T04:00:00').getTime();
+  const base = { alreadyRecorded: false, syncConfigured: true, lastSyncAt: null, dayStartMs: DAY_START };
+
+  it('a synced device that has pulled today may write the reading', () => {
+    expect(shouldRecordBurden({ ...base, lastSyncAt: DAY_START + 60_000 })).toBe(true);
+  });
+
+  it('a tab left open overnight may not — its view predates the day', () => {
+    /*
+      2026-09-02: an idle tab fired the 4am timer holding a mirror from before
+      the previous evening's edits. The ledger keeps the EARLIEST reading of a
+      day, so that stale number won, and yesterday's work was reported as this
+      morning's progress.
+    */
+    expect(shouldRecordBurden({ ...base, lastSyncAt: DAY_START - 6 * 3600_000 })).toBe(false);
+    expect(shouldRecordBurden({ ...base, lastSyncAt: null }), 'never synced this session')
+      .toBe(false);
+  });
+
+  it('a device with no sync configured is current by definition', () => {
+    expect(shouldRecordBurden({ ...base, syncConfigured: false, lastSyncAt: null })).toBe(true);
+  });
+
+  it('never writes twice over the same day', () => {
+    expect(shouldRecordBurden({ ...base, alreadyRecorded: true, lastSyncAt: DAY_START + 1 }))
+      .toBe(false);
   });
 });

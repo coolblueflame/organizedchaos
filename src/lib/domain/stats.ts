@@ -165,6 +165,37 @@ export function burdenTasks(tasks: Task[], lists: List[]): Task[] {
 export interface BurdenSnap { v: number; at: number }
 export type BurdenLedger = Record<string, BurdenSnap>;
 
+/** The moment the current app-day began — its rollover. */
+export function appDayStartTs(now: Date, rolloverHour: number): number {
+  const [y, m, d] = appDayKey(now, rolloverHour).split('-').map(Number);
+  return new Date(y!, m! - 1, d!, rolloverHour).getTime();
+}
+
+/**
+ * May this device write the day's opening reading?
+ *
+ * Only from a view it has actually refreshed. A tab left open overnight
+ * fires the rollover timer with a mirror frozen wherever it was when the
+ * user last looked — and because the ledger keeps the EARLIEST reading of
+ * each day, that stale number wins the day outright. The result is
+ * yesterday evening's work reported as this morning's progress (2026-09-02:
+ * "7h lighter, but I just woke up"), which is exactly the misattribution
+ * the measured baseline was built to prevent.
+ *
+ * So a synced device must have pulled since the day began. A device with no
+ * sync configured is always current by definition and records freely.
+ */
+export function shouldRecordBurden(state: {
+  alreadyRecorded: boolean;
+  syncConfigured: boolean;
+  lastSyncAt: number | null;
+  dayStartMs: number;
+}): boolean {
+  if (state.alreadyRecorded) return false;
+  if (!state.syncConfigured) return true;
+  return state.lastSyncAt !== null && state.lastSyncAt >= state.dayStartMs;
+}
+
 const DURATION_UNITS: Array<[string, number]> = [
   ['y', 24 * 365], ['mo', 24 * 30], ['w', 24 * 7], ['d', 24], ['h', 1],
 ];

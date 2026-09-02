@@ -32,8 +32,8 @@ import { REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
 import {
-  burdenTasks, completionCounts, estimateOutcome, maxCompletionsInOneDay,
-  MIN_TRACKED_MS, totalEstimateHours, type BurdenLedger,
+  appDayStartTs, burdenTasks, completionCounts, estimateOutcome, maxCompletionsInOneDay,
+  MIN_TRACKED_MS, shouldRecordBurden, totalEstimateHours, type BurdenLedger,
 } from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
@@ -305,6 +305,10 @@ export class AppStore {
       this.syncStatus = status;
       this.syncDetail = detail;
       this.lastSyncAt = engine.lastSyncAt;
+      // The day's opening reading waits for a refreshed view, so the moment
+      // one arrives is the moment to take it. Cheap: it returns immediately
+      // once the day has been written.
+      if (status === 'idle') void this.recordBurdenSnapshot(new Date());
     };
     this.engine = engine;
     this.syncStatus = 'idle';
@@ -1612,7 +1616,15 @@ export class AppStore {
    */
   private async recordBurdenSnapshot(now: Date): Promise<void> {
     const day = appDayKey(now, this.state.settings.rolloverHour);
-    if (this.burdenLedger[day] !== undefined) return;
+    // Only from a view this device has actually refreshed — see
+    // shouldRecordBurden. A device that has not pulled yet leaves the day
+    // unwritten and takes it up again when its first sync lands.
+    if (!shouldRecordBurden({
+      alreadyRecorded: this.burdenLedger[day] !== undefined,
+      syncConfigured: this.engine !== null,
+      lastSyncAt: this.lastSyncAt,
+      dayStartMs: appDayStartTs(now, this.state.settings.rolloverHour),
+    })) return;
     const v = totalEstimateHours(burdenTasks(this.state.tasks, this.state.lists));
     this.burdenLedger = { ...this.burdenLedger, [day]: { v, at: now.getTime() } };
     await this.repo.setKv('burdenLedger', $state.snapshot(this.burdenLedger));
