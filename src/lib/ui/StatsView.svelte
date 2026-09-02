@@ -263,10 +263,10 @@
     <details>
       <summary>as table</summary>
       <table>
-        <thead><tr><th>day</th><th>hours</th></tr></thead>
+        <thead><tr><th>day</th><th>on your plate</th></tr></thead>
         <tbody>
           {#each burden.filter((_, i) => i % Math.max(1, Math.floor(burden.length / 30)) === 0) as p (p.key)}
-            <tr><td>{p.key}</td><td>{p.hours}</td></tr>
+            <tr><td>{p.key}</td><td>{formatEstimate(p.hours) || '0m'}</td></tr>
           {/each}
         </tbody>
       </table>

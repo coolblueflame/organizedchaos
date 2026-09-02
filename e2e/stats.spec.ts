@@ -134,6 +134,28 @@ test('once yesterday is measured, deletes and estimate fixes move the delta', as
   await expect(page.getByTestId('shift-adjustments')).toContainText('1h 30m');
 });
 
+test('the burden table reads in hours and minutes, not a decimal', async ({ page }) => {
+  // 2026-09-02 ask: it printed the raw number (3352.25), which is neither a
+  // duration nor a rounding anyone wants to do in their head.
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Plate');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('quarter hour job');
+  await page.getByTestId('task-estimate-input').fill('15m');
+  await page.getByTestId('task-collapse').click();
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('stats-strip').click();
+  // Two charts each offer an "as table"; this is the burden one.
+  const burdenTable = page.getByRole('group').filter({ hasText: 'on your plate' });
+  await burdenTable.locator('summary').click();
+  const cells = burdenTable.locator('table td');
+  await expect(cells.filter({ hasText: '15m' }).first(), 'a duration, to the minute')
+    .toBeVisible();
+  await expect(cells.filter({ hasText: /^0\.25$/ }), 'never a bare decimal').toHaveCount(0);
+});
+
 test('a half-hour win is a win, not "no change"', async ({ page }) => {
   // 2026-09-02: the headline rounded to the nearest hour while the breakdown
   // reported to the minute, so 6h30m added against 7h of edits — a real 30
