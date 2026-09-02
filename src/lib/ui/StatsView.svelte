@@ -143,7 +143,10 @@
       <button class="delta" class:down={burdenDelta < 0} class:up={burdenDelta > 0}
         data-testid="stats-burden-open" aria-expanded={shiftOpen}
         onclick={() => (shiftOpen = !shiftOpen)}>
-        {#if Math.round(burdenDelta) === 0}
+        <!-- Minute-accurate, like the breakdown beneath it: rounding to the
+             nearest hour hid up to 29 minutes of real movement behind "no
+             change", and a small win is still a win (2026-09-02 ask). -->
+        {#if Math.round(burdenDelta * 60) === 0}
           no change
         {:else if burdenDelta < 0}
           ▼ {formatDurationLong(-burdenDelta)} lighter
@@ -191,9 +194,10 @@
             </div>
           {/if}
         {/each}
-        <!-- Half an hour of tolerance: the residual absorbs rounding and
-             pre-ledger drift, and a sub-30m line would be noise, not news. -->
-        {#if Math.abs(shiftAdjustments) >= 0.5}
+        <!-- Anything the row scan cannot attribute, down to the minute: an
+             estimate corrected by ten minutes is still the reason the number
+             moved, and hiding it made the sections fail to add up. -->
+        {#if Math.round(shiftAdjustments * 60) !== 0}
           <div class="shift-section" data-testid="shift-adjustments">
             <div class="shift-head">
               <span>estimate edits &amp; other adjustments</span>
@@ -204,7 +208,7 @@
           </div>
         {/if}
         {#if shift.addedByHand.length + shift.addedByRules.length + shift.completed.length + shift.removed.length === 0
-          && Math.abs(shiftAdjustments) < 0.5}
+          && Math.round(shiftAdjustments * 60) === 0}
           <div class="shift-item more">nothing moved in this window</div>
         {/if}
       </div>

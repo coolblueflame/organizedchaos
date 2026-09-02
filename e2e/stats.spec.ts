@@ -134,6 +134,42 @@ test('once yesterday is measured, deletes and estimate fixes move the delta', as
   await expect(page.getByTestId('shift-adjustments')).toContainText('1h 30m');
 });
 
+test('a half-hour win is a win, not "no change"', async ({ page }) => {
+  // 2026-09-02: the headline rounded to the nearest hour while the breakdown
+  // reported to the minute, so 6h30m added against 7h of edits — a real 30
+  // minutes lighter — read as "no change".
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Fine');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('over-estimated thing');
+  await page.getByTestId('task-estimate-input').fill('1h');
+  await page.getByTestId('task-collapse').click();
+
+  // Cross the rollover so the day's baseline is measured at 1h.
+  const tomorrow = new Date(Date.now() + 24 * 3600_000);
+  tomorrow.setHours(6, 0, 0, 0);
+  await page.clock.setFixedTime(tomorrow);
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+  // Correct it to 30m: exactly half an hour lighter than the measured day.
+  await page.getByText('over-estimated thing', { exact: true }).click();
+  await page.getByTestId('task-estimate-input').fill('30m');
+  await page.getByTestId('task-collapse').click();
+  await page.reload();
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').waitFor();
+
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-burden-delta')).toContainText('30m lighter');
+  await expect(page.getByTestId('stats-burden-delta')).not.toContainText('no change');
+
+  // And the breakdown accounts for it to the minute rather than staying quiet.
+  await page.getByTestId('stats-burden-open').click();
+  await expect(page.getByTestId('shift-adjustments')).toContainText('30m');
+});
+
 test('archiving a list takes its hours off the books', async ({ page }) => {
   await page.getByTestId('new-list').click();
   await page.getByTestId('new-list-input').fill('Shelf');
