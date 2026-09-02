@@ -224,7 +224,7 @@ export const TIMEBOX_LINES: readonly string[] = [
   'BRRRING. That’s the round.',
   'The timer has spoken. You may now stretch.',
   'Ding! Your table is ready — table for one, at the couch.',
-  '⏰ Deploy complete. Rolling back to rest state.',
+  'Deploy complete. Rolling back to rest state.',
   'That’s a wrap on this scene.',
   'Boss defeated: The Ticking Clock.',
   'You have been timeboxed. How do you feel?',
@@ -295,8 +295,8 @@ export const UNBLOCK_LINES: readonly string[] = [
 
 /** Rarer streak / heater lines — the app noticing you’re on one. */
 export const STREAK_LINES: readonly string[] = [
-  '🔥 You’re on fire. (metaphorically. hydrate.)',
-  '🔥🔥 HEATER. The dice fear you.',
+  'You’re on fire. (metaphorically. hydrate.)',
+  'HEATER. The dice fear you.',
   'You’ve entered THE ZONE. Please keep arms and legs inside the flow state.',
   'Combo ×3! The announcer is losing their mind.',
   'C-C-C-COMBO BREAKER — is what your streak does to procrastination.',
