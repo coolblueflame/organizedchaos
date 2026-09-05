@@ -198,6 +198,22 @@ export const QUIPS: readonly string[] = [
   'You have improved the situation. Measurably.',
   'And the list quietly gets on with being shorter.',
   'Finished. No notes.',
+  'The task has left the chat.',
+  'Achievement get! Rare drop: peace of mind.',
+  'That task has been sent to the shadow realm.',
+  'Cleared it like a Tetris line. Satisfying little thunk.',
+  'Party’s over, task. Someone call it a cab.',
+  'You came, you saw, you ticked.',
+  'task.exe has stopped responding. Because it’s done.',
+  'Plot twist: you were the deadline all along.',
+  'The list lost a member today. Nobody is mourning.',
+  'Handled like a pro with nothing to prove and a list to shorten.',
+  'That one’s in the bag. The bag is the done pile.',
+  'Look at you, being a verb.',
+  'Nailed it, framed it, hung it in the done gallery.',
+  'Task down. Coffee earned. Both true.',
+  'Not a warm-up. Not a rehearsal. An actual finished thing.',
+  'A checkmark is just a tiny trophy that fits on one line.',
 ] as const;
 
 /** Lines for finishing (or surviving) a timebox. */

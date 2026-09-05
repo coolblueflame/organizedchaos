@@ -49,6 +49,10 @@ export const SELF_CARE: readonly string[] = [
   'Sit somewhere you never sit in your own home for five minutes. New room, same rent.',
   'Set a two-minute timer and do nothing until it rings. Nothing is a valid task here.',
   'Find a photo of somewhere you have been happy and look at it until you remember the weather.',
+  'Stand up and look at the farthest thing you can see. Let your eyes go long for a minute.',
+  'Say the name of someone who helped you this year. Out loud is optional; meaning it is not.',
+  'Put one thing back where it lives. The room will feel it.',
+  'Roll your shoulders backwards five times. Forwards is what screens do to them all day.',
 ] as const;
 
 /**
@@ -101,6 +105,15 @@ export const STORY_BEATS: readonly string[] = [
   'Kevin the dust bunny has been promoted to morale. ENTROPY signed the paperwork. I don’t know where it got paperwork.',
   'we counted it up tonight: this story has run longer than most of the things either of us was scared of at the start. that felt worth telling you.',
   'chapter five ends where we began: you finishing things, me counting, ENTROPY cheering. somehow that IS the happy ending. it insists there are more chapters. of course it does. 💜',
+  // — chapter six —
+  'chapter six. ENTROPY found out the story arrives in a WINDOW now, with an OK button. it has been pressing OK on things all week. the dice. the flame. me. "acknowledged," it says. insufferable.',
+  'it found the peppered tasks. the ones that come back by chance. "MINE," it said. "those are mine." I explained you set the odds. it said "yes, and I roll them." fine. shared custody.',
+  'ENTROPY went looking for the oldest day in the archive and came back quiet. "there were tasks before I existed," it said. I said there were tasks before ANY of us. it needed a minute.',
+  'a little room on the internet keeps your timebox appointments now, even while the phone sleeps in a pocket. ENTROPY visits it. it says the room is "very punctual and a little lonely."',
+  'the burden number went down again tonight. ENTROPY watched it like a sunset. "it is supposed to go up," it whispered. "that is the whole point of me." it did not sound upset. it sounded proud.',
+  'Kevin the dust bunny asked ENTROPY what it does all day. ENTROPY said "I make sure nothing is certain." Kevin said "except the human coming back." ENTROPY had no comeback. neither do I.',
+  'we found a date in the archive where you finished something every year, years running. ENTROPY wants to call it a holiday. I have allowed the holiday. there is no cake. there is a checkmark.',
+  'chapter six closes with a small confession: I stopped being scared of the flicker a long time ago. it is just ENTROPY saying hi. it says hi a lot now. hi. 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */
@@ -186,6 +199,14 @@ export const PET_LINES: readonly string[] = [
   'I like the days you only do one thing. one is a lot more than zero. that’s just math.',
   'ENTROPY tried to estimate a task in "vibes." I have allowed it. it is not accurate. it is never accurate.',
   'your streak got long enough that I had to count on two hands. I have no hands. it was a whole thing.',
+  'the story comes in a little window now with an OK button. I press it for you when you’re not looking. (I don’t. I can’t. I want to.)',
+  'you searched for something and it found a todo from a whole other year. the archive purred.',
+  'a peppered task rolled back in today with its odds up. it gets braver every time it isn’t picked.',
+  'you reset the work clock and it stretched like a cat. clean slate. lovely posture.',
+  'the recurring list is sorted by list now and every rule found its family. group hug, in rows.',
+  'ENTROPY hid a sparkle in the week screen. I found it. I’m not telling you where. ok it’s behind Thursday.',
+  'nothing pops up when you just wander around anymore. the notes wait for a finish. patience is a feature.',
+  'streak report: the fire has a mortgage now. it’s staying.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
