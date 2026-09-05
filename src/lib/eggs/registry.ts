@@ -214,12 +214,15 @@ export const REGISTRY: EggDef[] = [
     const h = c.now.getHours();
     return h >= 0 && h < 2;
   }),
+  unlockEgg('streak-50', ['taskCompleted'], (c) => c.streakDays >= 50),
   unlockEgg('streak-100', ['taskCompleted'], (c) => c.streakDays >= 100),
   unlockEgg('long-haul', ['taskCompleted'], (c) => c.lifetimeCompletions >= 2500),
   unlockEgg('weekender', ['taskCompleted'], (c) => {
     const d = c.now.getDay();
     return d === 0 || d === 6;
   }),
-  // quiz-whiz, quiz-master, konami, chaos-word, hatchling, sweeper, clairvoyant,
-  // gardener and clockwork are granted directly by their own flows (grantUnlockAndShow).
+  // Everything else in UNLOCKS is granted directly by its own flow
+  // (grantUnlockAndShow): the codes, the trivia milestones, and the
+  // discoveries that read the finished ROW — its age, its tracked time, its
+  // list — which the context here deliberately cannot see.
 ];

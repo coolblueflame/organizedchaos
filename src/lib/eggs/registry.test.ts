@@ -79,6 +79,8 @@ describe('registry shape', () => {
     const DIRECT_GRANTS = new Set([
       'chaos-word', 'clairvoyant', 'clockwork', 'gardener', 'hatchling',
       'konami', 'load-bearing', 'quiz-master', 'quiz-whiz', 'sweeper',
+      'time-capsule', 'archaeologist', 'marathon', 'empty-shelf', 'spice-rack',
+      'bouncer', 'out-of-office', 'oracle', 'named-it',
     ]);
     const wired = new Set(
       REGISTRY.filter((r) => r.id.startsWith('unlock-')).map((r) => r.id.slice('unlock-'.length)),

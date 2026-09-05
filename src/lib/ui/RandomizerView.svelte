@@ -299,6 +299,7 @@
    */
   async function toggleVacation() {
     await app.updateSettings({ ignoreListHours: app.state.settings.ignoreListHours !== true });
+    if (app.state.settings.ignoreListHours === true) app.grantUnlockAndShow('out-of-office');
     notNow = []; // the pool changed shape → fresh skip session
     redraw();
   }

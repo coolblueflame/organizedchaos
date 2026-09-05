@@ -1504,3 +1504,73 @@ describe('the work clock tallies ACTIVE sessions, not wall time (2026-08-20 ask)
     expect(displaced.activeAccumulatedMs).toBe(2 * 60_000);
   });
 });
+
+describe('discoveries earned by the shape of a finish', () => {
+  const DAY = 86_400_000;
+  const HOUR = 3_600_000;
+
+  it('a task that waited over a year is a time capsule; over five, archaeology too', async () => {
+    const list = await store.addList('Old');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { createdAt: Date.now() - 400 * DAY });
+    await store.completeTask(a.id);
+    expect(store.eggUnlocks).toContain('time-capsule');
+    expect(store.eggUnlocks).not.toContain('archaeologist');
+    const b = await store.addTask(list.id);
+    await store.patchTask(b.id, { createdAt: Date.now() - 6 * 365 * DAY });
+    await store.completeTask(b.id);
+    expect(store.eggUnlocks).toContain('archaeologist');
+  });
+
+  it('two tracked hours is a marathon; a finish within a minute of its estimate is an oracle', async () => {
+    const list = await store.addList('Work');
+    const long = await store.addTask(list.id);
+    await store.patchTask(long.id, { inProgress: true, startedAt: Date.now() - 2 * HOUR - 60_000 });
+    await store.completeTask(long.id);
+    expect(store.eggUnlocks).toContain('marathon');
+    expect(store.eggUnlocks).not.toContain('oracle');
+    const exact = await store.addTask(list.id);
+    await store.patchTask(exact.id, { estimateHours: 0.5, inProgress: true, startedAt: Date.now() - 30 * 60_000 });
+    await store.completeTask(exact.id);
+    expect(store.eggUnlocks).toContain('oracle');
+  });
+
+  it('a finish that was merely ticked off tracks nothing and earns neither', async () => {
+    const list = await store.addList('Work');
+    const t = await store.addTask(list.id);
+    await store.patchTask(t.id, { estimateHours: 0.5 });
+    await store.completeTask(t.id);
+    expect(store.eggUnlocks).not.toContain('marathon');
+    expect(store.eggUnlocks).not.toContain('oracle');
+  });
+
+  it('clearing the last open task in a list with history empties the shelf; a lone first task does not', async () => {
+    const fresh = await store.addList('New');
+    const only = await store.addTask(fresh.id);
+    await store.completeTask(only.id);
+    expect(store.eggUnlocks).not.toContain('empty-shelf');
+    const shelf = await store.addList('Shelf');
+    const a = await store.addTask(shelf.id);
+    const b = await store.addTask(shelf.id);
+    await store.completeTask(a.id);
+    expect(store.eggUnlocks).not.toContain('empty-shelf'); // b is still open
+    await store.completeTask(b.id);
+    expect(store.eggUnlocks).toContain('empty-shelf');
+  });
+
+  it('finishing a peppered task stocks the spice rack', async () => {
+    const list = await store.addList('Spices');
+    const t = await store.addTask(list.id);
+    await store.createRecurring(t.id, { kind: 'chance', baseChance: 20, perRollBoost: 1 });
+    await store.completeTask(t.id);
+    expect(store.eggUnlocks).toContain('spice-rack');
+  });
+
+  it('locking a list makes a bouncer; unlocking does not', async () => {
+    const list = await store.addList('Private');
+    await store.setListLocked(list.id, false);
+    expect(store.eggUnlocks).not.toContain('bouncer');
+    await store.setListLocked(list.id, true);
+    expect(store.eggUnlocks).toContain('bouncer');
+  });
+});

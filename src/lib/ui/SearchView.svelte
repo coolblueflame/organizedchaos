@@ -13,9 +13,18 @@
   import TaskRow from './TaskRow.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
   import { adoptKeyboard } from './keyboardBridge';
+  import { presenter } from '../eggs/presenter.svelte';
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let editingTaskId = $state<string | null>(null);
+
+  // A phone has no key buffer to type a secret into, so the search box is
+  // where a name from the story can be said out loud. Idempotent: coming
+  // back to a search that still says it grants nothing twice.
+  $effect(() => {
+    if (searchQuery.value.trim().toLowerCase() !== 'entropy') return;
+    if (app.grantUnlockAndShow('named-it')) presenter.show({ kind: 'moment', moment: 'crt-flicker' });
+  });
 
   /*
     The box updates instantly; the SCAN trails it by a beat. Searching a large

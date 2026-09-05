@@ -47,6 +47,10 @@ import { Repo, type AppState } from '../storage/repo';
  */
 const underAutomation = (): boolean => typeof navigator !== 'undefined' && navigator.webdriver;
 
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const YEAR_MS = 365 * 24 * HOUR_MS;
+
 export class AppStore {
   state: AppState = $state({
     lists: [], tasks: [], tags: [], templates: [],
@@ -280,6 +284,43 @@ export class AppStore {
     this.eggs?.advanceStory(stage);
   }
 
+  /**
+   * Discoveries earned by the SHAPE of a completion rather than by counting
+   * them: how long the row waited, how long the work took, whether the
+   * estimate was honest, whether the list is now clear. The registry's
+   * context carries only tallies, on purpose, so these read the row here.
+   * Every grant is idempotent, which keeps the checks unconditional.
+   *
+   * `tracked` is the completion's own accounting (undefined when the task was
+   * ticked off without being worked, or the stretch was too short to count).
+   */
+  private noteFinishingDiscoveries(task: Task, tracked: number | undefined, finishedAt: number): void {
+    const waited = finishedAt - task.createdAt;
+    // A five-year wait also waited a year: both are true, and the rarer one
+    // is granted last so it is the card left on screen.
+    if (waited >= YEAR_MS) this.grantUnlockAndShow('time-capsule');
+    if (waited >= 5 * YEAR_MS) this.grantUnlockAndShow('archaeologist');
+    if (tracked !== undefined) {
+      if (tracked >= 2 * HOUR_MS) this.grantUnlockAndShow('marathon');
+      // Within a minute of the estimate, on a stretch long enough that the
+      // minute means something — a five-minute guess cannot be "prophetic".
+      if (task.estimateHours !== undefined && tracked >= 10 * MINUTE_MS
+        && Math.abs(tracked - task.estimateHours * HOUR_MS) < MINUTE_MS) {
+        this.grantUnlockAndShow('oracle');
+      }
+    }
+    // The shelf is empty when nothing else in the list is open — and only
+    // counts as CLEARED when the list has history; a brand-new list whose
+    // only task was just finished is a start, not a sweep.
+    const list = this.state.lists.find((l) => l.id === task.listId && !l.deleted);
+    if (list && list.archived !== true && list.generated !== true) {
+      const siblings = this.state.tasks.filter((t) => t.listId === task.listId && t.id !== task.id && !t.deleted);
+      const stillOpen = siblings.some((t) => t.completedAt === undefined);
+      const hasHistory = siblings.some((t) => t.completedAt !== undefined);
+      if (!stillOpen && hasHistory) this.grantUnlockAndShow('empty-shelf');
+    }
+  }
+
   // ── sync lifecycle (spec §8) ─────────────────────────────────────────────
 
   private buildEngine(cfg: { owner: string; repo: string; token: string }): void {
@@ -495,6 +536,7 @@ export class AppStore {
 
   async setListLocked(id: string, locked: boolean): Promise<void> {
     await this.patchList(id, { locked: locked || undefined });
+    if (locked) this.grantUnlockAndShow('bouncer');
   }
 
   /** Commit a hand-arranged custom order for one list's open tasks. */
@@ -1025,6 +1067,7 @@ export class AppStore {
       if (freed.length >= 3) this.grantUnlockAndShow('load-bearing');
     }
     this.fireEgg('taskCompleted');
+    if (task) this.noteFinishingDiscoveries(task, tracked, finishedAt);
 
     // Feed the recurring template's rolling average of how long it really takes.
     if (before?.recurrenceId && tracked !== undefined) {
@@ -1056,6 +1099,7 @@ export class AppStore {
         // means at most one extra row, deletable) — accepted trade for the
         // mechanic's whole point being immediacy (2026-08-20 ask).
         await this.updateRecurring(tpl.id, { chanceRolls: 0 });
+        this.grantUnlockAndShow('spice-rack');
         void this.runSpawnSweep();
       }
     }

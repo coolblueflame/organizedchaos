@@ -22,6 +22,7 @@
   function tap() {
     if (lock.unlocked) {
       lock.relock();
+      app.grantUnlockAndShow('bouncer');
       onchange?.();
     } else {
       gateOpen = !gateOpen;

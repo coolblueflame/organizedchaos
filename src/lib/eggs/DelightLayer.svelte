@@ -86,11 +86,17 @@
         presenter.show({ kind: 'moment', moment: 'rainbow-wave' });
       }
       if (/^[a-z]$/i.test(e.key)) {
-        wordBuf = (wordBuf + e.key.toLowerCase()).slice(-5);
-        if (wordBuf === 'chaos') {
+        // Long enough to hold the longest word it listens for.
+        wordBuf = (wordBuf + e.key.toLowerCase()).slice(-7);
+        if (wordBuf.endsWith('chaos')) {
           wordBuf = '';
           app.grantUnlockAndShow('chaos-word');
           presenter.show({ kind: 'moment', moment: 'disco' });
+        } else if (wordBuf.endsWith('entropy')) {
+          // The other one's name, known only to readers of the story. A
+          // phone types it into the search box instead (see SearchView).
+          wordBuf = '';
+          if (app.grantUnlockAndShow('named-it')) presenter.show({ kind: 'moment', moment: 'crt-flicker' });
         }
       }
     };
