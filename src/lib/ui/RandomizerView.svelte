@@ -29,6 +29,7 @@
   import { lock } from './lock.svelte';
   import { liveQueueIds } from '../domain/dayQueue';
   import { SELF_CARE } from '../eggs/content/extras';
+  import { pickFresh } from '../eggs/freshPick';
   import { completionCounts } from '../domain/stats';
   import { priorityRank } from '../domain/types';
   import Glyph from './Glyph.svelte';
@@ -180,7 +181,10 @@
       priorityRank(effectivePriority(drawn, app.state.settings, clock.now)) <= priorityRank('medium');
     if (counts.today >= 6 || calmPool) {
       selfCareOffered = true;
-      selfCare = SELF_CARE[Math.floor(Math.random() * SELF_CARE.length)]!;
+      // Dealt, not rolled: independent picks over a few dozen lines repeat
+      // within days (reported 2026-09-05, same arithmetic as the quips);
+      // the bag hands out every break once before any comes round again.
+      selfCare = pickFresh('selfcare', SELF_CARE, Math.random);
     }
   }
 
