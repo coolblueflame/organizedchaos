@@ -221,6 +221,79 @@
         if (++bursts >= 6) clearInterval(interval);
       }, 350);
       return () => clearInterval(interval);
+    } else if (current.moment === 'meteor-shower') {
+      // Streaks cross the dark from upper right to lower left: a bright head
+      // and a tail that fades along its own length, over a trailing fill so
+      // each streak also leaves a brief afterglow.
+      const spawn = () => ({
+        x: Math.random() * W * 1.4,
+        y: -Math.random() * H * 0.6,
+        vx: -(4 + Math.random() * 5),
+        vy: 7 + Math.random() * 6,
+        len: 30 + Math.random() * 60,
+      });
+      const meteors = Array.from({ length: 14 }, spawn);
+      const draw = () => {
+        ctx.fillStyle = 'rgba(11,14,20,0.28)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 2;
+        for (const m of meteors) {
+          m.x += m.vx;
+          m.y += m.vy;
+          const k = Math.hypot(m.vx, m.vy);
+          const tx = m.x - (m.vx / k) * m.len;
+          const ty = m.y - (m.vy / k) * m.len;
+          const tail = ctx.createLinearGradient(tx, ty, m.x, m.y);
+          tail.addColorStop(0, 'rgba(255,214,121,0)');
+          tail.addColorStop(1, 'rgba(255,244,214,0.95)');
+          ctx.strokeStyle = tail;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(m.x, m.y);
+          ctx.stroke();
+          if (m.y > H + m.len || m.x < -m.len) Object.assign(m, spawn());
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } else if (current.moment === 'petals') {
+      // The quiet one of its pair: petals fall and sway, nothing rushes.
+      const petals = Array.from({ length: 70 }, () => ({
+        x: Math.random() * W,
+        y: -Math.random() * H,
+        r: 5 + Math.random() * 7,
+        fall: 28 + Math.random() * 40,
+        sway: 0.8 + Math.random() * 1.6,
+        phase: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 2,
+        angle: Math.random() * Math.PI,
+        tint: Math.random() < 0.7 ? 'rgba(247,120,186,0.75)' : 'rgba(255,214,228,0.8)',
+      }));
+      let last = performance.now();
+      const draw = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        for (const p of petals) {
+          p.y += p.fall * dt;
+          p.phase += p.sway * dt;
+          p.x += Math.sin(p.phase) * 22 * dt;
+          p.angle += p.spin * dt;
+          if (p.y - p.r > H) { p.y = -p.r; p.x = Math.random() * W; }
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.angle);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, p.r, p.r * 0.55, 0, 0, Math.PI * 2);
+          ctx.fillStyle = p.tint;
+          ctx.fill();
+          ctx.restore();
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     }
     return () => cancelAnimationFrame(raf);
   });
@@ -286,7 +359,7 @@
     </div>
   {:else if current.kind === 'moment'}
     <button class="moment m-{current.moment}" data-testid="delight-moment" aria-label="dismiss" onclick={() => presenter.dismiss()}>
-      {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm' || current.moment === 'fireworks' || current.moment === 'bubbles'}
+      {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm' || current.moment === 'fireworks' || current.moment === 'bubbles' || current.moment === 'meteor-shower' || current.moment === 'petals'}
         <canvas bind:this={canvasEl}></canvas>
       {:else if current.moment === 'ticker-tape'}
         <div class="ticker">
@@ -441,6 +514,37 @@
     to { background-position: 60% 40%, 30% 55%, 70% 45%, 0 0; }
   }
   .m-fireworks, .m-bubbles { background: rgba(11, 14, 20, 0.82); }
+  .m-meteor-shower { background: rgba(11, 14, 20, 0.92); }
+  .m-petals { background: rgba(11, 14, 20, 0.55); }
+  /* A storm in three flashes: the sky lights, holds a beat, lights again.
+     Loud on purpose; the lava lamp below is its quiet counterpart. Only the
+     colour animates — no filters, nothing that repaints underneath. */
+  .m-lightning {
+    background: rgba(11, 14, 20, 0.7);
+    animation: lightning 1.7s ease-out 3;
+  }
+  @keyframes lightning {
+    0%, 18%, 40%, 100% { background: rgba(11, 14, 20, 0.7); }
+    4%, 24% { background: rgba(232, 240, 255, 0.92); }
+    8% { background: rgba(121, 192, 255, 0.35); }
+    30% { background: rgba(232, 240, 255, 0.6); }
+  }
+  /* Warm blobs rising and folding over one another, slow enough to watch.
+     Each layer is taller than the screen so a vertical position actually
+     has room to travel (a 100% tall layer cannot move at all). */
+  .m-lava-lamp {
+    background:
+      radial-gradient(38% 30% at 30% 50%, rgba(255, 166, 87, 0.55), transparent 70%),
+      radial-gradient(30% 26% at 70% 50%, rgba(247, 120, 186, 0.5), transparent 70%),
+      radial-gradient(26% 22% at 45% 50%, rgba(255, 214, 121, 0.45), transparent 70%),
+      rgba(11, 14, 20, 0.55);
+    background-size: 100% 180%, 100% 180%, 100% 180%, 100% 100%;
+    animation: lava-rise 3.2s ease-in-out infinite alternate;
+  }
+  @keyframes lava-rise {
+    from { background-position: 0 100%, 0 0%, 0 60%, 0 0; }
+    to { background-position: 0 0%, 0 100%, 0 20%, 0 0; }
+  }
   /* A dawn that arrives in two seconds: the warm band climbs and the dark
      lifts off it. The quiet counterpart to the loud ones. */
   .m-sunrise {
@@ -467,7 +571,7 @@
   }
   @keyframes ticker-run { to { transform: translateX(-50%); } }
   @media (prefers-reduced-motion: reduce) {
-    .ticker span, .m-sunrise { animation: none; }
+    .ticker span, .m-sunrise, .m-lightning, .m-lava-lamp { animation: none; }
   }
   .m-friendly-bsod { background: #1533b8; display: grid; place-items: center; }
   .bsod { color: #fff; font-family: var(--font-mono); text-align: left; max-width: 420px; padding: 20px; }

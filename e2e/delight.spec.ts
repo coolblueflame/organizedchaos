@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 /**
@@ -181,4 +182,43 @@ test('a story beat waits for OK — nothing else can take it', async ({ page }) 
     open.onerror = () => reject(open.error);
   }));
   expect(stage, 'acknowledged, so the story moved on').toBe(1);
+});
+
+test('every moment renders on demand without throwing', async ({ page }) => {
+  /*
+    The registry guard proves each moment NAME is handled; this proves each
+    one actually draws. A canvas branch that throws leaves the overlay blank
+    and the page error goes nowhere a human would see — so the names come
+    straight from the registry source and every one is forced in turn.
+  */
+  const src = readFileSync(new URL('../src/lib/eggs/registry.ts', import.meta.url), 'utf8');
+  const block = src.slice(src.indexOf('export const MOMENTS'), src.indexOf('] as const;'));
+  const names = [...block.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]!);
+  expect(names.length).toBeGreaterThan(10);
+
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Moments');
+  await page.getByTestId('new-list-input').press('Enter');
+  for (const name of names) {
+    await page.evaluate(([n]) => {
+      localStorage.setItem('OC_EGG_FORCE', 'moment');
+      localStorage.setItem('OC_MOMENT', n!);
+    }, [name]);
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.getByTestId('task-collapse').last().click();
+    const row = page.getByTestId(/^task-row-/).first();
+    const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+    await page.getByTestId(`task-check-${id}`).click();
+    const moment = page.getByTestId('delight-moment');
+    await expect(moment, name).toBeVisible();
+    await expect(moment, name).toHaveClass(new RegExp(`m-${name}`));
+    // Tapping the effect itself is a deliberate dismissal, honoured at once.
+    await moment.click();
+    await expect(moment).toHaveCount(0);
+  }
+  expect(errors).toEqual([]);
 });

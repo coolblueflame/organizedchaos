@@ -27,8 +27,23 @@ export const MOMENTS = [
   'rainbow-wave', 'matrix-rain', 'crt-flicker', 'confetti-storm',
   'disco', 'starfield', 'invert-blip', 'friendly-bsod', 'aurora',
   'fireworks', 'bubbles', 'ticker-tape', 'sunrise',
+  'meteor-shower', 'petals', 'lightning', 'lava-lamp',
 ] as const;
 export type MomentName = (typeof MOMENTS)[number];
+
+/**
+ * Which moment a roll shows. Under automation a test may name one
+ * (localStorage.OC_MOMENT) so every effect can be rendered on demand — a
+ * canvas branch that throws then fails a test instead of showing a human an
+ * empty overlay. Humans never set it; for them this is the plain roll.
+ */
+function chosenMoment(rng: () => number): MomentName {
+  if (typeof navigator !== 'undefined' && navigator.webdriver) {
+    const named = localStorage.getItem('OC_MOMENT');
+    if (named && (MOMENTS as readonly string[]).includes(named)) return named as MomentName;
+  }
+  return pick(MOMENTS, rng);
+}
 
 const unlockDef = (id: string) => UNLOCKS.find((u) => u.id === id)!;
 const unlockEgg = (
@@ -159,7 +174,7 @@ export const REGISTRY: EggDef[] = [
   {
     id: 'moment', weight: 6, triggers: ['taskCompleted', 'bigButtonPressed', 'appOpened'],
     cooldownMs: HOUR / 2, maxPerDay: 3,
-    present: (c) => ({ kind: 'moment', moment: pick(MOMENTS, c.rng) }),
+    present: (c) => ({ kind: 'moment', moment: chosenMoment(c.rng) }),
   },
   // The slow-burn story: one beat per stage, days apart, only for engaged
   // days. Retuned 2026-08-06 (Ben, 12 days / 235 completions / ONE beat),
