@@ -13,9 +13,10 @@
     averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, burdenShift, burdenTasks,
     completionSeries, formatDuration, formatDurationLong, formatElapsed,
     totalEstimateHours, type BurdenShiftEntry, type BurdenWindow,
+    onThisDay,
   } from '../domain/stats';
   import { formatEstimate } from '../domain/estimate';
-  import { lockedListIds } from '../domain/lock';
+  import { lockedListIds, withoutLocked } from '../domain/lock';
   import { lockSession } from '../state/lockSession.svelte';
   import { clock } from './clock.svelte';
   import { appDayKey, daysUntilDeadline } from '../domain/time';
@@ -43,6 +44,15 @@
     plainTasks, granularity, BUCKETS[granularity], new Date(), app.state.settings.rolloverHour));
 
   const plainLists = $derived($state.snapshot(app.state.lists));
+
+  /*
+    This date in earlier years. Locked lists' rows are dropped outright —
+    the names ARE the content here, so there is nothing anonymous left to
+    show the way the burden panels can show hours without names.
+  */
+  const memories = $derived(onThisDay(
+    withoutLocked(plainTasks, plainLists, lockSession.unlocked), clock.now, app.state.settings.rolloverHour));
+  const MEMORY_ROW_CAP = 6;
 
   /* Archived lists are abandoned, not owed (2026-08-12 ask) — every burden
      number below counts these rows; completions history keeps ALL tasks. */
@@ -255,6 +265,25 @@
     </details>
   </section>
 
+  {#if memories.length > 0}
+    <section class="panel" data-testid="stats-on-this-day">
+      <div class="panel-head"><h2>on this day</h2></div>
+      {#each memories as m (m.year)}
+        <div class="memory">
+          <span class="memory-when">{m.yearsAgo === 1 ? 'a year ago' : `${m.yearsAgo} years ago`} · {m.year}</span>
+          <ul class="memory-rows">
+            {#each m.tasks.slice(0, MEMORY_ROW_CAP) as t (t.id)}
+              <li>{t.name.trim() || 'untitled'}</li>
+            {/each}
+            {#if m.tasks.length > MEMORY_ROW_CAP}
+              <li class="memory-more">+{m.tasks.length - MEMORY_ROW_CAP} more</li>
+            {/if}
+          </ul>
+        </div>
+      {/each}
+    </section>
+  {/if}
+
   <section class="panel">
     <div class="panel-head"><h2>backlog burden (hours of work on your plate)</h2></div>
     <LineChart points={burden} color="var(--acc-orange)" format={formatDuration} />
@@ -333,6 +362,11 @@
      so the whole line lifts off the dim ??? rows around it. */
   .discoveries li.found { color: var(--acc-yellow); font-weight: 600; }
   .disc-hint { opacity: 0.6; font-size: 0.72rem; font-style: italic; }
+  .memory + .memory { margin-top: 10px; }
+  .memory-when { color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem; }
+  .memory-rows { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.85rem; }
+  .memory-rows li { overflow-wrap: anywhere; }
+  .memory-more { color: var(--dim); font-style: italic; font-size: 0.78rem; }
 
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }

@@ -54,6 +54,45 @@ export function winsList(tasks: Task[], now: Date, rolloverHour: number): string
     .join('\n');
 }
 
+export interface OnThisDayYear {
+  year: number;
+  yearsAgo: number;
+  /** Finished on this date that year, in the order they were finished. */
+  tasks: Task[];
+}
+
+/**
+ * What was finished on today's date in each earlier year, newest year first.
+ *
+ * Imported history counts here, unlike the scoreboard: something finished on
+ * this date years before the app existed is exactly the kind of thing worth
+ * being reminded of. Matching is on the app-day key's month and day, so the
+ * rollover applies to old years the same way it does to today; a February
+ * 29th simply finds nothing in a year without one.
+ */
+export function onThisDay(tasks: Task[], now: Date, rolloverHour: number): OnThisDayYear[] {
+  const today = appDayKey(now, rolloverHour);
+  const thisYear = Number(today.slice(0, 4));
+  const monthDay = today.slice(4); // "-MM-DD"
+  const byYear = new Map<number, Task[]>();
+  for (const t of doneTasks(tasks)) {
+    const key = appDayKey(new Date(t.completedAt!), rolloverHour);
+    if (!key.endsWith(monthDay)) continue;
+    const year = Number(key.slice(0, 4));
+    if (year >= thisYear) continue;
+    const rows = byYear.get(year) ?? [];
+    rows.push(t);
+    byYear.set(year, rows);
+  }
+  return [...byYear.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([year, rows]) => ({
+      year,
+      yearsAgo: thisYear - year,
+      tasks: rows.sort((a, b) => a.completedAt! - b.completedAt!),
+    }));
+}
+
 export interface CompletionCounts {
   today: number; week: number; month: number; year: number; lifetime: number;
 }

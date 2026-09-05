@@ -245,3 +245,53 @@ test('list health names the list most in need of the sweep', async ({ page }) =>
   await page.getByTestId('health-sweep').click();
   await expect(page.getByTestId('sweep-card')).toContainText('never looked at');
 });
+
+test('on this day remembers what you finished a year ago, and keeps locked lists out of it', async ({ page }) => {
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Garden');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('plant the tomatoes');
+  await page.getByTestId('task-collapse').click();
+
+  // Finish it "a year ago": the mocked clock stamps the completion.
+  const poke = () => page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  const then = new Date();
+  then.setFullYear(then.getFullYear() - 1);
+  then.setHours(12, 0, 0, 0);
+  await page.clock.setFixedTime(then);
+  await poke();
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+
+  // Back to the present, at noon so the date is unambiguous.
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  await page.clock.setFixedTime(today);
+  await poke();
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').click();
+  const panel = page.getByTestId('stats-on-this-day');
+  await expect(panel).toContainText('a year ago');
+  await expect(panel).toContainText('plant the tomatoes');
+  await page.getByTestId('back').click();
+
+  // Lock the list: the memory goes with it (names are the whole content).
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-pin-input').fill('1234');
+  await page.getByTestId('settings-pin-save').click();
+  await page.getByTestId('back').click();
+  const gardenRow = page.getByTestId(/^list-row-/).filter({ hasText: 'Garden' });
+  const listId = (await gardenRow.getAttribute('data-testid'))!.replace('list-row-', '');
+  await page.getByTestId(`list-menu-${listId}`).click();
+  await page.getByTestId('list-settings-lock').click();
+  await expect(gardenRow.locator('.locked-mark')).toBeVisible();
+  await page.getByTestId('settings-link').click();
+  await page.getByTestId('settings-lock-now').click();
+  await page.getByTestId('back').click();
+  await page.getByTestId('stats-strip').click();
+  await expect(page.getByTestId('stats-estimate')).toBeVisible();
+  await expect(page.getByTestId('stats-on-this-day')).toHaveCount(0);
+});

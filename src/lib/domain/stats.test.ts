@@ -3,7 +3,8 @@ import { type Priority, type Task } from './types';
 import {
   formatDurationLong,
   burdenChange, burdenSeries, burdenShift, burdenTasks, completionCounts, completionSeries,
-  formatDuration, maxCompletionsInOneDay, shouldRecordBurden, totalEstimateHours, winsList, estimateOutcome,
+  formatDuration, maxCompletionsInOneDay, onThisDay, shouldRecordBurden, totalEstimateHours, winsList,
+  estimateOutcome,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -381,5 +382,37 @@ describe('shouldRecordBurden — the day opens on a refreshed view', () => {
   it('never writes twice over the same day', () => {
     expect(shouldRecordBurden({ ...base, alreadyRecorded: true, lastSyncAt: DAY_START + 1 }))
       .toBe(false);
+  });
+});
+
+describe('onThisDay', () => {
+  it('groups this date’s finishes by earlier year, newest year first, imported history included', () => {
+    const later = doneAt('2025-07-15T18:00:00');
+    const earlier = doneAt('2025-07-15T10:00:00');
+    const tasks = [
+      later, earlier,
+      { ...doneAt('2018-07-15T09:00:00'), importedHistory: true },
+      doneAt('2026-07-15T10:00:00'), // today itself is not a memory yet
+      doneAt('2025-07-14T10:00:00'), // a different date
+      { ...doneAt('2024-07-15T10:00:00'), deleted: true },
+      task({ priority: 'low' }), // still open
+    ];
+    const years = onThisDay(tasks, now, 4);
+    expect(years.map((y) => [y.year, y.yearsAgo, y.tasks.length])).toEqual([[2025, 1, 2], [2018, 8, 1]]);
+    expect(years[0]!.tasks).toEqual([earlier, later]); // the order they were finished
+  });
+
+  it('rides the app-day rollover: 2am on the date still belongs to the day before', () => {
+    const early = doneAt('2025-07-15T02:00:00'); // app-day 2025-07-14
+    const late = doneAt('2025-07-16T02:00:00'); // app-day 2025-07-15
+    const years = onThisDay([early, late], now, 4);
+    expect(years).toHaveLength(1);
+    expect(years[0]!.tasks).toEqual([late]);
+  });
+
+  it('a leap day finds nothing in a year without one', () => {
+    const leapNoon = new Date('2028-02-29T12:00:00');
+    const around = [doneAt('2027-02-28T12:00:00'), doneAt('2027-03-01T12:00:00')];
+    expect(onThisDay(around, leapNoon, 4)).toEqual([]);
   });
 });
