@@ -1965,3 +1965,38 @@ test('bulk estimate: one value lands on the whole selection and clears NEW', asy
   await page.getByText('album one', { exact: true }).click();
   await expect(page.getByTestId('task-estimate-input')).toHaveValue('45m');
 });
+
+test('choosing a deadline does not move the row until you leave the field', async ({ page }) => {
+  /*
+    2026-09-06 report, iOS: opening the picker on an empty deadline writes
+    today's date at once; saving it re-sorted the list, remounted the row
+    and closed the picker. The value now waits for blur.
+  */
+  await reset(page);
+  await makeList(page, 'Dates');
+  await addTask(page, 'first');
+  await addTask(page, 'second');
+  const rows = page.getByTestId(/^task-row-/);
+  await expect(rows).toHaveCount(2);
+  const ids = await Promise.all(
+    (await rows.all()).map(async (r) => (await r.getAttribute('data-testid'))!.replace('task-row-', '')),
+  );
+  const second = ids[1]!;
+
+  await page.getByTestId(`task-row-${second}`).click();
+  const date = page.getByTestId('task-deadline-input');
+  await date.fill('2030-01-01'); // a deadline would sort this row to the top
+  // Settle, then assert once: "did not move" is a negative, and a poll that
+  // passes on its first sample proves nothing.
+  await page.waitForTimeout(400);
+  await expect(date).toBeFocused();
+  expect((await rows.nth(1).getAttribute('data-testid'))!, 'still second while choosing').toBe(`task-row-${second}`);
+
+  // Leaving the field commits: the row takes its sorted place, and the
+  // date survives a reload.
+  await date.blur();
+  await expect(rows.nth(0)).toHaveAttribute('data-testid', `task-row-${second}`);
+  await page.reload();
+  await page.getByTestId(`task-row-${second}`).click();
+  await expect(page.getByTestId('task-deadline-input')).toHaveValue('2030-01-01');
+});

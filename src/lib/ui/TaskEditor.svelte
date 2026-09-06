@@ -53,6 +53,28 @@
       void app.patchTask(task.id, { notes });
       touched();
     }
+    commitDeadline();
+  }
+
+  /*
+    The deadline commits when you LEAVE the field, never mid-choice. On iOS,
+    opening the picker on an empty field writes today's date into it at
+    once; saving that re-sorts the list, which remounts this row and closes
+    the picker under your finger, and choosing the real date takes a second
+    trip (2026-09-06 report). Desktop typing has the same shape: each valid
+    keystroke used to re-sort. Every way out of the editor commits the draft
+    — blur, the collapse button's flush, the outside-tap and Escape paths
+    (both blur first) — so nothing is lost, it just waits until you are done.
+  */
+  let deadlineDraft = $state<string | null>(null);
+
+  function commitDeadline() {
+    if (deadlineDraft === null) return;
+    const value = deadlineDraft || undefined;
+    deadlineDraft = null;
+    if (value === task.deadline) return;
+    void app.patchTask(task.id, { deadline: value });
+    touched();
   }
 
   /** Every checklist interaction rides the same save path as typing. */
@@ -74,11 +96,6 @@
       ? task.tagIds.filter((id) => id !== tagId)
       : [...task.tagIds, tagId];
     void app.patchTask(task.id, { tagIds });
-    touched();
-  }
-
-  function setDeadline(value: string) {
-    void app.patchTask(task.id, { deadline: value || undefined });
     touched();
   }
 
@@ -311,14 +328,15 @@
   <div class="fields">
     <label>
       <span>deadline</span>
-      <!-- oninput AND onchange: a deadline edit can re-group (and remount) this
-           row, so waiting for blur would lose the value (found via screenshot QA) -->
+      <!-- Drafted on input/change, committed on blur (see commitDeadline):
+           saving mid-choice re-sorts the list and remounts this row. -->
       <!-- .empty: desktop Safari ghosts today's date into valueless date
            inputs; the app.css rule hides that until a real value lands -->
       <input type="date" data-testid="task-deadline-input" value={task.deadline ?? ''}
         class:empty={!task.deadline}
-        oninput={(e) => setDeadline(e.currentTarget.value)}
-        onchange={(e) => setDeadline(e.currentTarget.value)} />
+        oninput={(e) => (deadlineDraft = e.currentTarget.value)}
+        onchange={(e) => (deadlineDraft = e.currentTarget.value)}
+        onblur={commitDeadline} />
     </label>
     <label>
       <span>timebox (min)</span>
