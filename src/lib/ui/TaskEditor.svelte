@@ -221,8 +221,12 @@
   /**
    * Where this instance has drifted from its rule (2026-08-11, the walk that
    * respawned Medium after being bumped to MAX): every spawn is born from
-   * the RULE, so an instance-only edit quietly reverts next time. Priority
-   * and estimate only — names and notes legitimately diverge per instance.
+   * the RULE, so an instance-only edit quietly reverts next time. Priority,
+   * estimate and name; notes are left alone, because a note is where the
+   * per-occurrence detail belongs. A rename is offered rather than pushed
+   * through: an instance called "walk (rainy route)" is a fair one-off, and
+   * the rule should only follow it on a deliberate tap. An empty name is
+   * mid-typing, not drift.
    */
   const ruleDrift = $derived.by(() => {
     if (!template) return [] as string[];
@@ -231,14 +235,19 @@
     if (template.estimateHours !== task.estimateHours) {
       drift.push(template.estimateHours === undefined ? 'no estimate' : formatEstimate(template.estimateHours));
     }
+    const name = task.name.trim();
+    const ruleName = template.name.trim();
+    if (name !== '' && ruleName !== name) drift.push(ruleName === '' ? 'no name' : `“${ruleName}”`);
     return drift;
   });
 
   function adoptIntoRule() {
     if (!template) return;
+    const name = task.name.trim();
     void app.updateRecurring(template.id, {
       priority: task.priority,
       estimateHours: task.estimateHours,
+      ...(name !== '' ? { name } : {}),
     });
   }
 

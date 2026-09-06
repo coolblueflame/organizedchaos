@@ -201,6 +201,17 @@ test('editing a recurring task shows the rule drift, and one tap adopts it', asy
   await page.getByTestId('task-collapse').click();
   await page.getByText('go for a walk', { exact: true }).click();
   await expect(page.getByTestId('rule-drift')).toHaveCount(0);
+
+  // A rename drifts too (2026-09-06 ask): the rule keeps its old name and
+  // every future spawn would be born under it. Same nudge, same one tap.
+  await page.getByTestId('task-name-input').fill('go for a long walk');
+  await page.getByTestId('task-name-input').blur();
+  await expect(page.getByTestId('rule-drift')).toContainText('go for a walk');
+  await page.getByTestId('rule-adopt').click();
+  await expect(page.getByTestId('rule-drift')).toHaveCount(0);
+  // The rule itself now carries the new name, not just the drift line.
+  await page.goto('./#/recurring');
+  await expect(page.getByTestId(/^recurring-row-/)).toContainText('go for a long walk');
 });
 
 test("deleting a recurring copy offers to stop the rule — and doesn't whack-a-mole", async ({ page }) => {
