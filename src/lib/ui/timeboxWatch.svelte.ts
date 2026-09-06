@@ -6,12 +6,13 @@
  * the alert simply never fired (reported 2026-08-03). The countdown is a
  * per-task display and stays there; the ALARM belongs to the app.
  *
- * Honest limit, unchanged and unfixable from here: while iOS has the whole app
- * suspended, no timer of ours runs at all. A true alarm through that needs a
- * server pushing at a scheduled time, which this app deliberately doesn't
- * have. What we can do — and now do — is fire the moment the app is alive
- * again, so a box that ran out in your pocket announces itself on return
- * instead of being silently swallowed.
+ * Honest limit: while iOS has the whole app suspended, no timer of ours runs
+ * at all. A true alarm through that needs a server pushing at a scheduled
+ * time — the optional alarm Worker (state/alarmPush) — and when that Worker
+ * holds a confirmed booking for a box, the system banner is ITS to raise;
+ * this watcher still does everything in-app (chime, confetti, haptic, the
+ * delight line) and catches up the moment the app is alive again, so a box
+ * that ran out in your pocket announces itself on return either way.
  */
 import type { List, Task } from '../domain/types';
 import { burstAt, motionOk } from './fx/particles';
@@ -20,7 +21,7 @@ import { haptic } from './fx/haptics';
 /** taskId → the deadline we already announced, so a box alarms exactly once. */
 const announced = new Map<string, number>();
 
-function notify(task: Task, lists: List[]): void {
+function notify(task: Task, lists: List[], pushBooked: boolean): void {
   try {
     if (!('Notification' in window)) return;
     /*
@@ -32,6 +33,16 @@ function notify(task: Task, lists: List[]): void {
       confetti, the haptic and its own line.
     */
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+    /*
+      And when the Worker holds a confirmed booking for this very deadline,
+      the banner is its to raise, on screen or off. A page that is hidden but
+      still running — a background tab, the seconds before iOS suspends —
+      used to post its own banner beside the push (2026-09-06 report, the
+      fourth of its kind): two alerts for one box, from two honest sources.
+      One owner per box closes that; if the Worker's push should ever fail
+      to land, the in-app announcement on return is still the fallback.
+    */
+    if (pushBooked) return;
     // No prompt here: permission was asked for when the box started (a real
     // gesture); a backgrounded app cannot raise a prompt at fire time anyway.
     if (Notification.permission !== 'granted') return;
@@ -75,12 +86,16 @@ function beep(): void {
 /**
  * Announce every timebox that has run out and hasn't been announced yet.
  * Safe to call as often as you like; the ledger keeps it to one per box.
+ *
+ * `pushBooked` answers whether a scheduled push already owns the system
+ * banner for a given task and deadline (see notify); absent, nothing does.
  */
 export function checkTimeboxes(
   tasks: Task[],
   lists: List[],
   onFired: (task: Task) => void,
   now = Date.now(),
+  pushBooked: (taskId: string, endsAt: number) => boolean = () => false,
 ): void {
   for (const t of tasks) {
     const endsAt = t.timeboxEndsAt;
@@ -93,7 +108,7 @@ export function checkTimeboxes(
     try {
       if (motionOk()) burstAt(window.innerWidth / 2, window.innerHeight / 3, { count: 30, power: 1.4 });
     } catch { /* fx never block the alarm */ }
-    notify(t, lists);
+    notify(t, lists, pushBooked(t.id, endsAt));
     beep();
     onFired(t);
   }

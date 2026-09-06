@@ -106,6 +106,53 @@ describe('checkTimeboxes', () => {
     expect(shown, 'nobody is watching the screen — say it out loud').toHaveLength(1);
   });
 
+  it('leaves the banner to the Worker when it holds a confirmed booking for this box', async () => {
+    /*
+      2026-09-06 report, the fourth double banner: the app hidden but still
+      running posted its own notification beside the scheduled push. When
+      the Worker has confirmed the booking, the push is the banner.
+    */
+    const shown: string[] = [];
+    const notification = { permission: 'granted' };
+    vi.stubGlobal('Notification', notification);
+    vi.stubGlobal('window', { Notification: notification });
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        getRegistration: async () => ({ showNotification: (t: string) => shown.push(t) }),
+      },
+    });
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+
+    const t = task({ timeboxEndsAt: NOW - 1 });
+    const fired: string[] = [];
+    checkTimeboxes([t], lists, (x) => fired.push(x.id), NOW, (id, at) => id === t.id && at === NOW - 1);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fired, 'the in-app alarm still happens').toHaveLength(1);
+    expect(shown, 'the push owns the banner').toEqual([]);
+  });
+
+  it('still speaks up when the booking is for a different deadline', async () => {
+    // A moved box: the Worker holds the OLD deadline, so nobody else will
+    // announce the new one.
+    const shown: string[] = [];
+    const notification = { permission: 'granted' };
+    vi.stubGlobal('Notification', notification);
+    vi.stubGlobal('window', { Notification: notification });
+    vi.stubGlobal('navigator', {
+      serviceWorker: {
+        getRegistration: async () => ({ showNotification: (t: string) => shown.push(t) }),
+      },
+    });
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+
+    const t = task({ timeboxEndsAt: NOW - 1 });
+    checkTimeboxes([t], lists, () => {}, NOW, (id, at) => id === t.id && at === NOW - 90_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(shown).toHaveLength(1);
+  });
+
   it('catches up on a box that expired while the app was away', () => {
     // iOS freezes our timers when backgrounded; the sweep on resume is the
     // whole point — an hour-old deadline still announces itself.
