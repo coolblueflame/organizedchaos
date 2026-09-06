@@ -86,13 +86,34 @@ describe('drawTask — what is owed right now (due rituals)', () => {
     expect(got?.id).toBe(lunch.id);
   });
 
-  it('and beats the day queue — a window closes, a queue does not', () => {
+  it('but the day queue beats it — the plan is the one thing the user assembled by hand', () => {
     const planned = task({ priority: 'low' });
     const lunch = task({ priority: 'medium' });
     const got = drawTask([planned, lunch], DEFAULT_SETTINGS, now, firstRng, {
       queueFirst: [planned.id], dueFirst: [lunch.id],
     });
-    expect(got?.id).toBe(lunch.id);
+    expect(got?.id).toBe(planned.id);
+    // With the queue exhausted, the owed ritual is next in line.
+    const then = drawTask([planned, lunch], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [planned.id], dueFirst: [lunch.id], excludeIds: [planned.id],
+    });
+    expect(then?.id).toBe(lunch.id);
+  });
+
+  it('…unless the owed ritual is at MAX priority, which beats the plan', () => {
+    const planned = task({ priority: 'max' }); // the queue's own priority is irrelevant
+    const meds = task({ priority: 'max' });
+    const lunch = task({ priority: 'high' });
+    const got = drawTask([planned, meds, lunch], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [planned.id], dueFirst: [meds.id, lunch.id],
+    });
+    expect(got?.id, 'a MAX ritual first, the other owed one waits behind the plan').toBe(meds.id);
+    // A deadline that escalates an owed ritual to MAX counts the same way.
+    const escalated = task({ priority: 'high', deadline: '2026-07-15' });
+    const viaDeadline = drawTask([planned, escalated], DEFAULT_SETTINGS, now, firstRng, {
+      queueFirst: [planned.id], dueFirst: [escalated.id],
+    });
+    expect(viaDeadline?.id).toBe(escalated.id);
   });
 
   it('several owed tasks still draw among themselves', () => {
@@ -141,13 +162,18 @@ describe('drawTask — the day queue', () => {
     expect(got?.id).toBe(nextUp.id);
   });
 
-  it('work-period fit still gates the queue', () => {
+  it('the work-period fit does not gate the queue — the plan was made on purpose', () => {
     const tooBig = task({ priority: 'high', estimateHours: 3 });
     const fits = task({ priority: 'low', estimateHours: 0.5 });
     const got = drawTask([tooBig, fits], DEFAULT_SETTINGS, now, firstRng, {
       queueFirst: [tooBig.id, fits.id], maxEstimateHours: 1,
     });
-    expect(got?.id).toBe(fits.id);
+    expect(got?.id).toBe(tooBig.id);
+    // Unqueued, the same task is still held back by the period.
+    const unplanned = drawTask([tooBig, fits], DEFAULT_SETTINGS, now, firstRng, {
+      maxEstimateHours: 1,
+    });
+    expect(unplanned?.id).toBe(fits.id);
   });
 
   it('an empty or fully-ineligible queue falls back to the normal tiered draw', () => {

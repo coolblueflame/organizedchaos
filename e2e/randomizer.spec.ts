@@ -295,7 +295,7 @@ test('a hand-queued task outranks its list being off the clock', async ({ page }
 
   // Queued by hand = meant for today, whatever the list's hours say — the
   // plan outranks the clock (2026-08-19 report; pre-fix this was the
-  // off-the-clock empty state). Due rituals still outrank the queue.
+  // off-the-clock empty state).
   await page.getByTestId('big-button').click();
   await expect(page.getByTestId('draw-from-queue')).toBeVisible();
   await expect(page.getByTestId('draw-card')).toContainText('after hours errand');

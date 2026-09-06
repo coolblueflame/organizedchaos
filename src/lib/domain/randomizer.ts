@@ -21,7 +21,9 @@ export interface DrawScope {
   excludeIds?: string[];
   /**
    * Work-period fit: only offer tasks estimated to fit in the time left.
-   * MAX-priority work is exempt — an emergency doesn't care about your window.
+   * MAX-priority work is exempt — an emergency doesn't care about your
+   * window — and so is anything in the day queue: the plan was made on
+   * purpose, and the period is a filter on the dice, not on the plan.
    */
   maxEstimateHours?: number;
   /**
@@ -32,19 +34,25 @@ export interface DrawScope {
   includeBlocked?: boolean;
   /**
    * The hand-ordered day queue: the FIRST of these ids still in the pool is
-   * served instead of a random pick. A deliberately planned order outranks any
-   * priority tier — but only the ORDER is privileged: snoozes, blockers, list
-   * hours, filters and the work-period fit all still gate the pool, so a
-   * queued task the rules would hide falls through to the next one (and then
-   * to the normal draw).
+   * served instead of a random pick — above every tier and above the owed
+   * rituals, save the ones at MAX priority. The queue is the one signal in
+   * the draw the user assembled by hand, so nothing the dice weigh may push
+   * it back (2026-09-06: with a dozen ritual windows open at once, "not now"
+   * had to be tapped through all of them to reach the plan); a ritual marked
+   * MAX is the user saying the opposite about that one, and wins. Only the
+   * ORDER is privileged, though: snoozes, blockers, list filters and a
+   * session skip still gate the pool, so a queued task the rules hide falls
+   * through to the next one (and then to the normal draw). Callers decide the
+   * rest — the screen exempts queued ids from the list-hours and
+   * ritual-window exclusions before building this.
    */
   queueFirst?: string[];
   /**
    * Owed RIGHT NOW (2026-07-29: due rituals): while any of these ids survive
-   * in the pool, the draw serves only from them — above every tier and above
-   * the day queue, because a window closes and a queue doesn't. Several owed
-   * tasks still draw fairly among themselves (tiering and the in-progress
-   * weighting run within the subset).
+   * in the pool, the draw serves only from them — above every tier. The day
+   * queue comes between: owed rituals at MAX priority are served before it,
+   * the rest after it. Several owed tasks still draw fairly among themselves
+   * (tiering and the in-progress weighting run within the subset).
    */
   dueFirst?: string[];
   /**
@@ -113,27 +121,33 @@ export function drawTask(
   let pool = eligibleForDraw(tasks, now, scope);
   if (scope?.maxEstimateHours !== undefined) {
     const fits = scope.maxEstimateHours;
+    const queued = new Set(scope.queueFirst ?? []);
     pool = pool.filter(
       (t) =>
-        effectivePriority(t, settings, now) === 'max' || (t.estimateHours ?? 1) <= fits,
+        queued.has(t.id)
+        || effectivePriority(t, settings, now) === 'max'
+        || (t.estimateHours ?? 1) <= fits,
     );
   }
   if (pool.length === 0) return null;
 
-  // What's owed right now narrows the whole draw to itself (see DrawScope.dueFirst).
-  if (scope?.dueFirst?.length) {
-    const due = new Set(scope.dueFirst);
-    const owed = pool.filter((t) => due.has(t.id));
-    if (owed.length > 0) pool = owed;
-  }
-
-  // The day queue pre-empts the tiered draw entirely (see DrawScope.queueFirst).
-  if (scope?.queueFirst?.length) {
-    const byId = new Map(pool.map((t) => [t.id, t]));
-    for (const id of scope.queueFirst) {
-      const queued = byId.get(id);
-      if (queued) return queued;
+  // What's owed right now (see DrawScope.dueFirst) narrows the draw to
+  // itself — before the queue when any owed task is at MAX, after it otherwise.
+  const due = scope?.dueFirst?.length ? new Set(scope.dueFirst) : null;
+  const owed = due ? pool.filter((t) => due.has(t.id)) : [];
+  const urgentOwed = owed.filter((t) => effectivePriority(t, settings, now) === 'max');
+  if (urgentOwed.length > 0) {
+    pool = urgentOwed;
+  } else {
+    // The day queue pre-empts everything below (see DrawScope.queueFirst).
+    if (scope?.queueFirst?.length) {
+      const byId = new Map(pool.map((t) => [t.id, t]));
+      for (const id of scope.queueFirst) {
+        const queued = byId.get(id);
+        if (queued) return queued;
+      }
     }
+    if (owed.length > 0) pool = owed;
   }
 
   // The pepper roll (see DrawScope.peppers). Each eligible pepper rolls

@@ -1164,11 +1164,14 @@ export class AppStore {
 
   private async drawNext(): Promise<void> {
     const now = new Date();
+    // A queued ritual draws even outside its window, as on the randomizer
+    // screen: the plan outranks the window.
+    const queued = new Set(liveQueueIds(this.state.queueIds, this.state.tasks));
     const next = drawTask(
       this.state.tasks, this.state.settings, now, Math.random,
       {
         excludeIds: [
-          ...ritualExclusions(this.state.tasks, this.state.settings, now),
+          ...ritualExclusions(this.state.tasks, this.state.settings, now).filter((id) => !queued.has(id)),
           ...archivedTaskIds(this.state.tasks, this.state.lists),
           // Locked lists' tasks never draw while locked — handing one to the
           // user would read its name out loud.

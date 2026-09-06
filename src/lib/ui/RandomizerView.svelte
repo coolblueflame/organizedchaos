@@ -58,8 +58,8 @@
    *
    * Hand-QUEUED tasks are exempt: queueing is an explicit "this, today", and
    * the plan outranks the clock (2026-08-19 report — a queued errand on an
-   * off-hours list never surfaced). Due rituals still outrank the queue
-   * itself, so the full precedence reads: ritual window > plan > list hours.
+   * off-hours list never surfaced). The full precedence reads:
+   * plan > ritual window > list hours.
    */
   const blockedByHours = $derived.by(() => {
     if (hoursIgnored) return [];
@@ -201,9 +201,17 @@
   /** Locked lists' tasks while locked — same never-proposed rule as the shelf. */
   const lockedOut = $derived(lockedTaskIds(app.state.tasks, app.state.lists, lock.unlocked));
 
-  const ritualsNotDue = $derived(
-    ritualExclusions(app.state.tasks, app.state.settings, clock.now),
-  );
+  /*
+    A ritual outside its window never draws — unless it was queued by hand.
+    Queueing one is a deliberate "this, today" that outranks the window the
+    same way it outranks list hours (2026-09-06: a queued morning ritual
+    vanished from the draw at eleven and could not be reached at all).
+  */
+  const ritualsNotDue = $derived.by(() => {
+    const queued = new Set(liveQueueIds(app.state.queueIds, app.state.tasks));
+    return ritualExclusions(app.state.tasks, app.state.settings, clock.now)
+      .filter((id) => !queued.has(id));
+  });
 
   /** Blockers inherit the urgency of whatever is waiting on them (§blocking). */
   const lifts = $derived(

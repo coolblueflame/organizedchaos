@@ -224,3 +224,76 @@ test('ticking a queued task celebrates like every other checkbox', async ({ page
   await page.getByTestId('completed-link').click();
   await expect(page.getByText('the queued one', { exact: true })).toBeVisible();
 });
+
+/** Pin the clock at 14:00 today so ritual windows are unambiguous. */
+async function pinAfternoon(page: Page) {
+  await page.clock.setFixedTime(new Date(new Date().setHours(14, 0, 0, 0)));
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+}
+
+/** Turn the expanded row's task into a daily ritual for the given window. */
+async function makeRitual(page: Page, name: string, from: string, to: string) {
+  await page.getByText(name, { exact: true }).click();
+  await page.getByTestId('task-ritual-row').click();
+  await page.getByTestId('ritual-from').fill(from);
+  await page.getByTestId('ritual-to').fill(to);
+  await page.getByTestId('ritual-save').click();
+  await expect(page.getByTestId('task-ritual-row')).toContainText('every day');
+  await page.getByTestId('task-collapse').last().click();
+}
+
+test('the plan outranks a ritual whose window is open, and the ritual is next in line', async ({ page }) => {
+  await reset(page);
+  await pinAfternoon(page);
+  await makeList(page, 'Day');
+  await addTask(page, 'write the report');
+  await addTask(page, 'eat lunch');
+  await makeRitual(page, 'eat lunch', '12:00', '16:00'); // open at 14:00
+  await queueByEditor(page, 'write the report');
+  await page.getByTestId('back').click();
+
+  // 2026-09-06 report: a dozen open ritual windows each cost a "not now"
+  // before the queue surfaced. The plan comes first now, full stop.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-from-queue')).toBeVisible();
+  await expect(page.getByTestId('draw-card')).toContainText('write the report');
+
+  // Skipping the plan hands the turn to what is owed.
+  await page.getByTestId('draw-not-now').click();
+  await expect(page.getByTestId('draw-card')).toContainText('eat lunch');
+});
+
+test('a queued ritual is served even outside its window', async ({ page }) => {
+  await reset(page);
+  await pinAfternoon(page);
+  await makeList(page, 'Day');
+  await addTask(page, 'stretch');
+  await makeRitual(page, 'stretch', '16:00', '17:00'); // closed at 14:00
+  await queueByEditor(page, 'stretch');
+  await page.getByTestId('back').click();
+
+  // Outside its window a ritual is normally not a suggestion at all — but
+  // queueing it by hand is the user overruling the window on purpose.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-from-queue')).toBeVisible();
+  await expect(page.getByTestId('draw-card')).toContainText('stretch');
+});
+
+test('a ritual at MAX priority still beats the plan', async ({ page }) => {
+  await reset(page);
+  await pinAfternoon(page);
+  await makeList(page, 'Day');
+  await addTask(page, 'write the report');
+  await addTask(page, 'take the meds');
+  await makeRitual(page, 'take the meds', '12:00', '16:00');
+  await page.getByText('take the meds', { exact: true }).click();
+  await page.getByTestId('priority-max').last().click();
+  await page.getByTestId('task-collapse').last().click();
+  await queueByEditor(page, 'write the report');
+  await page.getByTestId('back').click();
+
+  // MAX on a ritual is the user saying "this one really is first".
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('take the meds');
+  await expect(page.getByTestId('draw-from-queue')).toHaveCount(0);
+});
