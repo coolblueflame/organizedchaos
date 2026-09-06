@@ -248,39 +248,53 @@ describe('drawTask — tier selection', () => {
     expect(drawTask([overdueLow, plainHigh], DEFAULT_SETTINGS, now, firstRng)!.id).toBe(overdueLow.id);
   });
 
-  it('favours started work heavily but not absolutely', () => {
+  it('serves started work before untouched work, every time', () => {
+    // 2026-09-06 ask: "if all else is equal, due tasks should come before
+    // started tasks which should come before not started tasks". No dice in
+    // that decision any more — the rng only picks among true equals.
     const fresh = task({ priority: 'high' });
     const started = task({ priority: 'high', inProgress: true });
     const pool = [fresh, started];
-
-    // The group roll comes first: under STARTED_FIRST_CHANCE picks from what
-    // is already open, at or above it from the untouched pile.
-    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.5)!.id).toBe(started.id);
-    expect(drawTask(pool, DEFAULT_SETTINGS, now, () => 0.95)!.id).toBe(fresh.id);
-
-    let startedHits = 0;
-    for (let i = 0; i < 600; i++) {
-      if (drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id === started.id) startedHits += 1;
+    for (const roll of [0, 0.5, 0.95, 0.999]) {
+      expect(drawTask(pool, DEFAULT_SETTINGS, now, () => roll)!.id).toBe(started.id);
     }
-    expect(startedHits).toBeGreaterThan(420); // ≈80% expected, allow slack
-    expect(startedHits).toBeLessThan(560);    // but never a hard lock
+  });
+
+  it('due today or overdue comes before started, which comes before the rest', () => {
+    // All three sit in the same tier: the deadline escalates "dueToday" to
+    // max, and the other two are max by hand.
+    const rest = task({ priority: 'max' });
+    const started = task({ priority: 'max', inProgress: true });
+    const dueToday = task({ priority: 'max', deadline: '2026-07-15' });
+    const overdue = task({ priority: 'max', deadline: '2026-07-01' });
+    const pool = [rest, started, dueToday, overdue];
+    const dueIds = new Set([dueToday.id, overdue.id]);
+    for (let i = 0; i < 50; i++) {
+      expect(dueIds.has(drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id), 'due first').toBe(true);
+    }
+    // With nothing due, the started one; with nothing started, the rest.
+    expect(drawTask([rest, started], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(started.id);
+    expect(drawTask([rest], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(rest.id);
+    // A deadline still in the future is not "due", however close.
+    const tomorrow = task({ priority: 'max', deadline: '2026-07-16' });
+    expect(drawTask([tomorrow, started], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(started.id);
+    // Due AND started beats merely due.
+    const dueStarted = task({ priority: 'max', deadline: '2026-07-15', inProgress: true });
+    expect(drawTask([dueToday, dueStarted], DEFAULT_SETTINGS, now, Math.random)!.id).toBe(dueStarted.id);
   });
 
   it('the promise holds when the untouched pile dwarfs the started one', () => {
     // THE 2026-08-24 measurement: a real tier held 12 started tasks against
-    // 824 untouched, where the old per-task 5:1 came to ~7% — the whole
-    // reason this became a group-level roll. Population must not dilute it.
+    // 824 untouched, where a per-task 5:1 weight came to ~7%. Ranking the
+    // group makes the pile's shape irrelevant: every draw is a started one.
     const started = Array.from({ length: 12 }, () => task({ priority: 'high', inProgress: true }));
     const cold = Array.from({ length: 824 }, () => task({ priority: 'high' }));
     const pool = [...cold, ...started];
     const startedIds = new Set(started.map((t) => t.id));
 
-    let hits = 0;
-    for (let i = 0; i < 500; i++) {
-      if (startedIds.has(drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id)) hits += 1;
+    for (let i = 0; i < 200; i++) {
+      expect(startedIds.has(drawTask(pool, DEFAULT_SETTINGS, now, Math.random)!.id)).toBe(true);
     }
-    expect(hits / 500, 'roughly four draws in five, whatever the ratio').toBeGreaterThan(0.7);
-    expect(hits / 500).toBeLessThan(0.9);
   });
 
   it('a tier of only untouched work still draws every one of them', () => {

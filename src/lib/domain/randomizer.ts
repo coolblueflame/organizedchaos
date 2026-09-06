@@ -2,11 +2,14 @@
  * The randomizer draw (spec §4) — the heart of the app.
  *
  * Draw = take everything eligible, keep only the highest effective-priority
- * tier, prefer tasks already in progress, then pick uniformly at random.
- * The rng is injected so tests are deterministic and the UI can add drama.
+ * tier, then within it serve what is due today or overdue before what is
+ * already started before everything else, picking uniformly at random only
+ * among true equals. The rng is injected so tests are deterministic and the
+ * UI can add drama.
  */
 import { drawPriority, effectivePriority } from './priority';
 import { isBlocked } from './blocking';
+import { daysUntilDeadline } from './time';
 import { priorityRank, type Priority, type Settings, type Task } from './types';
 
 export interface DrawScope {
@@ -92,20 +95,27 @@ export function eligibleForDraw(tasks: Task[], now: Date, scope?: DrawScope): Ta
 }
 
 /**
- * How often the dice reach for work you have ALREADY STARTED, when the
- * winning tier holds both started and untouched tasks.
+ * The order within a tier, once priority has had its say. Lower comes first;
+ * the draw is uniform only among tasks that share the lowest rank present.
  *
- * A GROUP-level roll, not a per-task weight (2026-08-24 ask, after the
- * per-task version was measured against a real library). The old rule made
- * one started task five times likelier than one untouched task — which
- * sounds strong until the tier holds 12 started and 824 untouched, where
- * 5:1 per task still comes to about one draw in fifteen. Weighting the
- * CHOICE instead of the tasks makes the promise independent of how lopsided
- * the pile is: four draws in five come from what's already open, however
- * many of each there are. Not 100%, because sometimes the honest answer is
- * that the started pile is stale and something fresh deserves a look.
+ *   0  due today or overdue, and already started
+ *   1  due today or overdue
+ *   2  already started
+ *   3  everything else
+ *
+ * Deterministic on purpose (2026-09-06 ask: "if all else is equal, due
+ * tasks should come before started tasks which should come before not
+ * started tasks"). The earlier four-in-five group roll was the answer to a
+ * per-task weight that a lopsided tier diluted to nothing (12 started vs
+ * 824 untouched came to one draw in fifteen); ranking the group removes the
+ * dice from that decision entirely, so the promise no longer depends on the
+ * pile's shape at all. A started task that has gone stale is put down or
+ * finished by hand — the draw stops second-guessing it.
  */
-export const STARTED_FIRST_CHANCE = 0.8;
+function tierOrder(t: Task, settings: Settings, now: Date): number {
+  const due = t.deadline !== undefined && daysUntilDeadline(t.deadline, now, settings.rolloverHour) <= 0;
+  return (due ? 0 : 2) + (t.inProgress ? 0 : 1);
+}
 
 export function drawTask(
   tasks: Task[],
@@ -186,32 +196,15 @@ export function drawTask(
     const lift = lifts?.get(t.id);
     return Math.max(own, lift ? priorityRank(lift) : 0) === topRank;
   });
-  let candidates = intrinsic.length > 0 ? intrinsic : tier;
-  /*
-    An intrinsic-empty tier is here purely on PROJECT pressure (task-level
-    lifts count as intrinsic above), and project pressure is about FINISHING
-    the list: started tasks are served ABSOLUTELY first here, not merely
-    preferred (2026-07-30 ask) — completing one shrinks the remaining
-    estimate; starting another just spreads the work thinner. Ordinary draws
-    keep the softer preference below, so no single task owns the dice.
-  */
-  if (intrinsic.length === 0) {
-    const started = candidates.filter((t) => t.inProgress);
-    if (started.length > 0) candidates = started;
-  }
+  const candidates = intrinsic.length > 0 ? intrinsic : tier;
 
-  /*
-    Pick the GROUP first, then a task inside it (see STARTED_FIRST_CHANCE).
-    Rolling the group is what keeps the promise honest when the two sides are
-    wildly different sizes — the alternative, weighting each started task
-    against each untouched one, quietly collapses to nothing in a tier that
-    holds hundreds of untouched tasks.
-  */
-  const started = candidates.filter((t) => t.inProgress);
-  const untouched = candidates.filter((t) => !t.inProgress);
-  const bucket = started.length > 0 && untouched.length > 0
-    ? (rng() < STARTED_FIRST_CHANCE ? started : untouched)
-    : candidates;
+  // Due before started before the rest (see tierOrder); the dice only choose
+  // among tasks that tie on all of it. A tier here purely on project
+  // pressure gets the same treatment, which is what finishing a list wants:
+  // completing a started task shrinks the remaining estimate, starting
+  // another only spreads the work thinner.
+  const best = Math.min(...candidates.map((t) => tierOrder(t, settings, now)));
+  const bucket = candidates.filter((t) => tierOrder(t, settings, now) === best);
 
   const pick = bucket[Math.floor(rng() * bucket.length)];
   // Math.floor(rng() * n) is n only if rng() ever returns exactly 1; fall
