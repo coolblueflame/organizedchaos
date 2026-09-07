@@ -297,3 +297,39 @@ test('a ritual at MAX priority still beats the plan', async ({ page }) => {
   await expect(page.getByTestId('draw-card')).toContainText('take the meds');
   await expect(page.getByTestId('draw-from-queue')).toHaveCount(0);
 });
+
+test('a "not today" on a queued task rests at the bottom, marked, and is back in its spot tomorrow', async ({ page }) => {
+  await reset(page);
+  await pinAfternoon(page);
+  await makeList(page, 'Plan');
+  await addTask(page, 'first');
+  await addTask(page, 'second');
+  await addTask(page, 'third');
+  await queueByEditor(page, 'first');
+  await queueByEditor(page, 'second');
+  await queueByEditor(page, 'third');
+  await page.getByTestId('back').click();
+  await expect.poll(() => queueNames(page)).toEqual(['first', 'second', 'third']);
+
+  // Snooze the top of the plan from the draw.
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('first');
+  await page.getByTestId('draw-not-today').click();
+  await page.getByTestId('back').click();
+
+  // 2026-09-07 ask: it used to sit there at #1 looking as if nothing had
+  // happened. Now it rests at the bottom with a moon, out of the draw.
+  await expect.poll(() => queueNames(page)).toEqual(['second', 'third', 'first']);
+  const resting = page.locator('[data-queue-snoozed]');
+  await expect(resting).toHaveCount(1);
+  await expect(resting).toContainText('first');
+  await expect(page.getByTestId(/^queue-snoozed-/)).toHaveCount(1);
+
+  // The rollover lifts the snooze and the stored order was never touched.
+  const tomorrow = new Date(Date.now() + 24 * 3600_000);
+  tomorrow.setHours(6, 0, 0, 0);
+  await page.clock.setFixedTime(tomorrow);
+  await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  await expect.poll(() => queueNames(page)).toEqual(['first', 'second', 'third']);
+  await expect(page.locator('[data-queue-snoozed]')).toHaveCount(0);
+});

@@ -10,6 +10,7 @@
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
   import { withoutLocked } from '../domain/lock';
+  import { displayQueue, mergeReorder } from '../domain/dayQueue';
   import { lock } from './lock.svelte';
   import { projectPriorities } from '../domain/project';
   import { moveAcross, moveWithin, sameGrouping, sortLists, type GroupedIds } from '../domain/listOrder';
@@ -259,13 +260,15 @@
     e.preventDefault();
     dragPointerId = e.pointerId;
     queueDragId = id;
-    queueOrder = queueTasks.map((t) => t.id);
+    // Only the rows that can move: the snoozed ones sit at the bottom
+    // untouched, and the stored order is rebuilt around them on commit.
+    queueOrder = queueParts.active.map((t) => t.id);
   }
 
   function queueHitTest() {
     if (!queueDragId || !queueOrder) return;
     const rows = [...document.querySelectorAll<HTMLElement>('[data-queue-row]')]
-      .filter((el) => el.dataset.queueRow !== queueDragId);
+      .filter((el) => el.dataset.queueRow !== queueDragId && el.dataset.queueSnoozed === undefined);
     let index = rows.length;
     for (let i = 0; i < rows.length; i += 1) {
       const box = rows[i]!.getBoundingClientRect();
@@ -295,17 +298,26 @@
     const order = queueOrder;
     queueDragId = null;
     queueOrder = null;
-    if (order) await app.reorderQueue(order);
+    if (order) await app.reorderQueue(mergeReorder(queueTasks.map((t) => t.id), order));
   }
 
-  /** The rows to render: the live drag order while a drag is in flight.
-      Locked lists' tasks stay QUEUED but don't render their names while the
-      app is locked — the queue is the home screen's most readable surface. */
+  /*
+    Locked lists' tasks stay QUEUED but don't render their names while the
+    app is locked — the queue is the home screen's most readable surface.
+    Within what shows, a task snoozed for the day ("not today") drops to the
+    bottom, marked, until the rollover lifts the snooze and it is simply back
+    in its own place — the stored order never changes (2026-09-07 ask).
+  */
+  const queueParts = $derived(displayQueue(
+    withoutLocked(queueTasks, app.state.lists, lock.unlocked), clock.now.getTime()));
+
+  /** The rows to render: the live drag order while a drag is in flight. */
   const shownQueue = $derived.by(() => {
-    const visible = withoutLocked(queueTasks, app.state.lists, lock.unlocked);
-    if (!queueOrder) return visible;
-    const byId = new Map(visible.map((t) => [t.id, t]));
-    return queueOrder.map((id) => byId.get(id)).filter((t): t is Task => t !== undefined);
+    const { active, snoozed } = queueParts;
+    if (!queueOrder) return [...active, ...snoozed];
+    const byId = new Map(active.map((t) => [t.id, t]));
+    const dragged = queueOrder.map((id) => byId.get(id)).filter((t): t is Task => t !== undefined);
+    return [...dragged, ...snoozed];
   });
 
   /** Cancelled gestures reset everything without writing anything. */
@@ -550,14 +562,24 @@
       <!-- Budgeted like every per-task surface: a multi-select can queue
            hundreds in one gesture, and home must not mount them all. -->
       {#each shownQueue.slice(0, 80) as t, i (t.id)}
-        <div class="q-row" class:lifted={queueDragId === t.id}
-          data-queue-row={t.id} data-testid="queue-row-{t.id}"
+        {@const out = queueParts.snoozed.includes(t)}
+        <div class="q-row" class:lifted={queueDragId === t.id} class:snoozed={out}
+          data-queue-row={t.id} data-queue-snoozed={out ? '' : undefined} data-testid="queue-row-{t.id}"
           animate:flip={{ duration: queueDragId ? rowFlipMs : 0 }}>
-          <button class="list-grip" data-testid="queue-drag-{t.id}" aria-label="drag to reorder"
-            onpointerdown={(e) => startQueueDrag(e, t.id)}>
-            <Glyph name="grip" size={12} />
-          </button>
-          <span class="q-pos">{i + 1}</span>
+          {#if out}
+            <!-- Out for the day: not draggable, and the moon says why. -->
+            <span class="list-grip q-out" data-testid="queue-snoozed-{t.id}"
+              title="not today — back in its place tomorrow" aria-label="snoozed until tomorrow">
+              <Glyph name="moon" size={12} />
+            </span>
+            <span class="q-pos" aria-hidden="true">–</span>
+          {:else}
+            <button class="list-grip" data-testid="queue-drag-{t.id}" aria-label="drag to reorder"
+              onpointerdown={(e) => startQueueDrag(e, t.id)}>
+              <Glyph name="grip" size={12} />
+            </button>
+            <span class="q-pos">{i + 1}</span>
+          {/if}
           <!-- Celebrated like every other checkbox in the app (2026-08-22
                report: the queue was the one that finished in silence). -->
           <button class="q-check" data-testid="queue-check-{t.id}" aria-label="mark done"
@@ -816,6 +838,10 @@
     border-color: var(--acc-cyan);
     box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
   }
+  /* Snoozed for the day: still in the plan, just resting — dimmed and
+     dashed so it reads as "later", not "next". */
+  .q-row.snoozed { opacity: 0.6; border-style: dashed; }
+  .q-out { color: var(--dim); display: inline-flex; align-items: center; justify-content: center; cursor: default; }
   .q-pos {
     color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.7rem;
     min-width: 16px; text-align: right; flex: none;
