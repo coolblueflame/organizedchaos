@@ -8,7 +8,9 @@ import {
   type List, type RecurrenceMode, type RecurrenceTemplate, type SortMode, type Tag, type Task,
 } from '../domain/types';
 import { appDayKey, nextRolloverTs } from '../domain/time';
-import { nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns } from '../domain/recurrence';
+import {
+  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns,
+} from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import {
@@ -1043,7 +1045,7 @@ export class AppStore {
           // Re-armed from NOW, not the original moment: "come back X after
           // done" counts from when the task most recently became done.
           if (!tpl.paused) {
-            const next = scheduleAfterCompletion(tpl, new Date());
+            const next = scheduleAfterCompletion(tpl, new Date(), this.state.settings.rolloverHour);
             if (next !== null) teach.nextSpawnAt = next;
           }
           if (Object.keys(teach).length > 0) await this.updateRecurring(tpl.id, teach);
@@ -1088,7 +1090,7 @@ export class AppStore {
       ? this.state.templates.find((t) => t.id === task.recurrenceId && !t.deleted && !t.paused)
       : undefined;
     if (tpl) {
-      const next = scheduleAfterCompletion(tpl, new Date());
+      const next = scheduleAfterCompletion(tpl, new Date(), this.state.settings.rolloverHour);
       if (next !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
       if (tpl.mode.kind === 'chance') {
         // Peppered: completion resets the climb (on the synced row, so every
@@ -1723,7 +1725,20 @@ export class AppStore {
     const goneLists = new Set(
       this.state.lists.filter((l) => l.deleted || l.archived).map((l) => l.id));
     for (const tpl of this.state.templates) {
-      if (tpl.deleted || tpl.paused || goneLists.has(tpl.listId) || tpl.nextSpawnAt !== undefined) continue;
+      if (tpl.deleted || tpl.paused || goneLists.has(tpl.listId)) continue;
+      // An armed "days after done" rule is aligned to the rollover of the
+      // day it was going to arrive — the value the current arithmetic would
+      // have produced (see alignSpawnToRollover). Never later than it was;
+      // a rule armed at 00:36 tomorrow by the older moment-based arithmetic
+      // arrives at 04:00 today, which is where a daily task done just after
+      // midnight belongs. Identity for everything armed since, so this costs
+      // nothing once the library has converged.
+      if (tpl.mode.kind === 'afterCompletion' && tpl.nextSpawnAt !== undefined) {
+        const aligned = alignSpawnToRollover(tpl.nextSpawnAt, this.state.settings.rolloverHour);
+        if (aligned < tpl.nextSpawnAt) await this.updateRecurring(tpl.id, { nextSpawnAt: aligned });
+        continue;
+      }
+      if (tpl.nextSpawnAt !== undefined) continue;
       // Chance mode heals exactly like afterCompletion: its resting state is
       // unarmed-with-an-open-copy, and unarmed with NOTHING open is a rule
       // waiting for a completion that cannot come.

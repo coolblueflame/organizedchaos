@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { nextScheduledSpawn, scheduleAfterCompletion, spawnId, sweepSpawns } from './recurrence';
+import {
+  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, spawnId, sweepSpawns,
+} from './recurrence';
 import { DEFAULT_SETTINGS, type RecurrenceTemplate, type Task } from './types';
 
 const tpl = (over: Partial<RecurrenceTemplate>): RecurrenceTemplate => ({
@@ -11,32 +13,56 @@ const tpl = (over: Partial<RecurrenceTemplate>): RecurrenceTemplate => ({
 const at = (s: string) => new Date(s);
 
 describe('scheduleAfterCompletion', () => {
-  it('adds days as exact offset', () => {
+  it('counts app days and arrives at the rollover, not at the same time of day', () => {
     const t = tpl({ mode: { kind: 'afterCompletion', interval: 3, unit: 'days' } });
-    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00')))
-      .toBe(at('2026-07-13T15:00:00').getTime());
+    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00'), 4))
+      .toBe(at('2026-07-13T04:00:00').getTime());
+  });
+
+  it('a completion just after midnight still belongs to yesterday, so a daily task is back TODAY', () => {
+    // 2026-09-07 report: done at 00:30, missing from the day's list — the old
+    // arithmetic armed it for 00:30 tomorrow.
+    const t = tpl({ mode: { kind: 'afterCompletion', interval: 1, unit: 'days' } });
+    expect(scheduleAfterCompletion(t, at('2026-09-07T00:30:00'), 4))
+      .toBe(at('2026-09-07T04:00:00').getTime());
   });
 
   it('weeks multiply days', () => {
     const t = tpl({ mode: { kind: 'afterCompletion', interval: 2, unit: 'weeks' } });
-    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00')))
-      .toBe(at('2026-07-24T15:00:00').getTime());
+    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00'), 4))
+      .toBe(at('2026-07-24T04:00:00').getTime());
   });
 
-  it('months clamp to month length (Jan 31 + 1mo → Feb 28 in 2027)', () => {
+  it('months clamp to month length (Jan 31 + 1mo → Feb 28 in 2027), at the rollover', () => {
     const t = tpl({ mode: { kind: 'afterCompletion', interval: 1, unit: 'months' } });
-    expect(scheduleAfterCompletion(t, at('2027-01-31T09:00:00')))
-      .toBe(at('2027-02-28T09:00:00').getTime());
+    expect(scheduleAfterCompletion(t, at('2027-01-31T09:00:00'), 4))
+      .toBe(at('2027-02-28T04:00:00').getTime());
   });
 
   it('chance mode re-arms at the completion instant — immediacy IS the mechanic', () => {
     const t = tpl({ mode: { kind: 'chance', baseChance: 20, perRollBoost: 1 } });
-    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00')))
+    expect(scheduleAfterCompletion(t, at('2026-07-10T15:00:00'), 4))
       .toBe(at('2026-07-10T15:00:00').getTime());
   });
 
   it('returns null for scheduled modes', () => {
-    expect(scheduleAfterCompletion(tpl({}), at('2026-07-10T15:00:00'))).toBeNull();
+    expect(scheduleAfterCompletion(tpl({}), at('2026-07-10T15:00:00'), 4)).toBeNull();
+  });
+});
+
+describe('alignSpawnToRollover', () => {
+  it('snaps a moment-armed rule to the rollover of its own app day', () => {
+    // Armed by the old arithmetic for 00:36 on the 8th: that moment is still
+    // the 7th to the app, so the copy belongs at 04:00 on the 7th.
+    expect(alignSpawnToRollover(at('2026-09-08T00:36:00').getTime(), 4))
+      .toBe(at('2026-09-07T04:00:00').getTime());
+    expect(alignSpawnToRollover(at('2026-09-07T18:21:00').getTime(), 4))
+      .toBe(at('2026-09-07T04:00:00').getTime());
+  });
+
+  it('is the identity for anything already aligned', () => {
+    const aligned = at('2026-09-07T04:00:00').getTime();
+    expect(alignSpawnToRollover(aligned, 4)).toBe(aligned);
   });
 });
 

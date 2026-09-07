@@ -746,7 +746,7 @@ describe('AppStore', () => {
     expect((await persisted()).templates[0]!.nextSpawnAt).toBe(tpl.nextSpawnAt);
   });
 
-  it('afterCompletion template arms only when its task completes', async () => {
+  it('afterCompletion template arms only when its task completes, at the rollover of the Nth app day', async () => {
     vi.setSystemTime(new Date('2026-07-15T12:00:00'));
     const list = await store.addList('L');
     const a = await store.addTask(list.id);
@@ -754,7 +754,7 @@ describe('AppStore', () => {
     expect(tpl.nextSpawnAt).toBeUndefined();
     await store.completeTask(a.id);
     const armed = store.state.templates.find((t) => t.id === tpl.id)!;
-    expect(armed.nextSpawnAt).toBe(new Date('2026-07-18T12:00:00').getTime());
+    expect(armed.nextSpawnAt).toBe(new Date('2026-07-18T04:00:00').getTime());
     expect((await persisted()).templates[0]!.nextSpawnAt).toBe(armed.nextSpawnAt);
   });
 
@@ -1572,5 +1572,38 @@ describe('discoveries earned by the shape of a finish', () => {
     expect(store.eggUnlocks).not.toContain('bouncer');
     await store.setListLocked(list.id, true);
     expect(store.eggUnlocks).toContain('bouncer');
+  });
+});
+
+describe('"days after done" and the rollover', () => {
+  it('a daily task finished just after midnight is back at the 4am rollover, not 24 hours later', async () => {
+    const list = await store.addList('Nightly');
+    const a = await store.addTask(list.id);
+    await store.patchTask(a.id, { name: 'read a chapter' });
+    const tpl = await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    vi.setSystemTime(new Date('2026-09-07T00:30:00'));
+    await store.completeTask(a.id);
+    const armed = store.state.templates.find((t) => t.id === tpl.id)!.nextSpawnAt!;
+    expect(new Date(armed).toISOString()).toBe(new Date('2026-09-07T04:00:00').toISOString());
+    // The morning sweep materialises it: the copy is on today's list.
+    vi.setSystemTime(new Date('2026-09-07T06:00:00'));
+    await store.runSpawnSweep(new Date());
+    const copies = store.state.tasks.filter((t) => t.recurrenceId === tpl.id && t.completedAt === undefined);
+    expect(copies).toHaveLength(1);
+  });
+
+  it('a rule armed by the older moment arithmetic is healed into place by the sweep', async () => {
+    const list = await store.addList('Nightly');
+    const a = await store.addTask(list.id);
+    const tpl = await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 1, unit: 'days' });
+    await store.completeTask(a.id);
+    // What the old code left behind: 00:36 tomorrow (done at 00:36 today).
+    await store.updateRecurring(tpl.id, { nextSpawnAt: new Date('2026-09-08T00:36:00').getTime() });
+    vi.setSystemTime(new Date('2026-09-07T09:00:00'));
+    await store.runSpawnSweep(new Date());
+    const healed = store.state.templates.find((t) => t.id === tpl.id)!;
+    const copies = store.state.tasks.filter((t) => t.recurrenceId === tpl.id && t.completedAt === undefined);
+    expect(copies, 'aligned to 04:00 today, which has passed — so it spawned').toHaveLength(1);
+    expect(healed.nextSpawnAt, 'after-completion rests unarmed with a copy open').toBeUndefined();
   });
 });

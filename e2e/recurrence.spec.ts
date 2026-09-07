@@ -367,3 +367,37 @@ test('the recurring screen can be re-ordered, and remembers which order', async 
   await page.reload();
   await expect(page.getByTestId('recurring-sort')).toContainText('a–z');
 });
+
+test('a daily "after done" task finished just after midnight is back on today\'s list by morning', async ({ page }) => {
+  // 2026-09-07 report. The clock is pinned at 00:30: still yesterday to the
+  // app (rollover 04:00), so "one day after done" means the rollover that is
+  // three and a half hours away, not 00:30 tomorrow.
+  const poke = () => page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  const smallHours = new Date();
+  smallHours.setHours(0, 30, 0, 0);
+  await page.clock.setFixedTime(smallHours);
+  await poke();
+
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Nightly');
+  await page.getByTestId('new-list-input').press('Enter');
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('read a chapter');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-afterCompletion').click();
+  await page.getByTestId('recur-interval').fill('1');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  const row = page.getByTestId(/^task-row-/).first();
+  const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+  await page.getByTestId(`task-check-${id}`).click();
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+
+  // Morning: the sweep on visibility materialises the day's copy.
+  const morning = new Date(smallHours);
+  morning.setHours(6, 0, 0, 0);
+  await page.clock.setFixedTime(morning);
+  await poke();
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'read a chapter' })).toHaveCount(1);
+});

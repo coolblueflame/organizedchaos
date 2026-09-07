@@ -3,8 +3,9 @@
  *
  * Templates are the durable objects; tasks are their disposable instances.
  * Two modes:
- *  - afterCompletion: completing an instance arms `nextSpawnAt = completion + interval`
- *    ("come back X after done" — the task stays gone until then).
+ *  - afterCompletion: completing an instance arms `nextSpawnAt` for the
+ *    rollover of the app day `interval` after the completion's own app day
+ *    ("come back X days after done" — the task stays gone until then).
  *  - weekly/monthly schedule: `nextSpawnAt` always holds the next cadence moment
  *    (rolloverHour on a due day).
  * The spawn sweep runs at app open/focus and at the 4am rollover, materializing
@@ -24,18 +25,48 @@ function addMonthsClamped(d: Date, months: number): Date {
   return target;
 }
 
-/** afterCompletion: the moment the next instance should appear; null for scheduled modes. */
-export function scheduleAfterCompletion(tpl: RecurrenceTemplate, completedAt: Date): number | null {
+/** The rollover moment that opens the app day `d` belongs to. */
+function appDayStart(d: Date, rolloverHour: number): Date {
+  const [y, m, day] = appDayKey(d, rolloverHour).split('-').map(Number);
+  return new Date(y!, m! - 1, day!, rolloverHour);
+}
+
+/**
+ * A spawn moment aligned to the rollover of its own app day. Identity for
+ * anything this module arms now; for a rule armed by the older arithmetic
+ * (completion moment + N days) it yields exactly what the current rule would
+ * have produced, since adding whole days keeps the time of day — so the sweep
+ * can heal an armed rule in place without knowing when it was completed.
+ */
+export function alignSpawnToRollover(ts: number, rolloverHour: number): number {
+  return appDayStart(new Date(ts), rolloverHour).getTime();
+}
+
+/**
+ * afterCompletion: the moment the next instance should appear; null for
+ * scheduled modes.
+ *
+ * Day-granular and rollover-aligned: "N days after done" counts APP days
+ * from the day the completion belongs to, and the copy arrives at that
+ * day's rollover — so a daily task finished at 00:30 (still yesterday to the
+ * app) is back at 04:00 today, not at 00:30 tomorrow (2026-09-07 report: a
+ * task done just after midnight was missing from the day's list), and one
+ * finished mid-afternoon is in tomorrow MORNING's list rather than arriving
+ * mid-afternoon again. Months clamp like the scheduled modes do.
+ */
+export function scheduleAfterCompletion(
+  tpl: RecurrenceTemplate, completedAt: Date, rolloverHour: number,
+): number | null {
   const m = tpl.mode;
   // Chance mode re-arms the moment it completes — being immediately possible
   // again (at its base chance) is the whole mechanic (2026-08-20 ask).
   if (m.kind === 'chance') return completedAt.getTime();
   if (m.kind !== 'afterCompletion') return null;
-  if (m.unit === 'months') return addMonthsClamped(completedAt, m.interval).getTime();
+  const dayStart = appDayStart(completedAt, rolloverHour);
+  if (m.unit === 'months') return addMonthsClamped(dayStart, m.interval).getTime();
   const days = m.unit === 'weeks' ? m.interval * 7 : m.interval;
-  const d = new Date(completedAt.getTime());
-  d.setDate(d.getDate() + days);
-  return d.getTime();
+  dayStart.setDate(dayStart.getDate() + days);
+  return dayStart.getTime();
 }
 
 /**
