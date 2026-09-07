@@ -187,3 +187,35 @@ test('the fill-in prompt can re-file the task into a better list', async ({ page
   await expect(page.getByText('wind down with a movie', { exact: true })).toBeVisible();
   await expect(page.getByTestId(/^needs-review-/), 'reviewed too').toHaveCount(0);
 });
+
+test('the fill-in card offers lists in home order, and its deadline commits on the way out', async ({ page }) => {
+  // Four lists in creation order — home order — where storage order (the
+  // random id) is the one thing it is guaranteed not to be for long.
+  await reset(page, 'triage');
+  for (const title of ['zeta', 'alpha', 'mid', 'beta']) {
+    await page.getByTestId('new-list').click();
+    await page.getByTestId('new-list-input').fill(title);
+    await page.getByTestId('new-list-input').press('Enter');
+    await page.getByTestId('new-task').waitFor();
+    if (title !== 'beta') await page.getByTestId('back').click();
+  }
+  const id = await addTask(page, 'needs a home');
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-triage')).toContainText('needs a home');
+  const picker = page.getByTestId('triage-move');
+  await expect(picker.locator('option')).toHaveText(['zeta', 'alpha', 'mid', 'beta']);
+  // New lists file under a named section, so the picker shows it as a group
+  // — the raw-storage version had no groups at all (2026-09-07 report).
+  await expect(picker.locator('optgroup')).toHaveCount(1);
+
+  // The deadline drafted on the card lands when you leave it.
+  await page.getByTestId('triage-deadline').fill('2030-01-01');
+  await page.getByTestId('triage-done').click();
+  await expect(page.getByTestId('draw-card')).toBeVisible(); // fell through to a real roll
+  await page.getByTestId('back').click();
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'beta' }).locator('.list-main').click();
+  await page.getByTestId(`task-row-${id}`).click();
+  await expect(page.getByTestId('task-deadline-input')).toHaveValue('2030-01-01');
+});

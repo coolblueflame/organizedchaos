@@ -28,6 +28,7 @@
   import { lockedTaskIds } from '../domain/lock';
   import { lock } from './lock.svelte';
   import { liveQueueIds } from '../domain/dayQueue';
+  import { pickerListGroups } from '../domain/listOrder';
   import { SELF_CARE } from '../eggs/content/extras';
   import { pickFresh } from '../eggs/freshPick';
   import { completionCounts } from '../domain/stats';
@@ -144,6 +145,21 @@
     void app.patchTask(triage.id, { tagIds });
   }
   let triageOffered = false;
+  /** The re-file choices, grouped and ordered the way the home screen reads. */
+  const listGroups = $derived(pickerListGroups(app.state.lists));
+  /*
+    Drafted while choosing, committed on blur — the same reason as the task
+    editor's deadline: iOS writes today's date into an empty picker the
+    moment it opens, and saving that would file a deadline nobody chose if
+    the picker is then cancelled. Every way off the card blurs first.
+  */
+  let triageDeadline = $state<string | null>(null);
+  function commitTriageDeadline() {
+    if (!triage || triageDeadline === null) return;
+    const value = triageDeadline || undefined;
+    triageDeadline = null;
+    if (value !== triage.deadline) void app.patchTask(triage.id, { deadline: value });
+  }
 
   function maybeOfferTriage(): void {
     if (triageOffered) return;
@@ -428,9 +444,23 @@
         <label class="triage-move"><span>list</span>
           <select data-testid="triage-move" value={triage.listId}
             onchange={(e) => void app.moveTask(triage!.id, e.currentTarget.value)}>
-            {#each app.state.lists.filter((l) => l.archived !== true) as l (l.id)}
-              <option value={l.id}>{l.title}</option>
+            {#each listGroups as g (g.group)}
+              {#if g.group === ''}
+                {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+              {:else}
+                <optgroup label={g.group}>
+                  {#each g.lists as l (l.id)}<option value={l.id}>{l.title}</option>{/each}
+                </optgroup>
+              {/if}
             {/each}
+            <!-- Its home may be somewhere the picker no longer offers (an
+                 archived list, a dice-made vessel); it must still display,
+                 or the select silently claims the wrong list. -->
+            {#if !listGroups.some((g) => g.lists.some((l) => l.id === triage!.listId))}
+              <option value={triage.listId}>
+                {app.state.lists.find((l) => l.id === triage!.listId)?.title ?? 'its current list'}
+              </option>
+            {/if}
           </select>
         </label>
         <label class="triage-notes"><span>description</span>
@@ -443,7 +473,9 @@
             <!-- .empty: see the desktop-Safari ghost-date rule in app.css -->
             <input type="date" data-testid="triage-deadline" value={triage.deadline ?? ''}
               class:empty={!triage.deadline}
-              oninput={(e) => void app.patchTask(triage!.id, { deadline: e.currentTarget.value || undefined })} />
+              oninput={(e) => (triageDeadline = e.currentTarget.value)}
+              onchange={(e) => (triageDeadline = e.currentTarget.value)}
+              onblur={commitTriageDeadline} />
           </label>
           <label><span>estimate</span>
             <EstimateField hours={triage.estimateHours} testid="triage-estimate"
