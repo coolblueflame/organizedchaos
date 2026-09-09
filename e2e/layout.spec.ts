@@ -164,3 +164,34 @@ test('the bulk bar contains its controls even with long tag names', async ({ pag
   });
   expect(overflow, 'no control may pass the bar edge').toBeLessThanOrEqual(0);
 });
+
+test('a full-screen moment covers the whole phone viewport', async ({ page }) => {
+  // The overlay is a <button>; it must be sized like the confetti layer,
+  // not left to its insets (2026-09-08 report from a real iPhone). The
+  // emulation stretches it either way, so this guards the recipe against
+  // a future ancestor transform or a stray size rule, not the iOS quirk.
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Moments');
+  await page.getByTestId('new-list-input').press('Enter');
+  for (const name of ['matrix-rain', 'aurora']) {
+    await page.evaluate(([n]) => {
+      localStorage.setItem('OC_EGG_FORCE', 'moment');
+      localStorage.setItem('OC_MOMENT', n!);
+    }, [name]);
+    await page.getByTestId('new-task').click();
+    await page.getByTestId('task-name-input').fill(name);
+    await page.getByTestId('task-collapse').last().click();
+    const row = page.getByTestId(/^task-row-/).first();
+    const id = (await row.getAttribute('data-testid'))!.replace('task-row-', '');
+    await page.getByTestId(`task-check-${id}`).click();
+    const moment = page.getByTestId('delight-moment');
+    await expect(moment).toBeVisible();
+    const box = (await moment.boundingBox())!;
+    const vp = page.viewportSize()!;
+    expect({ x: box.x, y: box.y, w: Math.round(box.width), h: Math.round(box.height) }, name)
+      .toEqual({ x: 0, y: 0, w: vp.width, h: vp.height });
+    await moment.click();
+    await expect(moment).toHaveCount(0);
+  }
+});

@@ -476,8 +476,19 @@
     color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; padding: 6px 14px; cursor: pointer;
   }
 
+  /*
+    Sized explicitly, not left to `inset: 0` alone. This overlay is a
+    <button>, and iOS Safari sizes form controls to their content rather
+    than stretching them between their insets — on a real phone the effect
+    stopped short of the screen edges (2026-09-08 report; the desktop
+    engine and the iPhone emulation both stretch it, so this cannot be
+    reproduced here). The confetti layer, a canvas with an explicit
+    100vw × 100vh, has always covered the phone: same recipe.
+  */
   .moment {
-    position: fixed; inset: 0; z-index: 400; border: none; padding: 0; cursor: pointer;
+    position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 400;
+    display: block; margin: 0; padding: 0; border: none; cursor: pointer;
+    appearance: none; -webkit-appearance: none;
     background: transparent;
   }
   .moment canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
