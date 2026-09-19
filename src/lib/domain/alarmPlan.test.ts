@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alarmBody, alarmPlan, type AlarmRecord } from './alarmPlan';
+import { alarmBody, alarmPlan, backoffMs, type AlarmRecord } from './alarmPlan';
 import type { Priority, Task } from './types';
 
 const rec = (at: number): AlarmRecord => ({ at, confirmed: true });
@@ -78,6 +78,41 @@ describe('alarmPlan', () => {
     // Applying the plan = the sends landed and the server confirmed them.
     for (const s of first.schedule) ledger.set(s.taskId, { at: s.at, confirmed: true });
     expect(alarmPlan([a, b], ledger, NOW)).toEqual({ schedule: [], cancel: [] });
+  });
+});
+
+describe('alarmPlan — backing off', () => {
+  it('an entry resting after a failure is left alone until its time, then retried', () => {
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const resting = new Map([[t.id, { at: NOW + 60_000, confirmed: false, tries: 1, nextTryAt: NOW + 5_000 }]]);
+    expect(alarmPlan([t], resting, NOW + 1_000).schedule).toEqual([]);
+    expect(alarmPlan([t], resting, NOW + 5_000).schedule).toHaveLength(1);
+  });
+
+  it('a moved box goes out at once, whatever the old deadline was resting on', () => {
+    const t = task({ timeboxEndsAt: NOW + 120_000 });
+    const resting = new Map([[t.id, { at: NOW + 60_000, confirmed: false, tries: 3, nextTryAt: NOW + 20_000 }]]);
+    expect(alarmPlan([t], resting, NOW + 1_000).schedule).toHaveLength(1);
+  });
+
+  it('a cancel that failed rests too', () => {
+    const resting = new Map([['gone', { at: NOW + 60_000, confirmed: true, tries: 1, nextTryAt: NOW + 5_000, resting: 'cancel' as const }]]);
+    expect(alarmPlan([], resting, NOW + 1_000).cancel).toEqual([]);
+    expect(alarmPlan([], resting, NOW + 5_000).cancel).toEqual(['gone']);
+  });
+
+  it('a schedule that is resting never delays the cancel that takes it back', () => {
+    // The last-gasp cancel after a schedule that died mid-flight is how a
+    // server-held alarm is taken back before the phone suspends the page.
+    const resting = new Map([['done', { at: NOW + 60_000, confirmed: false, tries: 1, nextTryAt: NOW + 5_000, resting: 'set' as const }]]);
+    expect(alarmPlan([], resting, NOW + 1_000).cancel).toEqual(['done']);
+  });
+});
+
+describe('backoffMs', () => {
+  it('doubles from five seconds and caps at an hour', () => {
+    expect([1, 2, 3, 4].map(backoffMs)).toEqual([5_000, 10_000, 20_000, 40_000]);
+    expect(backoffMs(20)).toBe(3_600_000);
   });
 });
 

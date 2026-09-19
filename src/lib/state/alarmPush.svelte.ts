@@ -7,12 +7,16 @@
  * The plan is cheap, so it rides the same 1s sweep as the local watcher and
  * almost always produces nothing to send.
  *
- * Failure posture: fire-and-forget with re-try by convergence. A failed POST
- * leaves the ledger unchanged, so the very next non-empty diff repeats it.
- * The Worker being down costs exactly the feature it provides and nothing
- * else — which is what keeps the app's no-hosting promise honest.
+ * Failure posture: re-try by convergence, but never by brute force. A failed
+ * request backs off (5s, 10s, 20s… up to an hour), a Worker that refuses
+ * this device's credentials stops all traffic until the URL or secret is
+ * changed, and no sweep sends more than a handful of requests a minute.
+ * The first version retried on every one-second sweep, so ONE permanently
+ * refused request became ~86,000 requests a day from a single open tab and
+ * exhausted the Cloudflare free quota (2026-09-19). The Worker being down
+ * still costs exactly the feature it provides and nothing else.
  */
-import { alarmBody, alarmPlan, type AlarmRecord } from '../domain/alarmPlan';
+import { alarmBody, alarmPlan, backoffMs, type AlarmRecord } from '../domain/alarmPlan';
 import { lockedListIds } from '../domain/lock';
 import type { List, Settings, Task } from '../domain/types';
 
@@ -42,7 +46,15 @@ function hydrate(): void {
       // they describe sends the server confirmed, so they read as confirmed.
       if (typeof v === 'number') told.set(id, { at: v, confirmed: true });
       else if (v && typeof v === 'object' && typeof (v as AlarmRecord).at === 'number') {
-        told.set(id, { at: (v as AlarmRecord).at, confirmed: (v as AlarmRecord).confirmed === true });
+        const r = v as AlarmRecord;
+        told.set(id, {
+          at: r.at,
+          confirmed: r.confirmed === true,
+          ...(typeof r.tries === 'number' ? { tries: r.tries } : {}),
+          ...(typeof r.nextTryAt === 'number' ? { nextTryAt: r.nextTryAt } : {}),
+          ...(typeof r.rejected === 'number' ? { rejected: r.rejected } : {}),
+          ...(r.resting === 'set' || r.resting === 'cancel' ? { resting: r.resting } : {}),
+        });
       }
     }
   } catch { /* unreadable — degrades to the old session-local behaviour */ }
@@ -56,6 +68,56 @@ function flush(): void {
 }
 
 let subscription: PushSubscription | null = null;
+
+/**
+ * The auth breaker. A 401/403 means the Worker will answer the same way to
+ * every request carrying these credentials, so retrying is pure cost: the
+ * sweep sends nothing further until the URL or the secret changes. Session
+ * memory only — a reload gets one fresh attempt, which is cheap and lets a
+ * fixed Worker be noticed without a Settings visit.
+ */
+let refusal: { url: string; secret: string; status: number; at: number } | null = null;
+
+/** Why the Worker is not being spoken to, for the Settings readout. */
+export function alarmRefusal(): { status: number; at: number } | null {
+  return refusal ? { status: refusal.status, at: refusal.at } : null;
+}
+
+/**
+ * The per-minute cap: a leaky bucket of send moments. Whatever else goes
+ * wrong — a future loop nobody has thought of yet — one device cannot
+ * exceed this rate, and the free quota is safe by construction.
+ */
+const SENDS_PER_MINUTE = 30;
+let sendMoments: number[] = [];
+function underCap(now: number): boolean {
+  sendMoments = sendMoments.filter((t) => now - t < 60_000);
+  return sendMoments.length < SENDS_PER_MINUTE;
+}
+
+/** Record a failed attempt on an entry: count it and rest before the next of its kind. */
+function noteFailure(
+  taskId: string, at: number, now: number, kind: 'set' | 'cancel', status?: number,
+): void {
+  const prev = told.get(taskId);
+  const tries = (prev && prev.at === at && prev.resting === kind ? prev.tries ?? 0 : 0) + 1;
+  told.set(taskId, {
+    at,
+    confirmed: prev?.confirmed === true && prev.at === at,
+    tries,
+    nextTryAt: now + backoffMs(tries),
+    resting: kind,
+    ...(status !== undefined ? { rejected: status } : {}),
+  });
+  flush();
+}
+
+/** True when the status means "these credentials, never": trip the breaker. */
+function refuse(url: string, secret: string, status: number, now: number): boolean {
+  if (status !== 401 && status !== 403) return false;
+  refusal = { url, secret, status, at: now };
+  return true;
+}
 
 /**
  * Cached once FOUND — never cached as null. The old version asked exactly
@@ -89,6 +151,10 @@ export async function syncAlarms(
   const url = settings.alarmWorkerUrl?.trim();
   const secret = settings.alarmWorkerSecret;
   if (!url || !secret) return; // not configured — the feature simply isn't on
+  // Refused credentials stay refused until they change; a changed pair
+  // re-arms the breaker for one fresh attempt.
+  if (refusal && refusal.url === url && refusal.secret === secret) return;
+  refusal = null;
 
   hydrate(); // lazily, so a reload can still cancel what an earlier session scheduled
   const plan = alarmPlan(tasks, told, now);
@@ -115,8 +181,16 @@ export async function syncAlarms(
         exact shape of four separate reports. Recorded unconfirmed, it stays
         cancellable, and the diff still retries it until the server agrees.
       */
-      told.set(s.taskId, { at: s.at, confirmed: false });
+      const prev = told.get(s.taskId);
+      told.set(s.taskId, {
+        at: s.at, confirmed: false,
+        // A moved box starts its count afresh; the same deadline keeps it.
+        ...(prev && prev.at === s.at && prev.resting === 'set' && prev.tries
+          ? { tries: prev.tries, resting: 'set' as const } : {}),
+      });
       flush();
+      if (!underCap(now)) return;
+      sendMoments.push(now);
       try {
         const res = await send(url, {
           method: 'POST',
@@ -135,12 +209,24 @@ export async function syncAlarms(
             body: alarmBody(s.name, task ? locked.has(task.listId) : false),
           }),
         });
-        if (res.ok) { told.set(s.taskId, { at: s.at, confirmed: true }); flush(); }
-      } catch { /* worker unreachable — the next diff retries by convergence */ }
+        if (res.ok) {
+          told.set(s.taskId, { at: s.at, confirmed: true });
+          flush();
+        } else {
+          noteFailure(s.taskId, s.at, now, 'set', res.status);
+          if (refuse(url, secret, res.status, now)) return;
+        }
+      } catch {
+        // Unreachable: rest, then the diff retries by convergence.
+        noteFailure(s.taskId, s.at, now, 'set');
+      }
     }
   }
 
   for (const taskId of plan.cancel) {
+    const at = told.get(taskId)?.at ?? 0;
+    if (!underCap(now)) return;
+    sendMoments.push(now);
     try {
       const res = await send(url, {
         method: 'POST',
@@ -148,8 +234,16 @@ export async function syncAlarms(
         keepalive: true, // cancels especially — see the schedule POST's note
         body: JSON.stringify({ taskId, action: 'cancel' }),
       });
-      if (res.ok) { told.delete(taskId); flush(); }
-    } catch { /* ditto */ }
+      if (res.ok) {
+        told.delete(taskId);
+        flush();
+      } else {
+        noteFailure(taskId, at, now, 'cancel', res.status);
+        if (refuse(url, secret, res.status, now)) return;
+      }
+    } catch {
+      noteFailure(taskId, at, now, 'cancel');
+    }
   }
 }
 
@@ -159,10 +253,10 @@ export async function syncAlarms(
  * alarmed" has been reported four times and every fix before this one was
  * reasoned about without ever being able to SEE the ledger (2026-08-27).
  */
-export function scheduledAlarms(): Array<{ taskId: string; at: number; confirmed: boolean }> {
+export function scheduledAlarms(): Array<{ taskId: string; at: number; confirmed: boolean; rejected?: number }> {
   hydrate();
   return [...told.entries()]
-    .map(([taskId, r]) => ({ taskId, at: r.at, confirmed: r.confirmed }))
+    .map(([taskId, r]) => ({ taskId, at: r.at, confirmed: r.confirmed, ...(r.rejected !== undefined ? { rejected: r.rejected } : {}) }))
     .sort((a, b) => a.at - b.at);
 }
 
@@ -178,7 +272,11 @@ export async function cancelAllAlarms(
   const secret = settings.alarmWorkerSecret;
   if (!url || !secret) return;
   hydrate();
+  // A deliberate tap is allowed one attempt past the breaker: if the Worker
+  // has been fixed, this is how the device finds out.
+  refusal = null;
   for (const taskId of [...told.keys()]) {
+    const at = told.get(taskId)?.at ?? 0;
     try {
       const res = await send(url, {
         method: 'POST',
@@ -186,8 +284,16 @@ export async function cancelAllAlarms(
         keepalive: true,
         body: JSON.stringify({ taskId, action: 'cancel' }),
       });
-      if (res.ok) { told.delete(taskId); flush(); }
-    } catch { /* the sweep will keep trying */ }
+      if (res.ok) {
+        told.delete(taskId);
+        flush();
+      } else {
+        noteFailure(taskId, at, Date.now(), 'cancel', res.status);
+        if (refuse(url, secret, res.status, Date.now())) return;
+      }
+    } catch {
+      noteFailure(taskId, at, Date.now(), 'cancel');
+    }
   }
 }
 
@@ -196,6 +302,8 @@ export function resetAlarmLedger(keepStorage = false): void {
   told.clear();
   hydrated = false;
   subscription = null;
+  refusal = null;
+  sendMoments = [];
   if (!keepStorage) {
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);

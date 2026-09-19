@@ -11,10 +11,11 @@
   import Glyph from './Glyph.svelte';
   import LockGate from './LockGate.svelte';
   import { hasPin, lock, setPin } from './lock.svelte';
-  import { cancelAllAlarms, scheduledAlarms } from '../state/alarmPush.svelte';
+  import { alarmRefusal, cancelAllAlarms, scheduledAlarms } from '../state/alarmPush.svelte';
 
   /** The alarm readout, re-read on mount and on demand (see the ledger line). */
   let alarmRows = $state(scheduledAlarms());
+  let refused = $state(alarmRefusal());
 
   let howToOpen = $state(false);
   let pinDraft = $state('');
@@ -301,9 +302,18 @@
           — next at {new Date(alarmRows[0]!.at).toLocaleTimeString()}{#if alarmRows.some((r) => !r.confirmed)}, {alarmRows.filter((r) => !r.confirmed).length} unconfirmed{/if}.
         {/if}
       </p>
+      {#if refused}
+        <!-- The breaker is the difference between one refused request and a
+             request a second for the rest of the day (2026-09-19). -->
+        <p class="hint alarm-refused" data-testid="alarm-refused">
+          the Worker refused this device's requests ({refused.status}) at
+          {new Date(refused.at).toLocaleTimeString()} — nothing more is sent
+          until the url or the secret changes. Check both against the Worker.
+        </p>
+      {/if}
       <div class="alarm-tools">
         <button class="link" data-testid="alarm-ledger-refresh"
-          onclick={() => (alarmRows = scheduledAlarms())}>refresh</button>
+          onclick={() => { alarmRows = scheduledAlarms(); refused = alarmRefusal(); }}>refresh</button>
         {#if alarmRows.length > 0}
           <button class="link" data-testid="alarm-cancel-all"
             onclick={() => void cancelAllAlarms(app.state.settings).then(() => (alarmRows = scheduledAlarms()))}>

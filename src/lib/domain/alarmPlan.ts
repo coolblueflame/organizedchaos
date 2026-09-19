@@ -32,7 +32,34 @@ export interface AlarmPlan {
  * only confirmed sends made those alarms invisible to the cancel pass and
  * they fired over finished work (2026-08-27, the fourth report of it).
  */
-export interface AlarmRecord { at: number; confirmed: boolean }
+export interface AlarmRecord {
+  at: number;
+  confirmed: boolean;
+  /** Failed attempts at this `at` so far (schedule or cancel). */
+  tries?: number;
+  /** Not before this moment: the entry is backing off after a failure. */
+  nextTryAt?: number;
+  /**
+   * Which request the rest belongs to. A failed SCHEDULE must never delay a
+   * cancel: the cancel after a schedule that died mid-flight is the last
+   * chance to take back an alarm the server may hold, and it goes out at
+   * once; a failed cancel rests on its own account.
+   */
+  resting?: 'set' | 'cancel';
+  /** The last HTTP status the Worker refused with, for the readout. */
+  rejected?: number;
+}
+
+/**
+ * How long an entry rests after its Nth failure: 5s, 10s, 20s… capped at an
+ * hour. A retry-by-convergence design that retries on EVERY sweep turns one
+ * permanently refused request into a request per second — 86,400 a day from
+ * a single open tab, which is how a hobby app blew through Cloudflare's free
+ * daily quota (2026-09-19, the account's own 91% warning).
+ */
+export function backoffMs(tries: number): number {
+  return Math.min(3_600_000, 5_000 * 2 ** Math.max(0, tries - 1));
+}
 
 /**
  * @param scheduled what we have TRIED to tell the server, taskId → record
@@ -56,17 +83,23 @@ export function alarmPlan(
   for (const [taskId, task] of wanted) {
     const known = scheduled.get(taskId);
     // Only a CONFIRMED record at the right time counts as done; an attempt
-    // whose answer never arrived is repeated until one does.
+    // whose answer never arrived is repeated until one does — after its
+    // backoff, when it has one for this very deadline. A moved box is a new
+    // request and goes out at once.
     if (known?.confirmed && known.at === task.timeboxEndsAt) continue;
+    if (known && known.at === task.timeboxEndsAt && (known.nextTryAt ?? 0) > now
+      && (known.resting ?? 'set') === 'set') continue;
     schedule.push({ taskId, at: task.timeboxEndsAt!, name: task.name });
   }
 
   // Every id the ledger mentions, confirmed or not: taking back an alarm that
   // was never scheduled costs one no-op request; missing one alarms over
-  // work already finished.
+  // work already finished. A cancel that failed rests like any other entry.
   const cancel: string[] = [];
-  for (const taskId of scheduled.keys()) {
-    if (!wanted.has(taskId)) cancel.push(taskId);
+  for (const [taskId, known] of scheduled) {
+    if (wanted.has(taskId)) continue;
+    if ((known.nextTryAt ?? 0) > now && known.resting === 'cancel') continue;
+    cancel.push(taskId);
   }
 
   return { schedule, cancel };

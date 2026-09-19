@@ -6,7 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { List, Priority, Settings, Task } from '../domain/types';
-import { resetAlarmLedger, syncAlarms } from './alarmPush.svelte';
+import { alarmRefusal, resetAlarmLedger, syncAlarms } from './alarmPush.svelte';
 
 const NOW = 1_800_000_000_000;
 let n = 0;
@@ -213,20 +213,73 @@ describe('syncAlarms', () => {
     lost.send = async () => { throw new Error('lost'); };
     await syncAlarms([t], [], SETTINGS, NOW, lost.send);
 
+    // …after the rest a lost attempt earns; five seconds, not a second.
     const ok = harness();
-    await syncAlarms([t], [], SETTINGS, NOW + 1000, ok.send);
+    await syncAlarms([t], [], SETTINGS, NOW + 6_000, ok.send);
     expect(ok.sent.map((b) => b.body.action)).toEqual(['set']);
   });
 
-  it('a failed send is retried by the next sweep, a confirmed one is not', async () => {
-    const t = task({ timeboxEndsAt: NOW + 60_000 });
+  it('a failed send is retried after a backoff, not on the very next sweep', async () => {
+    /*
+      2026-09-19: Cloudflare warned the account was at 91% of its daily
+      100,000 requests. A request the Worker refused was being repeated on
+      every one-second sweep from an open tab — ~86,000 a day from one
+      device. A failure now earns a rest that doubles each time.
+    */
+    const t = task({ timeboxEndsAt: NOW + 3_600_000 });
     const fail = harness(500);
     await syncAlarms([t], [], SETTINGS, NOW, fail.send);
     expect(fail.sent).toHaveLength(1); // tried…
+    for (let s = 1; s <= 4; s++) await syncAlarms([t], [], SETTINGS, NOW + s * 1000, fail.send);
+    expect(fail.sent, 'four more sweeps inside the five-second rest send nothing').toHaveLength(1);
+    await syncAlarms([t], [], SETTINGS, NOW + 5_000, fail.send);
+    expect(fail.sent, 'the rest ends: one retry').toHaveLength(2);
+    for (let s = 6; s < 15; s++) await syncAlarms([t], [], SETTINGS, NOW + s * 1000, fail.send);
+    expect(fail.sent, 'the second rest is ten seconds').toHaveLength(2);
 
+    // Once the Worker answers, the entry settles and the sweep goes quiet.
     const ok = harness(200);
-    await syncAlarms([t], [], SETTINGS, NOW + 1000, ok.send);
-    await syncAlarms([t], [], SETTINGS, NOW + 2000, ok.send);
-    expect(ok.sent).toHaveLength(1); // …retried once, then settled
+    await syncAlarms([t], [], SETTINGS, NOW + 15_000, ok.send);
+    await syncAlarms([t], [], SETTINGS, NOW + 16_000, ok.send);
+    expect(ok.sent).toHaveLength(1);
+  });
+
+  it('refused credentials trip the breaker: one request, then silence until they change', async () => {
+    const t = task({ timeboxEndsAt: NOW + 3_600_000 });
+    const nope = harness(401);
+    for (let s = 0; s < 120; s++) await syncAlarms([t], [], SETTINGS, NOW + s * 1000, nope.send);
+    expect(nope.sent, 'two minutes of sweeps, one request').toHaveLength(1);
+    expect(alarmRefusal()?.status).toBe(401);
+
+    // A completed box makes a cancel due — still nothing while refused.
+    await syncAlarms([{ ...t, timeboxEndsAt: undefined, completedAt: NOW }], [], SETTINGS, NOW + 130_000, nope.send);
+    expect(nope.sent).toHaveLength(1);
+
+    // A new secret re-arms it for a fresh attempt.
+    const ok = harness(200);
+    await syncAlarms([t], [], { ...SETTINGS, alarmWorkerSecret: 'the-right-one' }, NOW + 131_000, ok.send);
+    expect(ok.sent).toHaveLength(1);
+    expect(alarmRefusal()).toBeNull();
+  });
+
+  it('a cancel that fails rests like a schedule that fails', async () => {
+    const t = task({ timeboxEndsAt: NOW + 60_000 });
+    const ok = harness(200);
+    await syncAlarms([t], [], SETTINGS, NOW, ok.send);
+    const down = harness(503);
+    const gone = [{ ...t, timeboxEndsAt: undefined, completedAt: NOW + 1000 }];
+    for (let s = 1; s <= 5; s++) await syncAlarms(gone, [], SETTINGS, NOW + s * 1000, down.send);
+    expect(down.sent.map((r) => r.body.action), 'one cancel, then a five-second rest').toEqual(['cancel']);
+    await syncAlarms(gone, [], SETTINGS, NOW + 6_000, down.send);
+    expect(down.sent).toHaveLength(2);
+  });
+
+  it('no sweep can exceed the per-minute cap, whatever goes wrong', async () => {
+    // Belt and braces: a loop nobody has imagined yet still cannot spend
+    // the quota — one device is held to thirty sends a minute.
+    const boxes = Array.from({ length: 80 }, () => task({ timeboxEndsAt: NOW + 3_600_000 }));
+    const down = harness(500);
+    for (let s = 0; s < 60; s++) await syncAlarms(boxes, [], SETTINGS, NOW + s * 1000, down.send);
+    expect(down.sent.length).toBeLessThanOrEqual(30);
   });
 });
