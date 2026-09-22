@@ -23,7 +23,7 @@ const HANDOFF_MS = 260;
  * of them plainly have text in them. Long enough to actually read now, and a
  * tap still clears it the instant you are done.
  */
-const MOMENT_MS = 9000;
+export const MOMENT_MS = 9000;
 /**
  * …but it cannot be dismissed instantly either: whatever tap or scroll was
  * already in flight when it appeared would wipe it before it was read. A short

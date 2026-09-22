@@ -5,7 +5,8 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { presenter } from './presenter.svelte';
+  import { MOMENT_MS, presenter } from './presenter.svelte';
+  import { crossingSpeed } from './momentMotion';
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
   import { focusOnMount } from '../ui/focusOnMount';
@@ -184,14 +185,21 @@
       }, 520);
       return () => clearInterval(interval);
     } else if (current.moment === 'bubbles') {
-      // Slow and quiet on purpose: the loud moments are loud, and a rare
-      // calm one makes the loud ones land harder.
+      /*
+        Quiet, not slow. The loud moments are loud and a calm one makes them
+        land harder — but calm still has to finish: these used to start up to
+        two screens BELOW the bottom and climb at 20–65 px/s, so most never
+        appeared at all and the rest were halfway up when the moment ended
+        (2026-09-21 report). They start spread across the screen now, and the
+        speed is paced against the window rather than guessed in pixels.
+      */
+      const rise = crossingSpeed(H, MOMENT_MS, 1.4);
       const bubbles = Array.from({ length: 60 }, () => ({
         x: Math.random() * W,
-        y: H + Math.random() * H,
+        y: Math.random() * H,
         r: 4 + Math.random() * 22,
-        speed: 20 + Math.random() * 45,
-        drift: (Math.random() - 0.5) * 18,
+        speed: rise * (0.75 + Math.random() * 0.5),
+        drift: (Math.random() - 0.5) * 30,
       }));
       let last = performance.now();
       const draw = () => {
@@ -258,12 +266,15 @@
       };
       draw();
     } else if (current.moment === 'petals') {
-      // The quiet one of its pair: petals fall and sway, nothing rushes.
+      // The quiet one of its pair: petals fall and sway, nothing rushes —
+      // but they still cross the screen inside the moment, and the sky is
+      // full of them from the first frame (see bubbles, same 2026-09-21 fix).
+      const fall = crossingSpeed(H, MOMENT_MS, 1.2);
       const petals = Array.from({ length: 70 }, () => ({
         x: Math.random() * W,
-        y: -Math.random() * H,
+        y: Math.random() * H,
         r: 5 + Math.random() * 7,
-        fall: 28 + Math.random() * 40,
+        fall: fall * (0.75 + Math.random() * 0.5),
         sway: 0.8 + Math.random() * 1.6,
         phase: Math.random() * Math.PI * 2,
         spin: (Math.random() - 0.5) * 2,
