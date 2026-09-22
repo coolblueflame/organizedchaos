@@ -42,6 +42,18 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 let rafId = 0;
 let lastTs = 0;
+/**
+ * When the last frame actually ran. A scheduled frame is not a running loop:
+ * requestAnimationFrame does not fire while the page is hidden, and iOS drops
+ * the queued callback outright when it suspends and restores a page — so
+ * `rafId` can stay set forever with nothing behind it. That left the last
+ * painted frame frozen on screen (2026-09-21 report, with a screenshot of
+ * confetti trails standing still over the home screen) and, worse, made
+ * `ensureLoop` a permanent no-op: every later celebration would have added
+ * particles nobody ever drew. Anything older than this is a dead loop.
+ */
+let lastFrameAt = 0;
+const LOOP_DEAD_MS = 1000;
 
 /*
   Test seam, same idea as clock.svelte's __ocTickClock: particles live in a
@@ -68,6 +80,25 @@ export function motionOk(): boolean {
   return !reduced;
 }
 
+/** Wipe the canvas and forget everything in flight. */
+function clearAll(): void {
+  pool = [];
+  cancelAnimationFrame(rafId);
+  rafId = 0;
+  if (ctx) ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+}
+
+/*
+  Leaving the app ends the celebration rather than pausing it. A burst is a
+  reaction to something the user just did; three minutes later, on return, it
+  is litter. Clearing on the way out also means no frame can be left frozen
+  by a suspension — the case that reached Ben — and the pool cannot silently
+  accumulate while nothing is drawing it.
+*/
+function onVisibility(): void {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') clearAll();
+}
+
 function resize() {
   if (!canvas || !ctx) return;
   const dpr = window.devicePixelRatio || 1;
@@ -82,8 +113,10 @@ export function bindCanvas(el: HTMLCanvasElement): () => void {
   ctx = el.getContext('2d');
   resize();
   window.addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', onVisibility);
   return () => {
     window.removeEventListener('resize', resize);
+    document.removeEventListener('visibilitychange', onVisibility);
     cancelAnimationFrame(rafId);
     rafId = 0;
     pool = [];
@@ -93,7 +126,11 @@ export function bindCanvas(el: HTMLCanvasElement): () => void {
 }
 
 function frame(ts: number) {
+  // Zeroed first: a loop that returns here must never leave `rafId` set, or
+  // ensureLoop would refuse to start another one for the rest of the session.
+  rafId = 0;
   if (!ctx || !canvas) return;
+  lastFrameAt = now();
   const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
   lastTs = ts;
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -117,16 +154,26 @@ function frame(ts: number) {
   if (pool.length > 0) {
     rafId = requestAnimationFrame(frame);
   } else {
-    rafId = 0;
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   }
 }
 
+function now(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
 function ensureLoop() {
-  if (rafId === 0 && pool.length > 0) {
-    lastTs = performance.now();
-    rafId = requestAnimationFrame(frame);
+  if (pool.length === 0) return;
+  // A set `rafId` is only trustworthy while frames are still arriving — see
+  // lastFrameAt. A stale one is cancelled and replaced rather than believed.
+  if (rafId !== 0) {
+    if (now() - lastFrameAt < LOOP_DEAD_MS) return;
+    cancelAnimationFrame(rafId);
+    rafId = 0;
   }
+  lastTs = now();
+  lastFrameAt = now();
+  rafId = requestAnimationFrame(frame);
 }
 
 export interface BurstOptions {
