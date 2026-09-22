@@ -398,6 +398,13 @@ test('a daily "after done" task finished just after midnight is back on today\'s
   morning.setHours(6, 0, 0, 0);
   await page.clock.setFixedTime(morning);
   await poke();
+  // The app only sweeps when it believes it is BEING LOOKED AT (App.svelte
+  // guards on visibilityState), and a page belonging to a parallel worker can
+  // legitimately report 'hidden' — the dispatch below is then correctly
+  // ignored and the sweep never runs. Solo runs never show it; the full suite
+  // does. Bring the page forward and wait for it to agree before dispatching.
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'read a chapter' })).toHaveCount(1);
 });

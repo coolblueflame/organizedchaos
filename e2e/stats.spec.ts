@@ -101,6 +101,13 @@ test('once yesterday is measured, deletes and estimate fixes move the delta', as
   tomorrow.setHours(6, 0, 0, 0);
   await page.clock.setFixedTime(tomorrow);
   await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  // The app only sweeps when it believes it is BEING LOOKED AT (App.svelte
+  // guards on visibilityState), and a page belonging to a parallel worker can
+  // legitimately report 'hidden' — the dispatch below is then correctly
+  // ignored and the sweep never runs. Solo runs never show it; the full suite
+  // does. Bring the page forward and wait for it to agree before dispatching.
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
   // Delete one (3h) and shrink the other's estimate (2h → 30m).
@@ -173,6 +180,10 @@ test('a half-hour win is a win, not "no change"', async ({ page }) => {
   tomorrow.setHours(6, 0, 0, 0);
   await page.clock.setFixedTime(tomorrow);
   await page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
+  // Same visibility precondition as the recurrence spec: the sweep only runs
+  // for a page that reports itself visible.
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
   // Correct it to 30m: exactly half an hour lighter than the measured day.
