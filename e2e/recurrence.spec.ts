@@ -372,6 +372,11 @@ test('a daily "after done" task finished just after midnight is back on today\'s
   // 2026-09-07 report. The clock is pinned at 00:30: still yesterday to the
   // app (rollover 04:00), so "one day after done" means the rollover that is
   // three and a half hours away, not 00:30 tomorrow.
+  //
+  // Two mechanisms keep that promise and either one alone is enough: the
+  // arming counts app days, and the sweep realigns a spawn armed by older
+  // arithmetic. Breaking one leaves the other to cover — so a change here is
+  // only proven broken when the copy fails to return with BOTH disabled.
   const poke = () => page.evaluate(() => (window as unknown as { __ocTickClock?: () => void }).__ocTickClock?.());
   const smallHours = new Date();
   smallHours.setHours(0, 30, 0, 0);
@@ -393,18 +398,41 @@ test('a daily "after done" task finished just after midnight is back on today\'s
   await page.getByTestId(`task-check-${id}`).click();
   await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
 
+  /*
+    Wait for the completion to finish arming the rule before touching the
+    clock. Completing patches the row out of the list and arms its rule a few
+    awaits later, so moving time forward in that gap makes the arming compute
+    from MORNING — landing on tomorrow's rollover, which is a mocked-clock
+    artifact rather than anything a real night can do.
+  */
+  const armedAt = () => page.evaluate(() => new Promise<number | null>((resolve) => {
+    const req = indexedDB.open('organizedchaos');
+    req.onsuccess = () => {
+      const tx = req.result.transaction('templates', 'readonly');
+      const all = tx.objectStore('templates').getAll();
+      tx.oncomplete = () => resolve((all.result[0]?.nextSpawnAt as number | undefined) ?? null);
+    };
+  }));
+  await expect.poll(armedAt).not.toBeNull();
+
   // Morning: the sweep on visibility materialises the day's copy.
   const morning = new Date(smallHours);
   morning.setHours(6, 0, 0, 0);
   await page.clock.setFixedTime(morning);
   await poke();
-  // The app only sweeps when it believes it is BEING LOOKED AT (App.svelte
-  // guards on visibilityState), and a page belonging to a parallel worker can
-  // legitimately report 'hidden' — the dispatch below is then correctly
-  // ignored and the sweep never runs. Solo runs never show it; the full suite
-  // does. Bring the page forward and wait for it to agree before dispatching.
+  /*
+    Returning to the app is what sweeps, and App.svelte only sweeps for a page
+    that reports itself visible — a page owned by a parallel worker may not.
+    Sweep the way a real morning does, repeatedly rather than exactly once:
+    completing a task arms its rule AFTER the row leaves the screen, so a
+    single sweep fired the instant the row vanishes can beat that write and
+    find nothing to do.
+  */
   await page.bringToFront();
   await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'read a chapter' })).toHaveCount(1);
+  const backOnTheList = async () => {
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    return page.getByTestId(/^task-row-/).filter({ hasText: 'read a chapter' }).count();
+  };
+  await expect.poll(backOnTheList, { timeout: 8000 }).toBe(1);
 });
