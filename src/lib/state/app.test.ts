@@ -1607,3 +1607,42 @@ describe('"days after done" and the rollover', () => {
     expect(healed.nextSpawnAt, 'after-completion rests unarmed with a copy open').toBeUndefined();
   });
 });
+
+describe('a sweep landing on a completion that is still writing', () => {
+  it('leaves the rule armed for the day the completion earned, not the next rollover', async () => {
+    /*
+      Completing arms "after done" for the rollover the interval earns; the
+      sweep's heal, finding a rule with nothing armed, reaches for the NEXT
+      rollover instead. The two disagree for any interval past a day, and the
+      heal writing second used to win — a rule set to come back in three days
+      would quietly return tomorrow. The mirror is patched after the write
+      lands, so "nothing armed" is exactly what a sweep sees in that window.
+    */
+    vi.setSystemTime(new Date('2026-09-29T10:00:00'));
+    const list = await store.addList('Chores');
+    const a = await store.addTask(list.id);
+    const tpl = await store.createRecurring(a.id, { kind: 'afterCompletion', interval: 3, unit: 'days' });
+
+    // Hold the mirror patch open once the write itself has landed: that gap
+    // is the race, and it is the store's own ordering, not an invention.
+    const repo = (store as unknown as { repo: Repo }).repo;
+    const real = repo.updateTemplate.bind(repo);
+    let held = 0;
+    const slow = vi.spyOn(repo, 'updateTemplate').mockImplementation(async (id, patch) => {
+      await real(id, patch);
+      if (held++ === 0) await new Promise((r) => setTimeout(r, 40));
+    });
+
+    const completing = store.completeTask(a.id);
+    await new Promise((r) => setTimeout(r, 20)); // inside the window
+    await store.runSpawnSweep(new Date());
+    await completing;
+    slow.mockRestore();
+
+    const onDisk = (await persisted()).templates.find((t) => t.id === tpl.id)!;
+    expect(onDisk.nextSpawnAt, 'three days out, not tomorrow')
+      .toBe(new Date('2026-10-02T04:00:00').getTime());
+    expect(store.state.templates.find((t) => t.id === tpl.id)!.nextSpawnAt)
+      .toBe(new Date('2026-10-02T04:00:00').getTime());
+  });
+});

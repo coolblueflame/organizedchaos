@@ -323,3 +323,36 @@ describe('eager task creation', () => {
     expect((await repo.loadSnapshot()).tasks[0]!.deleted).toBe(true);
   });
 });
+
+describe('armTemplateIfUnarmed', () => {
+  it('arms a dormant rule and reports that it did', async () => {
+    const repo = new Repo(openDb(`arm-${Math.random()}`));
+    const tpl = await repo.createTemplate({
+      listId: 'L1', name: 'water plants', notes: '', tagIds: [], priority: 'medium',
+      mode: { kind: 'afterCompletion', interval: 1, unit: 'days' }, paused: false,
+    });
+    await expect(repo.armTemplateIfUnarmed(tpl.id, 1_800_000_000_000)).resolves.toBe(true);
+    const rows = await repo.loadState();
+    expect(rows.templates[0]!.nextSpawnAt).toBe(1_800_000_000_000);
+  });
+
+  it('leaves an already-armed rule exactly as it found it', async () => {
+    // The race this exists for: a completion arms the rule for the rollover
+    // it earned while the sweep's heal is deciding on tomorrow. Whoever
+    // writes second must not undo the other.
+    const repo = new Repo(openDb(`arm-${Math.random()}`));
+    const tpl = await repo.createTemplate({
+      listId: 'L1', name: 'water plants', notes: '', tagIds: [], priority: 'medium',
+      mode: { kind: 'afterCompletion', interval: 1, unit: 'days' }, paused: false,
+      nextSpawnAt: 1_800_000_000_000,
+    });
+    await expect(repo.armTemplateIfUnarmed(tpl.id, 1_900_000_000_000)).resolves.toBe(false);
+    const rows = await repo.loadState();
+    expect(rows.templates[0]!.nextSpawnAt).toBe(1_800_000_000_000);
+  });
+
+  it('is a no-op for a template that is not there', async () => {
+    const repo = new Repo(openDb(`arm-${Math.random()}`));
+    await expect(repo.armTemplateIfUnarmed('ghost', 1)).resolves.toBe(false);
+  });
+});

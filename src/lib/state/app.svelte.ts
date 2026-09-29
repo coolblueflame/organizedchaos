@@ -1747,7 +1747,13 @@ export class AppStore {
           ? null
           : nextRolloverTs(now.getTime(), this.state.settings.rolloverHour))
         : nextScheduledSpawn(tpl.mode, now, this.state.settings.rolloverHour);
-      if (armed !== null) await this.updateRecurring(tpl.id, { nextSpawnAt: armed });
+      // Conditional at write time: a completion racing this sweep is arming
+      // the same field for the rollover it earned, and the heal's tomorrow
+      // must never land on top of it (see Repo.armTemplateIfUnarmed).
+      if (armed !== null && await this.repo.armTemplateIfUnarmed(tpl.id, armed)) {
+        tpl.nextSpawnAt = armed;
+        this.requestSync();
+      }
     }
 
     const res = sweepSpawns(this.state.templates, this.state.tasks, now, this.state.settings, this.state.lists);

@@ -230,6 +230,31 @@ export class Repo {
   updateTag(id: string, patch: Partial<Tag>) { return this.patchRow(this.db.tags, id, patch); }
   updateTemplate(id: string, patch: Partial<RecurrenceTemplate>) { return this.patchRow(this.db.templates, id, patch); }
 
+  /**
+   * Arm a template's next spawn, but only while it has none — the decision
+   * and the write happen in one transaction, so a value written in between
+   * survives. Returns whether it wrote.
+   *
+   * The sweep's dormant-rule heal arms an unarmed "after done" rule to the
+   * NEXT rollover, which is tomorrow. Completing a task arms the same field
+   * to the rollover the completion earns, often today. Both read, both write,
+   * and an unconditional heal landing second replaces today with tomorrow —
+   * the rule silently skips a day. Deciding at write time is the same rule
+   * patchRow follows for a sync's merged row, for the same reason.
+   */
+  async armTemplateIfUnarmed(id: string, at: number): Promise<boolean> {
+    let wrote = false;
+    await this.db.transaction('rw', this.db.templates, async () => {
+      const row = await this.db.templates.get(id);
+      if (!row || row.nextSpawnAt !== undefined) return;
+      await this.db.templates.put({
+        ...row, nextSpawnAt: at, updatedAt: nextStamp(row.updatedAt), editedAt: Date.now(),
+      });
+      wrote = true;
+    });
+    return wrote;
+  }
+
   async softDelete(table: 'lists' | 'tasks' | 'tags' | 'templates', id: string): Promise<void> {
     // Switch narrows the table union — a computed this.db[table] can't type-check.
     switch (table) {
