@@ -79,6 +79,8 @@ export class AppStore {
   eggBestStreak = $state(0);
   eggUnlocks = $state<string[]>([]);
   eggTrivia = $state({ correct: 0, total: 0 });
+  /** How many story beats have been read and acknowledged (synced). */
+  eggStoryStage = $state(0);
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -195,6 +197,7 @@ export class AppStore {
     this.eggLastCompletionDay = this.eggs.lastCompletionDay;
     this.eggUnlocks = this.eggs.unlocks;
     this.eggTrivia = this.eggs.triviaStats;
+    this.eggStoryStage = this.eggs.storyStage;
   }
 
   /** Report an app event; at most one delight presentation may result. */
@@ -284,6 +287,7 @@ export class AppStore {
 
   advanceStory(stage: number): void {
     this.eggs?.advanceStory(stage);
+    this.syncEggMirrors();
   }
 
   /**

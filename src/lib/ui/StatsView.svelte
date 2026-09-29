@@ -341,6 +341,13 @@
     <p class="discoveries-hint">Things you've stumbled into. There are more.
       {#if app.eggTrivia.total > 0}&nbsp;Quiz score: {app.eggTrivia.correct}/{app.eggTrivia.total}.{/if}
     </p>
+    <!-- Only once the story has begun: before that, even its existence is
+         something to stumble into. -->
+    {#if app.eggStoryStage > 0}
+      <button class="story-link" data-testid="stats-story-link" onclick={() => navigate({ name: 'story' })}>
+        <span aria-hidden="true">▚</span> the story so far
+      </button>
+    {/if}
     <ul class="discoveries" data-testid="discoveries">
       {#each UNLOCKS as u (u.id)}
         <li class:found={app.eggUnlocks.includes(u.id)}>
@@ -356,6 +363,13 @@
   /* StatsView had no .hint of its own, so the blurb inherited the default
      paragraph size and towered over the panel it sits in. */
   .discoveries-hint { color: var(--dim); font-size: 0.8rem; margin: 0; line-height: 1.5; }
+  .story-link {
+    align-self: flex-start; margin: 8px 0 10px;
+    background: none; border: 1px solid rgb(126 231 135 / 0.4); border-radius: 6px;
+    color: var(--acc-green); font-family: var(--font-mono); font-size: 0.78rem;
+    padding: 6px 10px; cursor: pointer;
+  }
+  @media (hover: hover) { .story-link:hover { border-color: var(--acc-green); } }
   .discoveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .discoveries li { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 0.82rem; }
   /* Earned ones read as gold — the medal glyph inherits it via currentColor,

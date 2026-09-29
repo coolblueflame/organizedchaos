@@ -48,6 +48,7 @@
   import RitualsView from './lib/ui/RitualsView.svelte';
   import WeekReviewView from './lib/ui/WeekReviewView.svelte';
   import WrappedView from './lib/ui/WrappedView.svelte';
+  import StoryView from './lib/ui/StoryView.svelte';
   import SweepView from './lib/ui/SweepView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import InstallHowTo from './lib/ui/InstallHowTo.svelte';
@@ -222,6 +223,8 @@
     <WeekReviewView />
   {:else if r.name === 'wrapped'}
     <WrappedView />
+  {:else if r.name === 'story'}
+    <StoryView />
   {:else if r.name === 'sweep'}
     <SweepView />
   {:else}
