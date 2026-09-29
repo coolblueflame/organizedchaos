@@ -51,6 +51,12 @@
       burstAt(window.innerWidth / 2, 120, { count: 30, power: 1.2 });
       haptic('success');
     }
+    // A celebrated note earns the same fanfare, thrown from the corner the
+    // companion lives in so the eye lands on what actually changed.
+    if (current?.kind === 'note' && current.celebrate) {
+      burstAt(window.innerWidth - 40, window.innerHeight - 60, { count: 36, power: 1.5, upward: 260 });
+      haptic('success');
+    }
     if (current?.kind === 'moment') haptic('tick');
     if (current?.kind !== 'trivia') picked = null;
   });

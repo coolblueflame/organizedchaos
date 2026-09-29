@@ -45,7 +45,12 @@ export interface TriviaQ {
 }
 
 export type Presentation =
-  | { kind: 'note'; text: string; emoji?: string; accent?: string }
+  /**
+   * `celebrate` marks a note as a once-in-a-lifetime moment rather than
+   * ambient chatter: it arrives with confetti, and the presenter queues it
+   * behind whatever is on screen instead of dropping it.
+   */
+  | { kind: 'note'; text: string; emoji?: string; accent?: string; celebrate?: boolean }
   | { kind: 'moment'; moment: string }
   | { kind: 'trivia'; q: TriviaQ }
   | { kind: 'unlock'; unlockId: string; label: string }

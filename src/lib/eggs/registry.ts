@@ -10,7 +10,7 @@ import {
   SWEEP_LINES, TIMEBOX_LINES, TIPS, UNBLOCK_LINES, WORK_PERIOD_LINES,
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
-import { STORY_BEATS, UNLOCKS } from './content/extras';
+import { PET_EVOLUTIONS, PET_STAGES, STORY_BEATS, UNLOCKS } from './content/extras';
 
 /**
  * Content is DEALT, not rolled: every line in a pool is used once before any
@@ -204,6 +204,24 @@ export const REGISTRY: EggDef[] = [
     condition: (c) => c.lifetimeCompletions >= 3
       && (c.daysSinceStoryBeat === null || c.daysSinceStoryBeat >= 1),
     present: () => ({ kind: 'story', text, stage: i + 1 }),
+  })),
+  /*
+    The companion changing form, announced by the completion that does it.
+    Keyed to the exact count rather than "at least", so a library already past
+    a rung stays quiet instead of replaying six evolutions at once; the count
+    is evaluated on every completion, so the exact number cannot be stepped
+    over locally. `guaranteed` because a milestone must never lose a dice roll.
+  */
+  ...PET_STAGES.map(([at, form], i): EggDef => ({
+    id: `pet-stage-${i}`,
+    weight: 1000,
+    guaranteed: true,
+    triggers: ['taskCompleted'],
+    maxLifetime: 1,
+    condition: (c) => c.lifetimeCompletions === at,
+    present: () => ({
+      kind: 'note', emoji: form, accent: 'purple', celebrate: true, text: PET_EVOLUTIONS[i]!,
+    }),
   })),
   // Earned discoveries.
   unlockEgg('first-blood', ['taskCompleted'], (c) => c.lifetimeCompletions >= 1),

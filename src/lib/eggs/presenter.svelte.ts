@@ -49,8 +49,13 @@ export class PresenterStore {
       // Earned awards are never silently replaced: a sweep that crosses two
       // milestones at once must show both, not flash one for a frame (spec §12
       // still applies — the run has to clear in seconds, hence the shortening).
-      if (p.kind === 'unlock') {
-        const dupe = this.queue.some((q) => q.kind === 'unlock' && q.unlockId === p.unlockId);
+      // A celebrated note is earned in the same sense — it marks something
+      // that happens a handful of times in a library's life — so it waits
+      // its turn rather than losing to whatever was already up.
+      if (p.kind === 'unlock' || (p.kind === 'note' && p.celebrate === true)) {
+        const key = p.kind === 'unlock' ? p.unlockId : p.text;
+        const dupe = this.queue.some(
+          (q) => q.kind === p.kind && (q.kind === 'unlock' ? q.unlockId : q.kind === 'note' ? q.text : '') === key);
         if (!dupe && this.queue.length < QUEUE_MAX) this.queue.push(p);
         return;
       }

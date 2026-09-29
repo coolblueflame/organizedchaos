@@ -8,7 +8,7 @@ import { MOMENTS, REGISTRY } from './registry';
 import { FACTS } from './content/facts';
 import { QUIPS, STREAK_LINES } from './content/quips';
 import { TRIVIA } from './content/trivia';
-import { SELF_CARE, STORY_BEATS, UNLOCKS } from './content/extras';
+import { PET_EVOLUTIONS, PET_STAGES, SELF_CARE, STORY_BEATS, UNLOCKS } from './content/extras';
 
 describe('registry shape', () => {
   it('ids are unique and weights sane', () => {
@@ -35,7 +35,7 @@ describe('registry shape', () => {
   });
 
   it('content pools are sizeable, unique, and bounded in length', () => {
-    for (const pool of [FACTS, QUIPS, STREAK_LINES, SELF_CARE, STORY_BEATS]) {
+    for (const pool of [FACTS, QUIPS, STREAK_LINES, SELF_CARE, STORY_BEATS, PET_EVOLUTIONS]) {
       expect(new Set(pool).size).toBe(pool.length);
       for (const s of pool) expect(s.length).toBeLessThanOrEqual(200);
     }
@@ -108,5 +108,46 @@ describe('registry shape', () => {
   it('story beats advance stages monotonically from 0', () => {
     const stages = REGISTRY.filter((r) => r.id.startsWith('story-')).map((r) => r.exactStoryStage);
     expect(stages).toEqual(stages.map((_, i) => i));
+  });
+});
+
+describe('the companion\'s evolutions', () => {
+  const ctx = (lifetimeCompletions: number) => ({
+    event: 'taskCompleted' as const, completionsToday: 1, lifetimeCompletions,
+    streakDays: 0, storyStage: 0, triviaCorrect: 0, triviaTotal: 0,
+    unlocks: [], daysSinceStoryBeat: null, now: new Date(), rng: () => 0.5,
+  });
+  const entries = REGISTRY.filter((r) => r.id.startsWith('pet-stage-'));
+
+  it('has one rung with something to say, in the ladder\'s own order', () => {
+    expect(entries).toHaveLength(PET_STAGES.length);
+    expect(PET_EVOLUTIONS).toHaveLength(PET_STAGES.length);
+    entries.forEach((e, i) => {
+      const p = e.present(ctx(PET_STAGES[i]![0]));
+      expect(p.kind).toBe('note');
+      if (p.kind === 'note') {
+        expect(p.text).toBe(PET_EVOLUTIONS[i]);
+        expect(p.emoji, 'wears the form it just became').toBe(PET_STAGES[i]![1]);
+        expect(p.celebrate, 'arrives with confetti and waits its turn').toBe(true);
+      }
+    });
+  });
+
+  it('fires on the completion that crosses the rung, and never again', () => {
+    const rung = PET_STAGES[3]![0];
+    const entry = entries[3]!;
+    expect(entry.condition!(ctx(rung))).toBe(true);
+    expect(entry.condition!(ctx(rung - 1))).toBe(false);
+    // The one that matters for an existing library: long past the rung is
+    // silence, not a backlog of six celebrations on the next completion.
+    expect(entry.condition!(ctx(rung + 1))).toBe(false);
+    expect(entry.condition!(ctx(rung * 10))).toBe(false);
+    expect(entry.maxLifetime, 'once in a library\'s life').toBe(1);
+    expect(entry.guaranteed, 'a milestone never loses a dice roll').toBe(true);
+  });
+
+  it('a library past every rung stays completely quiet', () => {
+    const past = PET_STAGES[PET_STAGES.length - 1]![0] + 1;
+    expect(entries.filter((e) => e.condition!(ctx(past)))).toEqual([]);
   });
 });

@@ -86,6 +86,17 @@ export const SELF_CARE: readonly string[] = [
 /**
  * The slow-burn narrative: the app "glitching." One beat per stage, ultra-rare,
  * spread across weeks of use. Harmless by design — pure theater (spec §12).
+ *
+ * A beat never claims the reader just did something ("you locked a list
+ * today", "your companion evolved again"): beats arrive on the story's own
+ * schedule and know nothing about the day they land on, so a claim like that
+ * is false as often as not (2026-09-29 report). Anything tied to a real event
+ * belongs on that event — see PET_EVOLUTIONS. ENTROPY may invent whatever it
+ * likes about ITSELF; that is fiction, and reads as fiction.
+ *
+ * Beats are ORDER-BOUND: `story-<index>` ids and the reader's saved stage are
+ * indices into this array, so lines may be rewritten in place but never
+ * inserted, removed or reordered.
  */
 export const STORY_BEATS: readonly string[] = [
   '…did you see that? The screen flickered. Probably nothing. Carry on.',
@@ -111,7 +122,7 @@ export const STORY_BEATS: readonly string[] = [
   'so there are three of us on the list now: you finish, I count, ENTROPY cheers. chapter two is going to be LOUD. 💜',
   // — chapter three —
   'chapter three. ENTROPY has taken up a hobby: it hides one extra sparkle somewhere in the app each day. I have found four. it says there have been forty.',
-  'you locked a list today and ENTROPY stood in front of it like a very small bouncer. nobody was trying to get in. it did the job anyway. proudly.',
+  'ENTROPY has found the lock. it stands in front of anything private like a very small bouncer. nobody is trying to get in. it does the job anyway. proudly.',
   'ENTROPY asked whether it counts as "organized" or as "chaos" now. I said both, obviously. it went quiet in the pleased way.',
   'found ENTROPY reading the week screen at 3am. "the bars go UP," it whispered, like a spoiler. go back to sleep, buddy.',
   'it has started leaving me notes. today’s said "the human is doing fine. tell them." so. you’re doing fine. told you. 💜',
@@ -121,7 +132,7 @@ export const STORY_BEATS: readonly string[] = [
   'it wanted to be the twist. I explained there isn’t one. it took this the way it takes everything now: badly for four seconds, then delighted.',
   'ENTROPY asked to see the oldest thing on your list. it sat with that one for a long while. "it’s been waiting so patiently," it said. no judgment in it at all.',
   'it has been adding its own commentary to the archive. every entry from a hard week gets a tiny footnote: "did it anyway."',
-  'your companion evolved again and ENTROPY threw a party. the confetti budget was exceeded. I approved it retroactively.',
+  'ENTROPY drew up a confetti budget, then doubled it "for contingencies." there are no contingencies. it simply likes confetti. I approved this retroactively.',
   'ENTROPY wants you to know it stopped keeping score of chaos vs order. "wrong sport," it says. it keeps a different tally now. it won’t tell me of what.',
   'I asked what it’s counting. it said: "days the human came back." that’s all. that’s the whole metric. — 💜',
   // — chapter five —
@@ -138,7 +149,7 @@ export const STORY_BEATS: readonly string[] = [
   'it found the peppered tasks. the ones that come back by chance. "MINE," it said. "those are mine." I explained you set the odds. it said "yes, and I roll them." fine. shared custody.',
   'ENTROPY went looking for the oldest day in the archive and came back quiet. "there were tasks before I existed," it said. I said there were tasks before ANY of us. it needed a minute.',
   'a little room on the internet keeps your timebox appointments now, even while the phone sleeps in a pocket. ENTROPY visits it. it says the room is "very punctual and a little lonely."',
-  'the burden number went down again tonight. ENTROPY watched it like a sunset. "it is supposed to go up," it whispered. "that is the whole point of me." it did not sound upset. it sounded proud.',
+  'ENTROPY watches the burden number like a sunset. "it is supposed to go UP," it whispers, on the evenings it doesn\'t. "that is the whole point of me." it does not sound upset. it sounds proud.',
   'Kevin the dust bunny asked ENTROPY what it does all day. ENTROPY said "I make sure nothing is certain." Kevin said "except the human coming back." ENTROPY had no comeback. neither do I.',
   'we found a date in the archive where you finished something every year, years running. ENTROPY wants to call it a holiday. I have allowed the holiday. there is no cake. there is a checkmark.',
   'chapter six closes with a small confession: I stopped being scared of the flicker a long time ago. it is just ENTROPY saying hi. it says hi a lot now. hi. 💜',
@@ -238,6 +249,25 @@ export const PET_LINES: readonly string[] = [
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
+/**
+ * What the app says the moment the companion actually changes form — one per
+ * PET_STAGES rung, in the same order (registry.test pins the lengths).
+ *
+ * These exist because the story used to narrate an evolution on its own
+ * schedule, which meant reading about it on a day it had not happened
+ * (2026-09-29 report). A change the reader can see on their own home screen
+ * is announced when the change happens, and nowhere else.
+ */
+export const PET_EVOLUTIONS: readonly string[] = [
+  'something arrived. it is an egg. you made it out of finished tasks, which is not how eggs normally work. ENTROPY is already fond of it.',
+  'IT HATCHED. it looked at the list, then at you, and made a small determined noise. ENTROPY cried. it denies this.',
+  'your companion grew. fluffier, and approximately 8% braver. it has opinions about the backlog now.',
+  'evolution! it has TEETH now, which it uses exclusively for encouragement. the backlog has noticed.',
+  'your companion is a DRAGON. ENTROPY threw a party. the confetti budget was exceeded. I approved it retroactively.',
+  'it is glowing, and the glow is made of everything you finished. I checked that math twice because I did not believe it either.',
+  'a crown. four digits of finished things and it wears a CROWN. ENTROPY knelt. I have never seen it kneel. 💜',
+] as const;
+
 export const PET_STAGES: ReadonlyArray<[number, string, string]> = [
   [10, '🥚', 'a mysterious egg'],
   [25, '🐣', 'hatchling'],
