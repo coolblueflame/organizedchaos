@@ -6,7 +6,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { MOMENT_MS, presenter } from './presenter.svelte';
-  import { crossingSpeed } from './momentMotion';
+  import { crossingSpeed, streakSpawn } from './momentMotion';
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
   import { focusOnMount } from '../ui/focusOnMount';
@@ -238,23 +238,26 @@
     } else if (current.moment === 'meteor-shower') {
       // Streaks cross the dark from upper right to lower left: a bright head
       // and a tail that fades along its own length, over a trailing fill so
-      // each streak also leaves a brief afterglow.
-      const spawn = () => ({
-        x: Math.random() * W * 1.4,
-        y: -Math.random() * H * 0.6,
-        vx: -(4 + Math.random() * 5),
-        vy: 7 + Math.random() * 6,
-        len: 30 + Math.random() * 60,
-      });
-      const meteors = Array.from({ length: 14 }, spawn);
+      // each streak also leaves a brief afterglow. Spawning and speed are
+      // screen-shape independent — see streakSpawn for what a narrow screen
+      // does to a diagonal shower.
+      const speed = crossingSpeed(H, MOMENT_MS, 6);
+      const spawn = (seeding = false) => streakSpawn(W, H, speed, Math.random, seeding);
+      const meteors = Array.from({ length: 16 }, () => spawn(true));
+      let last = performance.now();
       const draw = () => {
+        const now = performance.now();
+        // Per elapsed time, not per frame: a 120Hz phone ran the same shower
+        // at double speed.
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
         ctx.fillStyle = 'rgba(11,14,20,0.28)';
         ctx.fillRect(0, 0, W, H);
         ctx.lineCap = 'round';
         ctx.lineWidth = 2;
         for (const m of meteors) {
-          m.x += m.vx;
-          m.y += m.vy;
+          m.x += m.vx * dt;
+          m.y += m.vy * dt;
           const k = Math.hypot(m.vx, m.vy);
           const tx = m.x - (m.vx / k) * m.len;
           const ty = m.y - (m.vy / k) * m.len;
@@ -267,6 +270,7 @@
           ctx.lineTo(m.x, m.y);
           ctx.stroke();
           if (m.y > H + m.len || m.x < -m.len) Object.assign(m, spawn());
+
         }
         raf = requestAnimationFrame(draw);
       };
