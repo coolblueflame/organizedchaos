@@ -379,7 +379,11 @@
       </div>
     </div>
   {:else if current.kind === 'moment'}
-    <button class="moment m-{current.moment}" data-testid="delight-moment" aria-label="dismiss" onclick={() => presenter.dismiss()}>
+    <!-- A div, not a button: see the .moment rule for why the element type
+         matters to how far it reaches. -->
+    <div class="moment m-{current.moment}" data-testid="delight-moment" role="button" tabindex="0"
+      aria-label="dismiss" onclick={() => presenter.dismiss()}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); presenter.dismiss(); } }}>
       {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm' || current.moment === 'fireworks' || current.moment === 'bubbles' || current.moment === 'meteor-shower' || current.moment === 'petals'}
         <canvas bind:this={canvasEl}></canvas>
       {:else if current.moment === 'ticker-tape'}
@@ -393,7 +397,7 @@
           <p class="bsod-sub">100% complete. This was not an error. Tap to continue being great.</p>
         </div>
       {/if}
-    </button>
+    </div>
   {/if}
 {/if}
 
@@ -498,18 +502,18 @@
   }
 
   /*
-    Sized explicitly, not left to `inset: 0` alone. This overlay is a
-    <button>, and iOS Safari sizes form controls to their content rather
-    than stretching them between their insets — on a real phone the effect
-    stopped short of the screen edges (2026-09-08 report; the desktop
-    engine and the iPhone emulation both stretch it, so this cannot be
-    reproduced here). The confetti layer, a canvas with an explicit
-    100vw × 100vh, has always covered the phone: same recipe.
+    Sized by its insets alone, and a plain div, like the story and quiz
+    backdrops that reach every edge of an installed iPhone app. Two traps
+    sit either side of that. A viewport-unit height is short there: 100vh
+    measures the screen minus the home-indicator strip, so a layer sized
+    by it ends in a hard edge above the bottom (2026-09-29 report). And a
+    <button> is a form control, which iOS may size to its content rather
+    than stretch between its insets. Neither emulated engine shows either,
+    so the layout guard in registry.test pins the recipe itself.
   */
   .moment {
-    position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 400;
-    display: block; margin: 0; padding: 0; border: none; cursor: pointer;
-    appearance: none; -webkit-appearance: none;
+    position: fixed; inset: 0; z-index: 400;
+    cursor: pointer;
     background: transparent;
   }
   .moment canvas { position: absolute; inset: 0; width: 100%; height: 100%; }

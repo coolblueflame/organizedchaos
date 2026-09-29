@@ -151,3 +151,32 @@ describe('the companion\'s evolutions', () => {
     expect(entries.filter((e) => e.condition!(ctx(past)))).toEqual([]);
   });
 });
+
+describe('full-screen layers reach every edge', () => {
+  /*
+    On an installed iPhone app 100vh is the screen minus the home-indicator
+    strip, so a full-screen layer sized by it ends in a hard edge above the
+    bottom (2026-09-29 report). Neither emulated engine reproduces that, so
+    this pins the recipe instead: the two layers that must cover the whole
+    screen are sized by insets or percentages, never by viewport units.
+  */
+  const rule = (file: string, selector: string) => {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+    const at = src.indexOf(`${selector} {`);
+    expect(at, `${selector} is defined in ${file}`).toBeGreaterThan(-1);
+    return src.slice(at, src.indexOf('}', at));
+  };
+
+  it('the moment overlay is sized by its insets', () => {
+    const css = rule('./DelightLayer.svelte', '  .moment');
+    expect(css).toMatch(/inset:\s*0/);
+    expect(css, 'no viewport units').not.toMatch(/\d+(dvh|svh|lvh|vh|vw)\b/);
+  });
+
+  it('the celebration canvas is sized in percent of the viewport', () => {
+    const css = rule('../ui/fx/FxLayer.svelte', '  .fx');
+    expect(css).toMatch(/inset:\s*0/);
+    expect(css).toMatch(/height:\s*100%/);
+    expect(css, 'no viewport units').not.toMatch(/\d+(dvh|svh|lvh|vh|vw)\b/);
+  });
+});

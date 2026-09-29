@@ -26,8 +26,14 @@
 <input bind:this={switchEl} type="checkbox" class="ios-haptic" tabindex="-1" aria-hidden="true" />
 
 <style>
+  /*
+    A canvas is a replaced element, so it needs an explicit size to stretch
+    — but a percentage, not viewport units: for a fixed element 100% is the
+    same box `inset: 0` gives, while 100vh on an installed iPhone app stops
+    short of the home-indicator strip and clips whatever falls there.
+  */
   .fx {
-    position: fixed; inset: 0; width: 100vw; height: 100vh;
+    position: fixed; inset: 0; width: 100%; height: 100%;
     pointer-events: none; z-index: 9999;
   }
   .ios-haptic {
