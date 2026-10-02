@@ -51,13 +51,23 @@ describe('the render loop always has a way back', () => {
   let visibility = 'visible';
   let listeners: Record<string, Array<() => void>> = {};
 
+  // Just enough of a 2D context to know what a clear actually covers: the
+  // current scale (setTransform / save / restore) and every clearRect.
+  let scale = 1;
+  let saved: number[] = [];
+  let clearedRects: Array<{ w: number; h: number; scale: number }> = [];
   const ctxStub = {
-    setTransform: () => {},
-    clearRect: () => { clears += 1; },
+    setTransform: (a: number) => { scale = a; },
+    clearRect: (_x: number, _y: number, w: number, h: number) => {
+      clears += 1;
+      clearedRects.push({ w, h, scale });
+    },
     beginPath: () => {}, arc: () => {}, fill: () => {}, fillRect: () => {},
-    save: () => {}, restore: () => {}, translate: () => {}, rotate: () => {},
+    save: () => { saved.push(scale); }, restore: () => { scale = saved.pop() ?? scale; },
+    translate: () => {}, rotate: () => {},
     globalAlpha: 1, fillStyle: '',
   };
+  let canvasStub: { width: number; height: number; getContext: () => typeof ctxStub };
 
   /** Run the frame the loop last asked for, if any. */
   function runFrame(ms = 16) {
@@ -73,6 +83,7 @@ describe('the render loop always has a way back', () => {
 
   beforeEach(() => {
     clock = 0; scheduled = []; rafCalls = 0; clears = 0;
+    scale = 1; saved = []; clearedRects = [];
     visibility = 'visible'; listeners = {};
     vi.stubGlobal('performance', { now: () => clock });
     vi.stubGlobal('requestAnimationFrame', (cb: (ts: number) => void) => {
@@ -90,7 +101,8 @@ describe('the render loop always has a way back', () => {
       },
       removeEventListener: () => {},
     });
-    unbind = bindCanvas({ getContext: () => ctxStub } as unknown as HTMLCanvasElement);
+    canvasStub = { width: 0, height: 0, getContext: () => ctxStub };
+    unbind = bindCanvas(canvasStub as unknown as HTMLCanvasElement);
   });
 
   it('leaving the app clears the screen instead of freezing a frame on it', () => {
@@ -127,6 +139,26 @@ describe('the render loop always has a way back', () => {
     burstAt(210, 410, { count: 10 });
     expect(rafCalls, 'one loop, not two').toBe(afterFrame);
     expect(afterFrame).toBeGreaterThan(first);
+  });
+
+  it('wipes the whole buffer even after the window reports a shorter height', () => {
+    /*
+      2026-10-02: a strip of frozen dots below the companion. The buffer is
+      sized from the window when the layer binds; a clear sized from the
+      window LATER covers less of it if the reported height has shrunk, and
+      particles falling through the strip leave trails nobody erases.
+    */
+    const w = (window as unknown as { innerHeight: number });
+    w.innerHeight = 760; // was 800 when the buffer was sized
+    burstAt(380, 740, { count: 12, upward: 260 });
+    for (let i = 0; i < 400 && scheduled.length > 0; i++) runFrame(50);
+    expect(clearedRects.length).toBeGreaterThan(0);
+    for (const r of clearedRects) {
+      // In device pixels, the clear must reach every row and column the
+      // buffer has — whatever the window says now.
+      expect(r.w * r.scale, 'full width').toBeGreaterThanOrEqual(canvasStub.width);
+      expect(r.h * r.scale, 'full height').toBeGreaterThanOrEqual(canvasStub.height);
+    }
   });
 
   it('runs itself dry and wipes the canvas when the last particle dies', () => {

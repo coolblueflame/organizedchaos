@@ -80,12 +80,31 @@ export function motionOk(): boolean {
   return !reduced;
 }
 
+/**
+ * Erase every pixel the canvas holds.
+ *
+ * Measured by the buffer itself, under an identity transform — never by the
+ * window. The buffer is sized from the window at the last resize; if the
+ * window's reported height shrinks after that without a resize reaching
+ * this module, a window-sized clear leaves the bottom strip of the buffer
+ * untouched, and every particle falling through it paints a trail that
+ * outlives the celebration (2026-10-02 report: a frozen strip of dots below
+ * the companion, about the height of the home-indicator inset).
+ */
+function wipe(): void {
+  if (!ctx || !canvas) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
 /** Wipe the canvas and forget everything in flight. */
 function clearAll(): void {
   pool = [];
   cancelAnimationFrame(rafId);
   rafId = 0;
-  if (ctx) ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  wipe();
 }
 
 /*
@@ -133,7 +152,7 @@ function frame(ts: number) {
   lastFrameAt = now();
   const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
   lastTs = ts;
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  wipe();
   pool = pool.filter((p) => stepParticle(p, dt));
   for (const p of pool) {
     ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
@@ -154,7 +173,7 @@ function frame(ts: number) {
   if (pool.length > 0) {
     rafId = requestAnimationFrame(frame);
   } else {
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    wipe();
   }
 }
 
