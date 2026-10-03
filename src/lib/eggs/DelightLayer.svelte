@@ -15,6 +15,7 @@
   const CANVAS_MOMENTS = new Set([
     'matrix-rain', 'starfield', 'confetti-storm', 'fireworks', 'bubbles', 'meteor-shower', 'petals',
     'lava-lamp', 'card-cascade', 'level-clear', 'constellation', 'fireflies',
+    'eyes-in-the-dark', 'snowfall', 'balloons',
   ]);
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
@@ -542,6 +543,148 @@
         raf = requestAnimationFrame(draw);
       };
       draw();
+    } else if (current.moment === 'eyes-in-the-dark') {
+      // Cozy-spooky: pairs of red eyes open in the dark, look about, blink,
+      // and close; then one big pair opens right up close for a second (the
+      // small jump), blinks, and the dark admits who it was. Glow is drawn
+      // as gradients, never a filter.
+      const pairs = Array.from({ length: 14 }, () => ({
+        x: W * (0.08 + Math.random() * 0.84), y: H * (0.08 + Math.random() * 0.84),
+        size: 4 + Math.random() * 6, open: 0.2 + Math.random() * 3.2, phase: Math.random() * 6,
+      }));
+      /** One glowing eye; `slit` draws a cat's pupil instead of a round one. */
+      const eye = (x: number, y: number, r: number, lid: number, glow: number, slit = false) => {
+        if (lid <= 0.02) return;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3.2);
+        g.addColorStop(0, `rgba(255, 60, 40, ${0.55 * glow})`);
+        g.addColorStop(1, 'rgba(255, 60, 40, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r * 3.2, y - r * 3.2, r * 6.4, r * 6.4);
+        ctx.fillStyle = `rgba(255, 70, 50, ${glow})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.3, r * 0.75 * lid, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = slit ? `rgba(20, 0, 0, ${glow})` : `rgba(255, 220, 200, ${glow})`;
+        ctx.beginPath();
+        if (slit) ctx.ellipse(x, y, r * 0.16, r * 0.66 * lid, 0, 0, Math.PI * 2);
+        else ctx.ellipse(x, y, r * 0.35, r * 0.35 * lid, 0, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      // A blink: shut briefly every few seconds, out of step with the others.
+      const lidAt = (t: number, phase: number) => {
+        const c = (t + phase) % 3.4;
+        return c < 0.14 ? Math.abs(c - 0.07) / 0.07 : 1;
+      };
+      const t0 = performance.now();
+      let jumped = false;
+      const draw = () => {
+        const t = (performance.now() - t0) / 1000;
+        ctx.clearRect(0, 0, W, H);
+        if (t < 5.4) {
+          for (const p of pairs) {
+            if (t < p.open) continue;
+            const fade = Math.min(1, (t - p.open) / 0.6) * Math.min(1, (5.4 - t) / 0.3);
+            // The eyes drift a little toward the middle of the screen, as if
+            // looking at whoever is holding it.
+            const look = Math.min(1, (t - p.open) / 2) * p.size * 0.6;
+            const dx = Math.sign(W / 2 - p.x) * look;
+            const gap = p.size * 3.2;
+            const lid = lidAt(t, p.phase);
+            eye(p.x - gap / 2 + dx, p.y, p.size, lid, fade);
+            eye(p.x + gap / 2 + dx, p.y, p.size, lid, fade);
+          }
+        } else if (t < 7.6) {
+          if (!jumped) { jumped = true; haptic('heavy'); }
+          const r = Math.min(W, H) * 0.09;
+          const open = Math.min(1, (t - 5.7) / 0.12);
+          const lid = t > 7.1 ? Math.max(0, 1 - (t - 7.1) / 0.12) : open;
+          eye(W / 2 - r * 2.2, H * 0.45, r, lid, 1, true);
+          eye(W / 2 + r * 2.2, H * 0.45, r, lid, 1, true);
+        } else {
+          const a = Math.min(1, (t - 7.6) / 0.4);
+          ctx.fillStyle = `rgba(255, 166, 87, ${a})`;
+          ctx.font = `${Math.round(Math.min(W, H) * 0.06)}px ui-monospace, monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('boo!', W / 2, H * 0.45);
+          ctx.font = `${Math.round(Math.min(W, H) * 0.035)}px ui-monospace, monospace`;
+          ctx.fillText('(it’s just ENTROPY)', W / 2, H * 0.45 + Math.min(W, H) * 0.07);
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } else if (current.moment === 'snowfall') {
+      // Snow in three depths: far flakes small and slow, near ones big and
+      // quick, each swaying on its own, wrapping back to the top.
+      const flakes = Array.from({ length: 220 }, () => {
+        const depth = Math.random();
+        return {
+          x: Math.random() * W, y: Math.random() * H, depth,
+          r: 0.8 + depth * 2.6, vy: H * (0.03 + depth * 0.09), sway: 6 + depth * 18, p: Math.random() * 6,
+        };
+      });
+      let last = performance.now();
+      const draw = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        for (const f of flakes) {
+          f.y += f.vy * dt;
+          if (f.y > H + 4) { f.y = -4; f.x = Math.random() * W; }
+          const x = f.x + Math.sin(now / 1000 * 0.8 + f.p) * f.sway;
+          ctx.globalAlpha = 0.45 + f.depth * 0.5;
+          ctx.fillStyle = '#eaf4ff';
+          ctx.beginPath();
+          ctx.arc(x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } else if (current.moment === 'balloons') {
+      // A party's worth of balloons let go at once, rising and swaying,
+      // strings trailing.
+      const COLORS = ['#f778ba', '#ffd479', '#79c0ff', '#7ee787', '#d2a8ff', '#ffa657'];
+      const balloons = Array.from({ length: 22 }, (_, i) => ({
+        x: W * (0.05 + Math.random() * 0.9), y: H + 40 + Math.random() * H * 0.9,
+        r: Math.max(16, Math.min(W, H) * (0.035 + Math.random() * 0.025)),
+        vy: H * (0.12 + Math.random() * 0.1), p: Math.random() * 6, c: COLORS[i % COLORS.length]!,
+      }));
+      let last = performance.now();
+      const draw = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        for (const b of balloons) {
+          b.y -= b.vy * dt;
+          const x = b.x + Math.sin(now / 1000 * 1.1 + b.p) * b.r * 0.6;
+          ctx.strokeStyle = 'rgba(230, 237, 243, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, b.y + b.r * 1.2);
+          ctx.quadraticCurveTo(x - b.r * 0.5, b.y + b.r * 2.4, x + b.r * 0.2, b.y + b.r * 3.6);
+          ctx.stroke();
+          ctx.fillStyle = b.c;
+          ctx.beginPath();
+          ctx.ellipse(x, b.y, b.r, b.r * 1.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x - 3, b.y + b.r * 1.22);
+          ctx.lineTo(x + 3, b.y + b.r * 1.22);
+          ctx.lineTo(x, b.y + b.r * 1.12);
+          ctx.fill();
+          // A highlight, so they read as round.
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(x - b.r * 0.35, b.y - b.r * 0.45, b.r * 0.18, b.r * 0.3, -0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     } else if (current.moment === 'fireflies') {
       // A summer field at dusk: soft lights drift and blink on and off. Each
       // glow is drawn as a gradient, never a filter, so nothing here asks
@@ -840,6 +983,9 @@
   .m-level-clear { background: #0b0e14; }
   .m-constellation { background: rgb(6, 9, 18); }
   .m-fireflies { background: rgba(8, 16, 10, 0.9); }
+  .m-eyes-in-the-dark { background: rgb(3, 3, 5); }
+  .m-snowfall { background: rgba(10, 16, 28, 0.88); }
+  .m-balloons { background: rgba(11, 14, 20, 0.55); }
   .m-power-off { background: #030405; display: grid; place-items: center; }
   .crt-off {
     position: absolute; inset: 0; background: #eaf4ff;

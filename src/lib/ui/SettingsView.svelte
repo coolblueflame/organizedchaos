@@ -4,6 +4,8 @@
 -->
 <script lang="ts">
   import Sparkle from '../eggs/Sparkle.svelte';
+  import { SEASONAL_PREFIX, birthdayKey, birthdayOf, seasonalEnabled } from '../eggs/seasons';
+  import BirthdayPicker from '../eggs/BirthdayPicker.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import SyncHowTo from './SyncHowTo.svelte';
@@ -100,6 +102,16 @@
   function setting(patch: Partial<typeof app.state.settings>) {
     void app.updateSettings(patch);
   }
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  /** The birthday as shared, if it is. */
+  const birthday = $derived(birthdayOf(app.eggMarks));
+  // The picker opens on the shared date, when there is one.
+  let bMonth = $state(birthdayOf(app.eggMarks)?.month ?? 1);
+  let bDay = $state(birthdayOf(app.eggMarks)?.day ?? 1);
 </script>
 
 <main>
@@ -342,6 +354,27 @@
         onchange={(e) => setting({ autoSelectNext: e.currentTarget.checked })} /></label>
   </section>
 
+  <section class="group" data-testid="settings-occasions">
+    <h2>occasions</h2>
+    <!-- Kept in the synced delight ledger, so the choice follows the library to every device. -->
+    <label class="toggle"><span>seasonal touches (holidays and birthdays)</span>
+      <input type="checkbox" data-testid="settings-seasonal" checked={seasonalEnabled(app.eggMarks)}
+        onchange={(e) => app.markEgg(`${SEASONAL_PREFIX}${e.currentTarget.checked ? 'on' : 'off'}`, Date.now())} /></label>
+    <div class="birthday" data-testid="settings-birthday">
+      <span class="label">your birthday (month and day, no year)</span>
+      <BirthdayPicker bind:month={bMonth} bind:day={bDay} />
+      <div class="birthday-moves">
+        <button data-testid="settings-birthday-save" onclick={() => app.markEgg(birthdayKey({ month: bMonth, day: bDay }), Date.now())}>save</button>
+        {#if birthday}
+          <button data-testid="settings-birthday-clear" onclick={() => app.markEgg(birthdayKey(null), Date.now())}>forget it</button>
+        {/if}
+      </div>
+      <p class="hint" data-testid="settings-birthday-status">
+        {birthday ? `kept as ${MONTH_NAMES[birthday.month - 1]} ${birthday.day}.` : 'not shared.'}
+      </p>
+    </div>
+  </section>
+
   <section class="group">
     <h2>backup & data</h2>
     <button data-testid="settings-export" onclick={exportBackup} class="with-glyph"><Glyph name="install" size={11} /> export everything as JSON</button>
@@ -415,6 +448,9 @@
     color: var(--text); padding: 8px; font-size: 0.9rem; outline: none;
   }
   input:focus { border-color: var(--acc-blue); }
+  .birthday { display: flex; flex-direction: column; gap: 6px; }
+  .birthday .label { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
+  .birthday-moves { display: flex; gap: 8px; }
   .toggle { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
   .toggle input { width: 20px; height: 20px; accent-color: var(--acc-green); }
   button {

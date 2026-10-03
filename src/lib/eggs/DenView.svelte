@@ -20,12 +20,16 @@
   import DiceDuel from './DiceDuel.svelte';
   import { haptic } from '../ui/fx/haptics';
   import { SPARKLE_STORY_BEAT, sparkleTally } from './sparkles';
+  import { seasonNow } from './seasonNow.svelte';
+  import { SEASON_LOOKS } from './content/seasons';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
   const form = $derived(companionForm(lifetime));
   const progress = $derived({ unlocks: app.eggUnlocks, marks: app.eggMarks });
   const worn = $derived(wornTrinket(progress));
+  /** What it has on: the reader's choice first, else the season's costume. */
+  const dressed = $derived(worn?.emoji ?? (seasonNow.current ? SEASON_LOOKS[seasonNow.current].costume : null));
   const welcomed = $derived(app.eggMarks[DEN_MARKS.welcomed] !== undefined);
   const seen = $derived(MOMENTS.filter((m) => app.eggMarks[`moment:${m}`] !== undefined));
   const sparkles = $derived(sparkleTally(app.eggMarks));
@@ -96,7 +100,7 @@
       {#if bubble}<p class="bubble" data-testid="den-bubble">{bubble}</p>{/if}
       <button class="pet" class:hop={hopping} data-testid="den-companion" aria-label="poke {form[2]}" onclick={poke}>
         <span class="body">{form[1]}</span>
-        {#if worn}<span class="worn" data-testid="den-worn">{worn.emoji}</span>{/if}
+        {#if dressed}<span class="worn" data-testid="den-worn">{dressed}</span>{/if}
       </button>
       <p class="name">{form[2]}</p>
       <p class="mood" data-testid="den-mood">mood: {mood}</p>

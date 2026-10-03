@@ -11,6 +11,8 @@ import {
 } from './content/quips';
 import { TRIVIA } from './content/trivia';
 import { PET_EVOLUTIONS, PET_STAGES, STORY_BEATS, UNLOCKS } from './content/extras';
+import { SEASON_MOMENTS, SEASONAL_ONLY_MOMENTS, type Season } from './seasons';
+import { SEASON_LOOKS } from './content/seasons';
 
 /**
  * Content is DEALT, not rolled: every line in a pool is used once before any
@@ -29,21 +31,27 @@ export const MOMENTS = [
   'fireworks', 'bubbles', 'ticker-tape', 'sunrise',
   'meteor-shower', 'petals', 'lightning', 'lava-lamp',
   'card-cascade', 'level-clear', 'power-off', 'constellation', 'fireflies',
+  'eyes-in-the-dark', 'snowfall', 'balloons',
 ] as const;
 export type MomentName = (typeof MOMENTS)[number];
 
+/** The moments any day can bring; the seasonal ones wait for their season. */
+const YEAR_ROUND_MOMENTS = MOMENTS.filter((m) => !SEASONAL_ONLY_MOMENTS.has(m));
+
 /**
- * Which moment a roll shows. Under automation a test may name one
+ * Which moment a roll shows. In a season, half the rolls bring that
+ * season's own moment. Under automation a test may name one
  * (localStorage.OC_MOMENT) so every effect can be rendered on demand — a
  * canvas branch that throws then fails a test instead of showing a human an
  * empty overlay. Humans never set it; for them this is the plain roll.
  */
-function chosenMoment(rng: () => number): MomentName {
+function chosenMoment(rng: () => number, season: Season | null | undefined): MomentName {
   if (typeof navigator !== 'undefined' && navigator.webdriver) {
     const named = localStorage.getItem('OC_MOMENT');
     if (named && (MOMENTS as readonly string[]).includes(named)) return named as MomentName;
   }
-  return pick(MOMENTS, rng);
+  if (season && rng() < 0.5) return SEASON_MOMENTS[season];
+  return pick(YEAR_ROUND_MOMENTS, rng);
 }
 
 const unlockDef = (id: string) => UNLOCKS.find((u) => u.id === id)!;
@@ -175,7 +183,16 @@ export const REGISTRY: EggDef[] = [
   {
     id: 'moment', weight: 6, triggers: ['taskCompleted', 'bigButtonPressed', 'appOpened'],
     cooldownMs: HOUR / 2, maxPerDay: 3,
-    present: (c) => ({ kind: 'moment', moment: chosenMoment(c.rng) }),
+    present: (c) => ({ kind: 'moment', moment: chosenMoment(c.rng, c.season) }),
+  },
+  // The season's own lines, only while it lasts (see ./seasons).
+  {
+    id: 'season-line', weight: 30, triggers: ['taskCompleted'], maxPerDay: 2,
+    condition: (c) => !!c.season,
+    present: (c) => ({
+      kind: 'note', emoji: SEASON_LOOKS[c.season!].costume, accent: 'orange',
+      text: deal(`season-${c.season}`, SEASON_LOOKS[c.season!].lines, c.rng),
+    }),
   },
   // The slow-burn story: one beat per stage, days apart, only for engaged
   // days. Retuned 2026-08-06 (Ben, 12 days / 235 completions / ONE beat),

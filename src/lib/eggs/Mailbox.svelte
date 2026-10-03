@@ -13,11 +13,18 @@
   import { lifetimeCompletions } from '../domain/stats';
   import { DEN_MARKS, denOpen } from './den';
   import { DEN_INVITE } from './content/den';
+  import { seasonNow } from './seasonNow.svelte';
+  import { SEASON_LOOKS } from './content/seasons';
+  import { BIRTHDAY_ASK_AT, SEASON_MOMENTS, birthdayAnswered, seasonalEnabled } from './seasons';
+  import BirthdayAsk from './BirthdayAsk.svelte';
+  import { presenter } from './presenter.svelte';
 
   /** One waiting item: what the list shows, and what opening it does. */
   interface Waiting { id: string; from: string; subject: string; open: () => void }
 
   let sheetOpen = $state(false);
+  /** ENTROPY's birthday question is open. */
+  let asking = $state(false);
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
 
@@ -32,6 +39,26 @@
     // The den's invitation: waits until the den is first visited, on any device.
     if (denOpen(lifetime, app.eggMarks) && app.eggMarks[DEN_MARKS.invited] === undefined) {
       items.push({ id: 'den', ...DEN_INVITE, open: () => navigate({ name: 'den' }) });
+    }
+    // ENTROPY's one birthday question, for a library that has settled in.
+    // Part of the seasonal touches, so switching those off withdraws it.
+    if (lifetime >= BIRTHDAY_ASK_AT && seasonalEnabled(app.eggMarks) && !birthdayAnswered(app.eggMarks)) {
+      items.push({ id: 'birthday', from: 'ENTROPY', subject: 'a small question (it’s for a list)', open: () => (asking = true) });
+    }
+    // The season's letter: plays its moment, then says its piece.
+    const season = seasonNow.current;
+    const letterKey = seasonNow.letterKey;
+    if (season && letterKey && app.eggMarks[letterKey] === undefined) {
+      const look = SEASON_LOOKS[season];
+      items.push({
+        id: 'season', from: look.letter.from, subject: look.letter.subject,
+        open: () => {
+          app.markEgg(letterKey);
+          presenter.show({ kind: 'moment', moment: SEASON_MOMENTS[season] });
+          // Celebrated, so it waits behind the moment instead of being dropped.
+          presenter.show({ kind: 'note', emoji: look.costume, accent: 'orange', celebrate: true, text: look.letter.text });
+        },
+      });
     }
     return items;
   });
@@ -84,6 +111,10 @@
     </ul>
     <p class="hint">// these wait as long as you need them to.</p>
   </section>
+{/if}
+
+{#if asking}
+  <BirthdayAsk onclose={() => (asking = false)} />
 {/if}
 
 <style>

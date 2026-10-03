@@ -6,6 +6,7 @@
 import type { MomentName } from './registry';
 import { PET_STAGES } from './content/extras';
 import { sparkleTally } from './sparkles';
+import { latestChoice } from './ledger';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -77,19 +78,12 @@ export const TRINKETS: readonly Trinket[] = [
 ];
 
 /**
- * The trinket being worn: whichever `wear:` stamp is newest. Stamps only
- * ever grow, so putting something on is just stamping it now, and two
- * devices that dressed the companion differently agree on the later choice.
- * An unearned or unknown stamp wears nothing rather than something unearned.
+ * The trinket being worn: the newest `wear:` choice (see ./ledger). An
+ * unearned or unknown choice wears nothing rather than something unearned.
  */
 export function wornTrinket(p: DenProgress): Trinket | null {
-  let newest: [string, number] | null = null;
-  for (const [key, at] of Object.entries(p.marks)) {
-    if (!key.startsWith(WEAR_PREFIX)) continue;
-    if (!newest || at > newest[1]) newest = [key.slice(WEAR_PREFIX.length), at];
-  }
-  if (!newest) return null;
-  const t = TRINKETS.find((x) => x.id === newest![0]);
+  const id = latestChoice(p.marks, WEAR_PREFIX);
+  const t = TRINKETS.find((x) => x.id === id);
   return t && t.earned(p) ? t : null;
 }
 
@@ -120,4 +114,7 @@ export const SCRAPBOOK: Readonly<Record<MomentName, ScrapbookPage>> = {
   'power-off': { name: 'Power Off', hint: 'safe to turn off' },
   'constellation': { name: 'Constellation', hint: 'written in the stars' },
   'fireflies': { name: 'Fireflies', hint: 'a summer dusk' },
+  'eyes-in-the-dark': { name: 'Eyes in the Dark', hint: 'only in the dark half of october' },
+  'snowfall': { name: 'Snowfall', hint: 'only in december' },
+  'balloons': { name: 'Balloons', hint: 'only on a birthday (yours, or the app’s)' },
 };

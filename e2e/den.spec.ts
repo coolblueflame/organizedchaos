@@ -7,7 +7,12 @@ import { expect, test, type Page } from '@playwright/test';
  */
 test.skip(({ browserName }) => browserName !== 'chromium', 'den flows on chromium');
 
-/** A fresh library with `completed` finished tasks and, optionally, saved delight state. */
+/**
+ * A fresh library with `completed` finished tasks and saved delight state.
+ * The birthday question is always answered up front: a library this size
+ * would otherwise have it waiting in the mailbox too, and these tests are
+ * about the den's own letter.
+ */
 async function seedLibrary(page: Page, completed: number, eggState?: Record<string, unknown>) {
   await page.goto('./');
   await page.evaluate(() => new Promise<void>((resolve) => {
@@ -34,13 +39,12 @@ async function seedLibrary(page: Page, completed: number, eggState?: Record<stri
           inProgress: false, createdAt: at - 60_000, updatedAt: at, completedAt: at, deleted: false,
         });
       }
-      if (eggState) {
-        tx.objectStore('kv').put({ key: 'eggState', value: {
-          seen: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
-          lastPresentedAt: 0, presentedDay: '', presentedToday: 0, lastCompletionDay: '', streakDays: 0,
-          ...eggState,
-        } });
-      }
+      tx.objectStore('kv').put({ key: 'eggState', value: {
+        seen: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
+        lastPresentedAt: 0, presentedDay: '', presentedToday: 0, lastCompletionDay: '', streakDays: 0,
+        ...eggState,
+        marks: { 'birthday:none': 1, ...(eggState?.marks as Record<string, number> | undefined) },
+      } });
       tx.oncomplete = () => { req.result.close(); resolve(); };
       tx.onerror = () => reject(tx.error);
     };
@@ -92,7 +96,8 @@ test('the den arrives as a letter, and afterwards opens from the companion', asy
   await expect(page.getByTestId('den-welcome')).toHaveCount(0);
 
   // Read once, gone everywhere: the letter does not wait for a second reading.
-  await expect.poll(async () => Object.keys(await savedMarks(page)).sort()).toEqual(['den:welcomed', 'mail:den']);
+  await expect.poll(async () => Object.keys(await savedMarks(page)).filter((k) => !k.startsWith('birthday:')).sort())
+    .toEqual(['den:welcomed', 'mail:den']);
   await page.reload();
   await expect(page.getByTestId('den')).toBeVisible();
   await expect(page.getByTestId('den-welcome'), 'the welcome is read once').toHaveCount(0);

@@ -8,6 +8,7 @@
  */
 import { appDayKey, daysUntilDeadline } from '../domain/time';
 import { resolveHeldUnlocks } from '../sync/files';
+import { activeSeason, type Season } from './seasons';
 
 export type EggEvent =
   | 'taskCompleted' | 'drawAccepted' | 'drawSkipped'
@@ -33,6 +34,8 @@ export interface EggContext {
    * has been silent, the harder its next beat leans on the lottery.
    */
   daysSinceStoryBeat: number | null;
+  /** The season in force (see ./seasons), when the library has seasonal touches on. */
+  season?: Season | null;
   now: Date;
   rng: () => number;
 }
@@ -334,6 +337,7 @@ export class EggEngine {
         ? null
         : -daysUntilDeadline(
             appDayKey(new Date(lastStoryAt), this.rolloverHour), now, this.rolloverHour),
+      season: activeSeason(day, this.state.marks ?? {}),
       now,
       rng: this.rng,
     };

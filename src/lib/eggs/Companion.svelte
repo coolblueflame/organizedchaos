@@ -11,6 +11,8 @@
   import { PET_LINES } from './content/extras';
   import { companionForm, denOpen, wornTrinket } from './den';
   import { navigate } from '../ui/router.svelte';
+  import { seasonNow } from './seasonNow.svelte';
+  import { SEASON_LOOKS } from './content/seasons';
   import { presenter } from './presenter.svelte';
   import { burstFromElement, motionOk } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
@@ -19,6 +21,8 @@
   const stage = $derived(companionForm(lifetime));
   const canEnter = $derived(denOpen(lifetime, app.eggMarks));
   const worn = $derived(wornTrinket({ unlocks: app.eggUnlocks, marks: app.eggMarks }));
+  /** What sits on the companion: the reader's choice first, else the season's costume. */
+  const dressed = $derived(worn?.emoji ?? (seasonNow.current ? SEASON_LOOKS[seasonNow.current].costume : null));
 
   const nearHatch = $derived(stage?.[1] === '🥚' && lifetime >= 20);
   const onFire = $derived(app.eggStreak >= 3);
@@ -74,7 +78,7 @@
     onpointerdown={pressStart} onpointerup={pressEnd} onpointerleave={pressEnd} onpointercancel={pressEnd}
     oncontextmenu={(e) => { if (canEnter) e.preventDefault(); }}>
     <span class="body">{stage[1]}</span>
-    {#if worn}<span class="trinket" data-testid="companion-trinket">{worn.emoji}</span>{/if}
+    {#if dressed}<span class="trinket" data-testid="companion-trinket">{dressed}</span>{/if}
     {#if onFire}<span class="mood">🔥</span>{/if}
   </button>
 {/if}

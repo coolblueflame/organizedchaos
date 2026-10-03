@@ -29,6 +29,8 @@
   import Mailbox from '../eggs/Mailbox.svelte';
   import Companion from '../eggs/Companion.svelte';
   import Sparkle from '../eggs/Sparkle.svelte';
+  import { seasonNow } from '../eggs/seasonNow.svelte';
+  import { SEASON_LOOKS } from '../eggs/content/seasons';
   import QuickAdd from './QuickAdd.svelte';
   import InstallBanner from './InstallBanner.svelte';
   import WorkPeriod from './WorkPeriod.svelte';
@@ -398,6 +400,9 @@
   $effect(() => {
     if (newListOpen) newListInput?.focus();
   });
+
+  /** The season's touches (tagline, accent), or null on an ordinary day. */
+  const look = $derived(seasonNow.current ? SEASON_LOOKS[seasonNow.current] : null);
 </script>
 
 <svelte:window
@@ -418,10 +423,10 @@
   }} />
 
 <main>
-  <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
+  <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent" style:color={look?.accent}>chaos</span><span class="cursor">▊</span></h1>
   <div class="tagline-row">
     <!-- The sparkle rides with the tagline, not with the row's far end. -->
-    <span class="tagline-wrap"><p class="tagline">// a todo list with loaded dice</p><Sparkle spot="home" /></span>
+    <span class="tagline-wrap"><p class="tagline" data-testid="tagline">{look?.tagline ?? '// a todo list with loaded dice'}</p><Sparkle spot="home" /></span>
     <Mailbox />
   </div>
 
@@ -433,7 +438,8 @@
 
   <WorkPeriod />
 
-  <button class="big-button" data-testid="big-button" onclick={bigButton}>
+  <button class="big-button" data-testid="big-button" onclick={bigButton}
+    style:border-color={look?.accent} style:color={look?.accent}>
     {phrase}
   </button>
 
