@@ -19,6 +19,7 @@
   import { presenter } from './presenter.svelte';
   import DiceDuel from './DiceDuel.svelte';
   import { haptic } from '../ui/fx/haptics';
+  import { SPARKLE_STORY_BEAT, sparkleTally } from './sparkles';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
@@ -27,6 +28,7 @@
   const worn = $derived(wornTrinket(progress));
   const welcomed = $derived(app.eggMarks[DEN_MARKS.welcomed] !== undefined);
   const seen = $derived(MOMENTS.filter((m) => app.eggMarks[`moment:${m}`] !== undefined));
+  const sparkles = $derived(sparkleTally(app.eggMarks));
 
   const mood = $derived.by(() => {
     const streak = app.eggStreak;
@@ -98,6 +100,9 @@
       </button>
       <p class="name">{form[2]}</p>
       <p class="mood" data-testid="den-mood">mood: {mood}</p>
+      {#if sparkles > 0 || app.eggStoryStage > SPARKLE_STORY_BEAT}
+        <p class="mood" data-testid="den-sparkles">sparkles found: {sparkles}</p>
+      {/if}
     </section>
 
     <DiceDuel />

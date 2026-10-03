@@ -677,6 +677,7 @@
   @keyframes note-in { from { opacity: 0; transform: translate(-50%, -16px); } }
   .accent-orange { border-color: var(--acc-orange); }
   .accent-cyan { border-color: var(--acc-cyan); }
+  .accent-yellow { border-color: var(--acc-yellow); }
   .emoji { flex: none; }
   .unlock { border-color: var(--acc-yellow); }
   .unlock b { color: var(--acc-yellow); font-family: var(--font-mono); font-size: 0.7rem; }

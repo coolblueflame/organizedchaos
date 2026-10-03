@@ -7,6 +7,7 @@
   weight — with the destructive actions all undoable.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { app } from '../state/app.svelte';
   import { focusOnMount } from './focusOnMount';
   import { duplicateGroups, sortByUsage, tagUsage } from '../domain/tags';
@@ -52,6 +53,7 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Tags</h1>
+    <Sparkle spot="tags" />
   </header>
 
   {#if app.state.tags.length === 0}

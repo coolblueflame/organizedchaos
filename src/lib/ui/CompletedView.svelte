@@ -3,6 +3,7 @@
   app-day (4am rule), newest first, with one-tap restore.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { app } from '../state/app.svelte';
   import { withoutLocked } from '../domain/lock';
   import { lock } from './lock.svelte';
@@ -95,6 +96,7 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Completed</h1>
+    <Sparkle spot="completed" />
   </header>
 
   {#if winCount > 0}

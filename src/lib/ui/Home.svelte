@@ -28,6 +28,7 @@
   import StatsStrip from './StatsStrip.svelte';
   import Mailbox from '../eggs/Mailbox.svelte';
   import Companion from '../eggs/Companion.svelte';
+  import Sparkle from '../eggs/Sparkle.svelte';
   import QuickAdd from './QuickAdd.svelte';
   import InstallBanner from './InstallBanner.svelte';
   import WorkPeriod from './WorkPeriod.svelte';
@@ -419,7 +420,8 @@
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
   <div class="tagline-row">
-    <p class="tagline">// a todo list with loaded dice</p>
+    <!-- The sparkle rides with the tagline, not with the row's far end. -->
+    <span class="tagline-wrap"><p class="tagline">// a todo list with loaded dice</p><Sparkle spot="home" /></span>
     <Mailbox />
   </div>
 
@@ -643,6 +645,7 @@
   .cursor { color: var(--acc-green); animation: blink 1.1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0; }
+  .tagline-wrap { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
   /* The mailbox chip shares the tagline's line, right-aligned, so waiting
      things are visible without pushing the day's work down the screen. */
   .tagline-row {

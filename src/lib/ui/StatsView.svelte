@@ -3,6 +3,7 @@
   time-to-completion tile with the 1h-assumption note, backlog burden line.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { UNLOCKS } from '../eggs/content/extras';
   import { denOpen } from '../eggs/den';
   import Glyph from './Glyph.svelte';
@@ -126,6 +127,7 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Stats</h1>
+    <Sparkle spot="stats" />
   </header>
 
   <button class="week-link" data-testid="stats-week-link" onclick={() => navigate({ name: 'week' })}>

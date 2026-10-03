@@ -3,6 +3,7 @@
   block with their completion dates. Results are live as you type.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { searchTasks, searchTemplates } from '../domain/search';
@@ -76,6 +77,7 @@
       placeholder="search everything…"
       bind:this={inputEl}
       bind:value={searchQuery.value} />
+    <Sparkle spot="search" />
   </header>
 
   {#if results.open.length > 0}

@@ -324,4 +324,7 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'high-roller', label: 'High Roller — won ten duels', hint: 'keep the dice warm' },
   { id: 'scrapbooker', label: 'Scrapbooker — half the big moments, seen', hint: 'a scrapbook, half full' },
   { id: 'seen-it-all', label: 'Seen It All — every big moment, seen', hint: 'a scrapbook, full' },
+  { id: 'finders-keepers', label: 'Finders Keepers — found one of ENTROPY’s sparkles', hint: 'something small, hidden somewhere' },
+  { id: 'magpie', label: 'Magpie — ten sparkles found', hint: 'keep looking' },
+  { id: 'hoard', label: 'Dragon’s Hoard — fifty sparkles found', hint: 'a proper hoard' },
 ] as const;

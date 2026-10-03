@@ -5,6 +5,7 @@
  */
 import type { MomentName } from './registry';
 import { PET_STAGES } from './content/extras';
+import { sparkleTally } from './sparkles';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -72,6 +73,7 @@ export const TRINKETS: readonly Trinket[] = [
   { id: 'wand', emoji: '🪄', label: 'a wand', hint: 'a month of tomorrows', earned: (p) => p.unlocks.includes('streak-30') },
   { id: 'die', emoji: '🎲', label: 'a lucky die', hint: 'win ten duels', earned: (p) => duelWins(p) >= 10 },
   { id: 'star', emoji: '🌟', label: 'a star', hint: 'fill the whole scrapbook', earned: (p) => p.unlocks.includes('seen-it-all') },
+  { id: 'comet', emoji: '💫', label: 'a pocket sparkle', hint: 'find ten of ENTROPY’s sparkles', earned: (p) => sparkleTally(p.marks) >= 10 },
 ];
 
 /**

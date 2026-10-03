@@ -3,6 +3,7 @@
   pause/resume, edit (inline RecurrenceEditor), delete with undo.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { lockedListIds } from '../domain/lock';
   import { lock } from './lock.svelte';
   import { app } from '../state/app.svelte';
@@ -107,6 +108,7 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Recurring</h1>
+    <Sparkle spot="recurring" />
     <button class="sort" data-testid="recurring-sort" onclick={cycleSort}
       title="how these are arranged">sort: {RECURRING_SORT_LABELS[sort]}</button>
   </header>

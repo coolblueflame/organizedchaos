@@ -31,6 +31,8 @@ import { nanoid } from 'nanoid';
 import type { MappedImport } from '../import/thingsMap';
 import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { MOMENTS, REGISTRY } from '../eggs/registry';
+import { SPARKLE_PREFIX, sparkleTally } from '../eggs/sparkles';
+import { SPARKLE_FIRST, SPARKLE_FOUND } from '../eggs/content/sparkles';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
 import {
@@ -232,6 +234,25 @@ export class AppStore {
     if (!this.eggs?.mark(key, value)) return;
     this.syncEggMirrors();
     this.requestSync();
+  }
+
+  /**
+   * One of ENTROPY's sparkles was found (see eggs/sparkles): record it, say
+   * so, then grant whatever the new tally earned. The announcement goes
+   * first on purpose: an award waits its turn behind a note, but a note
+   * arriving while an award is up is dropped, and the first find's note is
+   * the one that explains what a sparkle even is.
+   */
+  collectSparkle(dayKey: string): void {
+    this.markEgg(`${SPARKLE_PREFIX}${dayKey}`);
+    const n = sparkleTally(this.eggMarks);
+    const text = n === 1
+      ? SPARKLE_FIRST
+      : SPARKLE_FOUND[Math.floor(Math.random() * SPARKLE_FOUND.length)]!.replace('{n}', String(n));
+    presenter.show({ kind: 'note', emoji: '✨', accent: 'yellow', text });
+    this.grantUnlockAndShow('finders-keepers');
+    if (n >= 10) this.grantUnlockAndShow('magpie');
+    if (n >= 50) this.grantUnlockAndShow('hoard');
   }
 
   /**

@@ -3,6 +3,7 @@
   The PAT is written straight to device-local kv and shown never again.
 -->
 <script lang="ts">
+  import Sparkle from '../eggs/Sparkle.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import SyncHowTo from './SyncHowTo.svelte';
@@ -105,6 +106,7 @@
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Settings</h1>
+    <Sparkle spot="settings" />
   </header>
 
   <section class="group">
