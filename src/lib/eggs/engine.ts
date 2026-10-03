@@ -125,6 +125,8 @@ export interface EggState {
    */
   unlockGrants?: Record<string, number>;
   unlockRevokes?: Record<string, number>;
+  /** Things that have happened (see DelightProgress.marks) — synced. */
+  marks?: Record<string, number>;
 }
 
 /** Factory, not a constant — nested objects must never be shared across instances. */
@@ -132,7 +134,7 @@ const freshState = (): EggState => ({
   seen: {}, presentedTodayBy: {}, trivia: { correct: 0, total: 0 }, unlocks: [], storyStage: 0,
   lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
   lastCompletionDay: '', streakDays: 0, bestStreakDays: 0,
-  unlockGrants: {}, unlockRevokes: {},
+  unlockGrants: {}, unlockRevokes: {}, marks: {},
 });
 
 export interface EngineDeps {
@@ -230,6 +232,7 @@ export class EggEngine {
           trivia: { correct: s.trivia?.correct ?? 0, total: s.trivia?.total ?? 0 },
           unlockGrants: { ...s.unlockGrants },
           unlockRevokes: { ...s.unlockRevokes },
+          marks: { ...s.marks },
           // Re-resolve rather than trust the stored array, so a persisted
           // revocation stays applied no matter what wrote the blob last.
           unlocks: resolveHeldUnlocks(s.unlocks ?? [], s.unlockGrants, s.unlockRevokes),
@@ -423,11 +426,12 @@ export class EggEngine {
     bestStreakDays?: number;
     unlockGrants?: Record<string, number>;
     unlockRevokes?: Record<string, number>;
+    marks?: Record<string, number>;
   }): boolean {
     const before = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
       this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
-      this.state.unlockGrants, this.state.unlockRevokes,
+      this.state.unlockGrants, this.state.unlockRevokes, this.state.marks,
     ]);
     const maxByKey = (a: Record<string, number> = {}, b: Record<string, number> = {}) => {
       const out = { ...a };
@@ -436,6 +440,7 @@ export class EggEngine {
     };
     this.state.unlockGrants = maxByKey(this.state.unlockGrants, progress.unlockGrants);
     this.state.unlockRevokes = maxByKey(this.state.unlockRevokes, progress.unlockRevokes);
+    this.state.marks = maxByKey(this.state.marks, progress.marks);
     this.state.unlocks = resolveHeldUnlocks(
       [...new Set([...this.state.unlocks, ...progress.unlocks])],
       this.state.unlockGrants, this.state.unlockRevokes);
@@ -461,10 +466,33 @@ export class EggEngine {
     const changed = JSON.stringify([
       this.state.unlocks, this.state.storyStage, this.state.trivia,
       this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
-      this.state.unlockGrants, this.state.unlockRevokes,
+      this.state.unlockGrants, this.state.unlockRevokes, this.state.marks,
     ]) !== before;
     if (changed) this.persist();
     return changed;
+  }
+
+  /**
+   * Record that something happened (see DelightProgress.marks). Keeps the
+   * larger value, the same rule the merge applies, so a stale write can never
+   * take a mark back. Returns whether anything changed.
+   */
+  mark(key: string, value: number = this.now().getTime()): boolean {
+    if (value <= (this.state.marks?.[key] ?? 0)) return false;
+    this.state.marks = { ...this.state.marks, [key]: value };
+    this.persist();
+    return true;
+  }
+
+  /** The value recorded for a mark, if any. */
+  getMark(key: string): number | undefined { return this.state.marks?.[key]; }
+
+  /** Every mark under a namespace, without the prefix, sorted. */
+  marked(prefix: string): string[] {
+    return Object.keys(this.state.marks ?? {})
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length))
+      .sort();
   }
 
   /** True if newly granted; false if already discovered. */

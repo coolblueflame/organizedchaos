@@ -400,6 +400,30 @@ describe('a beat is told only when the reader says so', () => {
   });
 });
 
+describe('the marks ledger', () => {
+  it('keeps the larger value, survives a restart, and absorbs another device by maximum', async () => {
+    let saved: EggState | null = null;
+    const eng = new EggEngine({ registry: [], rolloverHour: 4, load: async () => null, save: async (s) => { saved = s; } });
+    await eng.ready;
+    expect(eng.mark('moment:aurora', 10)).toBe(true);
+    expect(eng.mark('moment:aurora', 5), 'an older value never takes a mark back').toBe(false);
+    expect(eng.getMark('moment:aurora')).toBe(10);
+    eng.mark('moment:disco', 3);
+    expect(eng.marked('moment:')).toEqual(['aurora', 'disco']);
+
+    const again = new EggEngine({ registry: [], rolloverHour: 4, load: async () => saved, save: async () => {} });
+    await again.ready;
+    expect(again.marked('moment:')).toEqual(['aurora', 'disco']);
+    const changed = again.absorb({
+      unlocks: [], storyStage: 0, triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+      marks: { 'moment:aurora': 4, 'moment:petals': 8 },
+    });
+    expect(changed).toBe(true);
+    expect(again.getMark('moment:aurora')).toBe(10);
+    expect(again.marked('moment:')).toEqual(['aurora', 'disco', 'petals']);
+  });
+});
+
 describe('a beat set aside for later', () => {
   const beat = (): EggDef => ({
     id: 'story-0', weight: 1, triggers: ['appOpened'], exactStoryStage: 0,

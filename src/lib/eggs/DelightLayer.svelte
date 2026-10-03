@@ -6,7 +6,16 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import { MOMENT_MS, presenter } from './presenter.svelte';
-  import { crossingSpeed, streakSpawn } from './momentMotion';
+  import {
+    cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, streakSpawn,
+    type CascadeCard,
+  } from './momentMotion';
+
+  /** Moments drawn on the canvas; every other moment is drawn in CSS. */
+  const CANVAS_MOMENTS = new Set([
+    'matrix-rain', 'starfield', 'confetti-storm', 'fireworks', 'bubbles', 'meteor-shower', 'petals',
+    'lava-lamp', 'card-cascade', 'level-clear', 'constellation', 'fireflies',
+  ]);
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
   import { focusOnMount } from '../ui/focusOnMount';
@@ -66,7 +75,10 @@
       burstAt(window.innerWidth - 40, window.innerHeight - 60, { count: 36, power: 1.5, upward: 260 });
       haptic('success');
     }
-    if (current?.kind === 'moment') haptic('tick');
+    if (current?.kind === 'moment') {
+      haptic('tick');
+      app.noteMomentShown(current.moment);
+    }
     if (current?.kind !== 'trivia') picked = null;
   });
 
@@ -324,6 +336,240 @@
         raf = requestAnimationFrame(draw);
       };
       draw();
+    } else if (current.moment === 'card-cascade') {
+      // The old desktop solitaire win: cards spring off the foundations,
+      // bounce along the bottom and leave every frame behind them. Never
+      // clearing is the whole effect — the overlay owns this canvas, so all
+      // of it goes when the moment does.
+      const cw = Math.max(34, Math.min(64, W * 0.11));
+      const ch = cw * 1.4;
+      const SUITS = ['♠', '♥', '♦', '♣'];
+      const cards: CascadeCard[] = [];
+      let launched = 0;
+      let sinceLaunch = 1;
+      let last = performance.now();
+      const drawCard = (c: CascadeCard) => {
+        ctx.fillStyle = '#f6f2e6';
+        ctx.strokeStyle = '#141414';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') ctx.roundRect(c.x, c.y, c.w, c.h, 4);
+        else ctx.rect(c.x, c.y, c.w, c.h);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = c.suit === '♥' || c.suit === '♦' ? '#c8102e' : '#141414';
+        ctx.font = `${Math.round(c.h * 0.42)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(c.suit, c.x + c.w / 2, c.y + c.h / 2);
+      };
+      const draw = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        sinceLaunch += dt;
+        if (sinceLaunch > 0.45 && cards.filter((c) => c.alive).length < 3) {
+          cards.push(cascadeCard(W, H, cw, ch, launched % 2 === 0, Math.random, SUITS[launched % 4]!));
+          launched += 1;
+          sinceLaunch = 0;
+        }
+        for (const c of cards) {
+          if (!c.alive) continue;
+          cardStep(c, dt, W, H);
+          drawCard(c);
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } else if (current.moment === 'lava-lamp') {
+      // Real metaballs: blob fields summed on a coarse grid, every cell past
+      // the threshold is wax. Computed small and scaled up with smoothing,
+      // which is what softens the edges — and keeps it cheap on a phone.
+      const cell = 4;
+      const gw = Math.ceil(W / cell);
+      const gh = Math.ceil(H / cell);
+      const field = document.createElement('canvas');
+      field.width = gw;
+      field.height = gh;
+      const fctx = field.getContext('2d');
+      if (fctx) {
+        const img = fctx.createImageData(gw, gh);
+        const blobs = Array.from({ length: 8 }, (_, i) => lavaBlob(gw, gh, Math.random, i, 8));
+        const t0 = performance.now();
+        const draw = () => {
+          const t = (performance.now() - t0) / 1000;
+          for (const b of blobs) moveLavaBlob(b, t, gh);
+          for (let y = 0; y < gh; y++) {
+            const k = y / gh;
+            for (let x = 0; x < gw; x++) {
+              const v = metaballField(x, y, blobs);
+              const i = (y * gw + x) * 4;
+              // A soft step rather than a hard cut: the wax's edge fades over
+              // a narrow band of the field, so scaled up it reads as a
+              // rounded surface, not a staircase.
+              const e = Math.min(1, Math.max(0, (v - 0.82) / 0.26));
+              const wax = e * e * (3 - 2 * e);
+              const halo = Math.max(0, Math.min(1, (v - 0.45) / 0.37)) * 0.35;
+              img.data[i] = Math.round(120 + 135 * wax);
+              img.data[i + 1] = Math.round(30 + (60 + 110 * (1 - k)) * wax);
+              img.data[i + 2] = Math.round(70 + (110 * k - 20) * wax);
+              img.data[i + 3] = Math.round(255 * Math.max(wax, halo));
+            }
+          }
+          fctx.putImageData(img, 0, 0);
+          ctx.clearRect(0, 0, W, H);
+          // The lamp's heat: a warm glow pooling at the base.
+          const heat = ctx.createRadialGradient(W / 2, H * 1.05, 0, W / 2, H * 1.05, H * 0.55);
+          heat.addColorStop(0, 'rgba(255, 140, 60, 0.45)');
+          heat.addColorStop(1, 'rgba(255, 140, 60, 0)');
+          ctx.fillStyle = heat;
+          ctx.fillRect(0, 0, W, H);
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(field, 0, 0, W, H);
+          raf = requestAnimationFrame(draw);
+        };
+        draw();
+      }
+    } else if (current.moment === 'level-clear') {
+      // An 8-bit stage clear, drawn at a quarter of the resolution and
+      // scaled up without smoothing so every shape lands on chunky pixels.
+      const px = 4;
+      const lw = Math.ceil(W / px);
+      const lh = Math.ceil(H / px);
+      const low = document.createElement('canvas');
+      low.width = lw;
+      low.height = lh;
+      const l = low.getContext('2d');
+      if (l) {
+        const COLORS = ['#ffd479', '#7ee787', '#79c0ff', '#f778ba', '#ffa657'];
+        type Spark = { x: number; y: number; vx: number; vy: number; c: string };
+        let sparks: Spark[] = [];
+        let bursts = 0;
+        const burst = () => {
+          sparks = sparks.concat(Array.from({ length: 36 }, () => ({
+            x: lw / 2 + (Math.random() - 0.5) * lw * 0.5, y: lh * 0.42,
+            vx: (Math.random() - 0.5) * lw * 1.0, vy: -(0.25 + Math.random() * 0.7) * lh,
+            c: COLORS[Math.floor(Math.random() * COLORS.length)]!,
+          })));
+          bursts += 1;
+        };
+        const t0 = performance.now();
+        let last = t0;
+        const draw = () => {
+          const now = performance.now();
+          const t = (now - t0) / 1000;
+          const dt = Math.min(0.05, (now - last) / 1000);
+          last = now;
+          l.fillStyle = '#0b0e14';
+          l.fillRect(0, 0, lw, lh);
+          // The banner drops in and settles with a couple of bounces.
+          const p = Math.min(1, t / 0.7);
+          const y = lh * 0.42 * (1 - Math.abs(Math.cos(p * Math.PI * 2.5)) * (1 - p));
+          l.fillStyle = Math.floor(t * 6) % 2 ? '#ffd479' : '#ffffff';
+          l.font = `bold ${Math.max(8, Math.round(lw / 9))}px monospace`;
+          l.textAlign = 'center';
+          l.textBaseline = 'middle';
+          l.fillText('LEVEL CLEAR!', lw / 2, y);
+          if (t > 0.7) {
+            // A fresh burst each time the banner flashes, like a fanfare.
+            if (bursts < 1 + Math.floor((t - 0.7) / 1.3)) burst();
+            l.fillStyle = Math.floor(t * 3) % 2 ? '#7ee787' : '#79c0ff';
+            l.font = `bold ${Math.max(6, Math.round(lw / 16))}px monospace`;
+            l.fillText('SCORE +1000', lw / 2, lh * 0.5);
+            for (const s of sparks) {
+              s.vy += lh * 0.8 * dt;
+              s.x += s.vx * dt;
+              s.y += s.vy * dt;
+              l.fillStyle = s.c;
+              l.fillRect(Math.round(s.x), Math.round(s.y), 2, 2);
+            }
+            sparks = sparks.filter((s) => s.y < lh + 4);
+          }
+          ctx.imageSmoothingEnabled = false;
+          ctx.clearRect(0, 0, W, H);
+          ctx.drawImage(low, 0, 0, W, H);
+          raf = requestAnimationFrame(draw);
+        };
+        draw();
+      }
+    } else if (current.moment === 'constellation') {
+      // Stars come out, a few brighten, and lines join them into the face of
+      // a die — the app's own symbol, written across the night.
+      const face = 1 + Math.floor(Math.random() * 6);
+      const side = Math.min(W, H) * 0.42;
+      const ox = (W - side) / 2;
+      const oy = (H - side) / 2;
+      const pips = diePips(face).map(([x, y]) => [ox + x * side, oy + y * side] as const);
+      const field = Array.from({ length: 140 }, () => ({
+        x: Math.random() * W, y: Math.random() * H, r: 0.6 + Math.random() * 1.3, p: Math.random() * 6,
+      }));
+      const t0 = performance.now();
+      const draw = () => {
+        const t = (performance.now() - t0) / 1000;
+        ctx.clearRect(0, 0, W, H);
+        for (const s of field) {
+          ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + s.p);
+          ctx.fillStyle = '#c9d1d9';
+          ctx.fillRect(s.x, s.y, s.r, s.r);
+        }
+        ctx.globalAlpha = 1;
+        const bright = Math.min(1, t / 1.2);
+        ctx.fillStyle = `rgba(255, 244, 214, ${bright})`;
+        for (const [x, y] of pips) {
+          ctx.beginPath();
+          ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Lines between pips, then the outline of the die, drawn on in turn.
+        const drawn = Math.max(0, (t - 1.2) / 2.2);
+        ctx.strokeStyle = 'rgba(121, 192, 255, 0.75)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 1; i < pips.length && i <= drawn * pips.length; i++) {
+          ctx.moveTo(pips[i - 1]![0], pips[i - 1]![1]);
+          ctx.lineTo(pips[i]![0], pips[i]![1]);
+        }
+        ctx.stroke();
+        const outline = Math.max(0, Math.min(1, (t - 3.4) / 1.4));
+        if (outline > 0) {
+          ctx.strokeStyle = `rgba(210, 168, 255, ${0.8 * outline})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          if (typeof ctx.roundRect === 'function') ctx.roundRect(ox, oy, side, side, side * 0.12);
+          else ctx.rect(ox, oy, side, side);
+          ctx.stroke();
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    } else if (current.moment === 'fireflies') {
+      // A summer field at dusk: soft lights drift and blink on and off. Each
+      // glow is drawn as a gradient, never a filter, so nothing here asks
+      // the compositor to blur a repainting layer.
+      const flies = Array.from({ length: 42 }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        p: Math.random() * Math.PI * 2, rate: 0.6 + Math.random() * 1.1,
+        dx: (Math.random() - 0.5) * 0.6, dy: (Math.random() - 0.5) * 0.6,
+      }));
+      const t0 = performance.now();
+      const draw = () => {
+        const t = (performance.now() - t0) / 1000;
+        ctx.clearRect(0, 0, W, H);
+        for (const f of flies) {
+          const x = f.x + Math.sin(t * 0.5 + f.p) * W * 0.04 + f.dx * t * 12;
+          const y = f.y + Math.cos(t * 0.4 + f.p) * H * 0.03 + f.dy * t * 12;
+          const glow = Math.max(0, Math.sin(t * f.rate + f.p)) ** 3;
+          if (glow < 0.02) continue;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
+          g.addColorStop(0, `rgba(228, 255, 150, ${0.95 * glow})`);
+          g.addColorStop(0.35, `rgba(180, 230, 90, ${0.45 * glow})`);
+          g.addColorStop(1, 'rgba(180, 230, 90, 0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x - 14, y - 14, 28, 28);
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     }
     return () => cancelAnimationFrame(raf);
   });
@@ -394,8 +640,13 @@
     <div class="moment m-{current.moment}" data-testid="delight-moment" role="button" tabindex="0"
       aria-label="dismiss" onclick={() => presenter.dismiss()}
       onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); presenter.dismiss(); } }}>
-      {#if current.moment === 'matrix-rain' || current.moment === 'starfield' || current.moment === 'confetti-storm' || current.moment === 'fireworks' || current.moment === 'bubbles' || current.moment === 'meteor-shower' || current.moment === 'petals'}
+      {#if CANVAS_MOMENTS.has(current.moment)}
         <canvas bind:this={canvasEl}></canvas>
+      {:else if current.moment === 'power-off'}
+        <!-- An old monitor switching off: the picture folds to a line, the
+             line to a dot, and then the famous all-clear. -->
+        <div class="crt-off" aria-hidden="true"></div>
+        <p class="crt-safe">It is now safe to turn off your task.</p>
       {:else if current.moment === 'ticker-tape'}
         <div class="ticker">
           <span>&nbsp;★&nbsp;ANOTHER ONE DONE&nbsp;★&nbsp;THE LIST GROWS SHORTER&nbsp;★&nbsp;WITNESSED AND RECORDED&nbsp;★&nbsp;ANOTHER ONE DONE&nbsp;★&nbsp;THE LIST GROWS SHORTER&nbsp;★&nbsp;WITNESSED AND RECORDED&nbsp;★&nbsp;</span>
@@ -581,22 +832,32 @@
     8% { background: rgba(121, 192, 255, 0.35); }
     30% { background: rgba(232, 240, 255, 0.6); }
   }
-  /* Warm blobs rising and folding over one another, slow enough to watch.
-     Each layer is taller than the screen so a vertical position actually
-     has room to travel (a 100% tall layer cannot move at all). */
-  .m-lava-lamp {
-    background:
-      radial-gradient(38% 30% at 30% 50%, rgba(255, 166, 87, 0.55), transparent 70%),
-      radial-gradient(30% 26% at 70% 50%, rgba(247, 120, 186, 0.5), transparent 70%),
-      radial-gradient(26% 22% at 45% 50%, rgba(255, 214, 121, 0.45), transparent 70%),
-      rgba(11, 14, 20, 0.55);
-    background-size: 100% 180%, 100% 180%, 100% 180%, 100% 100%;
-    animation: lava-rise 3.2s ease-in-out infinite alternate;
+  /* The lamp's fluid; the wax itself is drawn on the canvas. */
+  .m-lava-lamp { background: rgb(24, 8, 22); }
+  /* The felt every solitaire win was played on. */
+  .m-card-cascade { background: rgb(14, 96, 44); }
+  .m-level-clear { background: #0b0e14; }
+  .m-constellation { background: rgb(6, 9, 18); }
+  .m-fireflies { background: rgba(8, 16, 10, 0.9); }
+  .m-power-off { background: #030405; display: grid; place-items: center; }
+  .crt-off {
+    position: absolute; inset: 0; background: #eaf4ff;
+    box-shadow: 0 0 60px rgba(159, 211, 255, 0.9);
+    transform-origin: center;
+    animation: crt-off 1.1s ease-in forwards;
   }
-  @keyframes lava-rise {
-    from { background-position: 0 100%, 0 0%, 0 60%, 0 0; }
-    to { background-position: 0 0%, 0 100%, 0 20%, 0 0; }
+  @keyframes crt-off {
+    0% { transform: scale(1, 1); opacity: 0.85; }
+    45% { transform: scale(1, 0.006); opacity: 1; }
+    75% { transform: scale(0.004, 0.006); opacity: 1; }
+    100% { transform: scale(0, 0); opacity: 0; }
   }
+  .crt-safe {
+    position: relative; margin: 0; padding: 0 24px; text-align: center;
+    color: #f0a020; font-family: var(--font-mono); font-size: 1rem;
+    opacity: 0; animation: crt-safe 0.4s ease-out 1.5s forwards;
+  }
+  @keyframes crt-safe { to { opacity: 1; } }
   /* A dawn that arrives in two seconds: the warm band climbs and the dark
      lifts off it. The quiet counterpart to the loud ones. */
   .m-sunrise {
@@ -623,7 +884,7 @@
   }
   @keyframes ticker-run { to { transform: translateX(-50%); } }
   @media (prefers-reduced-motion: reduce) {
-    .ticker span, .m-sunrise, .m-lightning, .m-lava-lamp { animation: none; }
+    .ticker span, .m-sunrise, .m-lightning, .crt-off, .crt-safe { animation: none; }
   }
   .m-friendly-bsod { background: #1533b8; display: grid; place-items: center; }
   .bsod { color: #fff; font-family: var(--font-mono); text-align: left; max-width: 420px; padding: 20px; }

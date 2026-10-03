@@ -67,6 +67,16 @@ export interface DelightProgress {
    */
   unlockGrants?: Record<string, number>;
   unlockRevokes?: Record<string, number>;
+  /**
+   * Things that have happened, by key, each with a number — usually the
+   * moment it happened, sometimes a running tally. Keys are namespaced
+   * ("moment:aurora", "letter:…") so every collection the delight layer
+   * grows shares one trip through the sync layer instead of each needing
+   * its own. Merged per key by maximum: idempotent and order-independent,
+   * like the unlock clocks — and, like the trivia tallies, a count bumped on
+   * two devices at once keeps the larger rather than the sum.
+   */
+  marks?: Record<string, number>;
 }
 
 /**

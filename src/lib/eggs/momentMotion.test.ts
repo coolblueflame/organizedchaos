@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { crossingSpeed, streakSpawn } from './momentMotion';
+import {
+  cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, streakSpawn,
+} from './momentMotion';
 
 describe('crossingSpeed', () => {
   it('carries a drifter the whole way within the window it is on screen for', () => {
@@ -82,5 +84,75 @@ describe('streakSpawn', () => {
     expect(entering.y).toBeLessThan(0);
     // Past the right edge is the whole point: those enter partway down.
     expect(entering.x).toBeGreaterThan(390);
+  });
+});
+
+describe('the solitaire cascade', () => {
+  const W = 390;
+  const H = 844;
+
+  it('bounces off the bottom edge and never rests below it, each bounce lower than the last', () => {
+    const c = cascadeCard(W, H, 44, 62, true, () => 0.5, '♠');
+    const rebounds: number[] = [];
+    let prevVy = c.vy;
+    for (let i = 0; i < 2000 && c.alive; i++) {
+      cardStep(c, 1 / 60, W, H);
+      expect(c.y + c.h).toBeLessThanOrEqual(H + 1e-9);
+      if (prevVy > 0 && c.vy < 0) rebounds.push(-c.vy);
+      prevVy = c.vy;
+    }
+    expect(rebounds.length, 'it bounced').toBeGreaterThan(1);
+    for (let i = 1; i < rebounds.length; i++) expect(rebounds[i]!).toBeLessThan(rebounds[i - 1]!);
+  });
+
+  it('leaves the screen on the far side from where it started', () => {
+    const fromRight = cascadeCard(W, H, 44, 62, true, () => 0.5, '♥');
+    const fromLeft = cascadeCard(W, H, 44, 62, false, () => 0.5, '♣');
+    expect(fromRight.vx).toBeLessThan(0);
+    expect(fromLeft.vx).toBeGreaterThan(0);
+    for (let i = 0; i < 2000 && fromRight.alive; i++) cardStep(fromRight, 1 / 60, W, H);
+    expect(fromRight.alive).toBe(false);
+    expect(fromRight.x).toBeLessThan(0);
+  });
+});
+
+describe('the lava lamp', () => {
+  const blob = (x: number, y: number, r: number) => ({ x, y, r, baseX: x, phase: 0, speed: 0, sway: 0 });
+
+  it('is wax at a blob and clear far from it', () => {
+    const b = [blob(10, 10, 4)];
+    expect(metaballField(10, 10, b)).toBeGreaterThanOrEqual(1);
+    expect(metaballField(40, 40, b)).toBeLessThan(1);
+  });
+
+  it('joins two blobs as they near each other, before they touch', () => {
+    // Midpoint between two radius-4 blobs: apart, the gap is clear; close,
+    // the summed field bridges it — the gooey join.
+    const apart = [blob(0, 0, 4), blob(14, 0, 4)];
+    const near = [blob(0, 0, 4), blob(9, 0, 4)];
+    expect(metaballField(7, 0, apart)).toBeLessThan(1);
+    expect(metaballField(4.5, 0, near)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('keeps every blob inside the lamp as it rises and sinks', () => {
+    const b = lavaBlob(60, 120, () => 0.5);
+    for (let t = 0; t < 60; t += 0.25) {
+      moveLavaBlob(b, t, 120);
+      expect(b.y).toBeGreaterThanOrEqual(0);
+      expect(b.y).toBeLessThanOrEqual(120);
+    }
+  });
+});
+
+describe('diePips', () => {
+  it('has as many pips as the face, inside the unit square', () => {
+    for (let face = 1; face <= 6; face++) {
+      const pips = diePips(face);
+      expect(pips).toHaveLength(face);
+      for (const [x, y] of pips) {
+        expect(x).toBeGreaterThan(0); expect(x).toBeLessThan(1);
+        expect(y).toBeGreaterThan(0); expect(y).toBeLessThan(1);
+      }
+    }
   });
 });

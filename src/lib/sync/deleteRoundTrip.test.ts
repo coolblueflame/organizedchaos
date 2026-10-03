@@ -202,6 +202,19 @@ describe('discoveries travel between devices', () => {
       .toEqual({ oops: 1_000_000 });
   });
 
+  it('the marks ledger travels, merged per key by maximum', async () => {
+    // One map carries every collection the delight layer grows; a mark made
+    // on either device survives, and the later value of a shared key wins.
+    pc.snap.delight = withDelight({ marks: { 'moment:aurora': 100, 'moment:disco': 400 } });
+    await pc.engine.syncNow();
+    phone.snap.delight = withDelight({ marks: { 'moment:aurora': 300, 'moment:bubbles': 200 } });
+    await phone.engine.syncNow();
+    await pc.engine.syncNow();
+    const expected = { 'moment:aurora': 300, 'moment:bubbles': 200, 'moment:disco': 400 };
+    expect(phone.snap.delight!.marks).toEqual(expected);
+    expect(pc.snap.delight!.marks).toEqual(expected);
+  });
+
   it('burden measurements travel, and the earliest reading owns each day', async () => {
     phone.snap.burdenLedger = { '2026-08-12': { v: 41, at: 2000 } };
     await phone.engine.syncNow();

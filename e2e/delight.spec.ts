@@ -221,6 +221,19 @@ test('every moment renders on demand without throwing', async ({ page }) => {
     await expect(moment).toHaveCount(0);
   }
   expect(errors).toEqual([]);
+
+  // Every moment that reached the screen is remembered, whichever door it
+  // came through; the forced door used here is one the lottery never sees.
+  await expect.poll(() => page.evaluate(() => new Promise<string[]>((resolve) => {
+    const open = indexedDB.open('organizedchaos');
+    open.onsuccess = () => {
+      const req = open.result.transaction('kv').objectStore('kv').get('eggState');
+      req.onsuccess = () => {
+        const marks = (req.result?.value?.marks ?? {}) as Record<string, number>;
+        resolve(Object.keys(marks).filter((k) => k.startsWith('moment:')).map((k) => k.slice(7)).sort());
+      };
+    };
+  }))).toEqual([...names].sort());
 });
 
 test('a story beat can wait in the mailbox, and the story moves on only when it is read', async ({ page }) => {

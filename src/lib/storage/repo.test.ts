@@ -214,6 +214,16 @@ describe('Repo', () => {
       expect(eggs!.unlocks).toEqual(['earned-just-now', 'from-the-other-device']);
       expect(eggs!.storyStage, 'never rewound').toBe(3);
     });
+
+    it('carries the marks ledger out and folds incoming marks in by maximum', async () => {
+      await repo.setKv('eggState', { unlocks: [], storyStage: 0, marks: { 'moment:aurora': 5, 'moment:disco': 9 } });
+      const out = await repo.loadSnapshot();
+      expect(out.delight!.marks, 'travels with the snapshot').toEqual({ 'moment:aurora': 5, 'moment:disco': 9 });
+      out.delight = { ...out.delight!, marks: { 'moment:aurora': 7, 'moment:disco': 2, 'moment:petals': 1 } };
+      await repo.replaceAll(out);
+      const eggs = await repo.getKv<{ marks: Record<string, number> }>('eggState');
+      expect(eggs!.marks).toEqual({ 'moment:aurora': 7, 'moment:disco': 9, 'moment:petals': 1 });
+    });
   });
 
   it('sync auth kv round-trips and clears', async () => {

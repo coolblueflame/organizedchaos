@@ -29,6 +29,7 @@ interface StoredDelight {
   bestStreakDays?: number;
   unlockGrants?: Record<string, number>;
   unlockRevokes?: Record<string, number>;
+  marks?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -48,6 +49,7 @@ function storedToProgress(stored: StoredDelight): DelightProgress {
       ? { unlockGrants: { ...stored.unlockGrants } } : {}),
     ...(stored.unlockRevokes && Object.keys(stored.unlockRevokes).length
       ? { unlockRevokes: { ...stored.unlockRevokes } } : {}),
+    ...(stored.marks && Object.keys(stored.marks).length ? { marks: { ...stored.marks } } : {}),
   };
 }
 
@@ -419,6 +421,7 @@ export class Repo {
             bestStreakDays: won.bestStreakDays ?? won.streakDays,
             unlockGrants: won.unlockGrants ?? {},
             unlockRevokes: won.unlockRevokes ?? {},
+            marks: won.marks ?? {},
           },
         });
       }

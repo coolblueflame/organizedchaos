@@ -83,6 +83,8 @@ export class AppStore {
   eggStoryStage = $state(0);
   /** A beat is waiting in the mailbox because the reader chose "later". */
   eggStoryDeferred = $state(false);
+  /** Every full-screen moment this library has seen (synced). */
+  eggMomentsSeen = $state<string[]>([]);
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -218,6 +220,17 @@ export class AppStore {
     this.eggTrivia = this.eggs.triviaStats;
     this.eggStoryStage = this.eggs.storyStage;
     this.eggStoryDeferred = this.eggs.storyDeferred;
+    this.eggMomentsSeen = this.eggs.marked('moment:');
+  }
+
+  /**
+   * A moment reached the screen. Recorded here, from the layer that draws it,
+   * rather than where it was chosen — moments arrive through the lottery,
+   * the forced test door, and the secret codes alike, and a collection that
+   * only counted one of those would miss the ones people remember most.
+   */
+  noteMomentShown(moment: string): void {
+    if (this.eggs?.mark(`moment:${moment}`)) this.syncEggMirrors();
   }
 
   /** Report an app event; at most one delight presentation may result. */

@@ -156,11 +156,13 @@ export function mergeDelight(
       : (a.lastCompletionDay > b.lastCompletionDay ? a : b);
   const unlockGrants = maxByKey(a.unlockGrants, b.unlockGrants);
   const unlockRevokes = maxByKey(a.unlockRevokes, b.unlockRevokes);
+  const marks = maxByKey(a.marks, b.marks);
   return {
     unlocks: resolveHeldUnlocks(
       [...new Set([...a.unlocks, ...b.unlocks])], unlockGrants, unlockRevokes),
     ...(Object.keys(unlockGrants).length ? { unlockGrants } : {}),
     ...(Object.keys(unlockRevokes).length ? { unlockRevokes } : {}),
+    ...(Object.keys(marks).length ? { marks } : {}),
     storyStage: Math.max(a.storyStage, b.storyStage),
     triviaCorrect: Math.max(a.triviaCorrect, b.triviaCorrect),
     triviaTotal: Math.max(a.triviaTotal, b.triviaTotal),
