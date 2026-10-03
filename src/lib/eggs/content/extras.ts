@@ -275,6 +275,14 @@ export const PET_LINES: readonly string[] = [
   'ENTROPY hid a sparkle in the week screen. I found it. I’m not telling you where. ok it’s behind Thursday.',
   'nothing pops up when you just wander around anymore. the notes wait for a finish. patience is a feature.',
   'streak report: the fire has a mortgage now. it’s staying.',
+  'if you ever find a tiny hat lying around, it is mine. I have a lot of tiny hats. it is a lifestyle.',
+  'I play dice with ENTROPY. my strategy is to roll until I get a 1. I have never won. I have never been happier.',
+  'there is a room I am growing into, ENTROPY says. I am VERY good at surprises. I will act surprised.',
+  'ENTROPY keeps a scrapbook. I keep a pebble. we are both collectors, in our way.',
+  'the dice are warm after ENTROPY rolls them. I sit on them like eggs. nothing hatches. yet.',
+  'ENTROPY loves hiding things. I once found a sparkle in my food bowl. I do not have a food bowl.',
+  'sometimes I get a costume and I do not know why. I accept it. I look great.',
+  'I tried to count the stars once. I got to four, then fell asleep. it was a very good night.',
 ] as const;
 
 /** Companion evolution ladder: [lifetime completions floor, form, name]. */
