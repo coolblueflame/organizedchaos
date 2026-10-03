@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, companionForm, denOpen, momentsSeen, wornTrinket } from './den';
+import {
+  DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, companionForm, denOpen, dressing, momentsSeen, splitForm, wornTrinket,
+} from './den';
 import { MOMENTS } from './registry';
 import { PET_STAGES } from './content/extras';
+import { SEASON_LOOKS } from './content/seasons';
 
 describe('the den door', () => {
   it('opens at the dragon rung, and stays open once visited', () => {
@@ -63,5 +66,24 @@ describe('the scrapbook', () => {
       expect(SCRAPBOOK[m].name.length, m).toBeGreaterThan(0);
       expect(SCRAPBOOK[m].hint.length, m).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('dressing the companion', () => {
+  it('wears things on the creature, never on what its form adds beside it', () => {
+    expect(splitForm('👑🐲')).toEqual({ adornment: '👑', creature: '🐲' });
+    expect(splitForm('✨🐲')).toEqual({ adornment: '✨', creature: '🐲' });
+    for (const [, form] of PET_STAGES) {
+      const { adornment, creature } = splitForm(form);
+      expect(adornment + creature, form).toBe(form);
+      expect(creature.length, form).toBeGreaterThan(0);
+    }
+  });
+
+  it('puts the reader’s choice first, then the season’s costume, then nothing', () => {
+    const bow = TRINKETS.find((t) => t.id === 'bow')!;
+    expect(dressing(bow, 'halloween')).toEqual({ emoji: '🎀', slot: 'head' });
+    expect(dressing(null, 'winter')).toEqual({ emoji: SEASON_LOOKS.winter.costume, slot: 'neck' });
+    expect(dressing(null, null)).toBeNull();
   });
 });

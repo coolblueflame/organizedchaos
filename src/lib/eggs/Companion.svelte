@@ -9,10 +9,10 @@
   import { app } from '../state/app.svelte';
   import { lifetimeCompletions } from '../domain/stats';
   import { PET_LINES } from './content/extras';
-  import { companionForm, denOpen, wornTrinket } from './den';
+  import { companionForm, denOpen, dressing, wornTrinket } from './den';
+  import CompanionFigure from './CompanionFigure.svelte';
   import { navigate } from '../ui/router.svelte';
   import { seasonNow } from './seasonNow.svelte';
-  import { SEASON_LOOKS } from './content/seasons';
   import { presenter } from './presenter.svelte';
   import { burstFromElement, motionOk } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
@@ -21,8 +21,7 @@
   const stage = $derived(companionForm(lifetime));
   const canEnter = $derived(denOpen(lifetime, app.eggMarks));
   const worn = $derived(wornTrinket({ unlocks: app.eggUnlocks, marks: app.eggMarks }));
-  /** What sits on the companion: the reader's choice first, else the season's costume. */
-  const dressed = $derived(worn?.emoji ?? (seasonNow.current ? SEASON_LOOKS[seasonNow.current].costume : null));
+  const dressed = $derived(dressing(worn, seasonNow.current));
 
   const nearHatch = $derived(stage?.[1] === '🥚' && lifetime >= 20);
   const onFire = $derived(app.eggStreak >= 3);
@@ -91,8 +90,7 @@
     class:ready={held}
     onpointerdown={pressStart} onpointerup={pressRelease} onpointerleave={pressCancel} onpointercancel={pressCancel}
     oncontextmenu={(e) => { if (canEnter) e.preventDefault(); }}>
-    <span class="body">{stage[1]}</span>
-    {#if dressed}<span class="trinket" data-testid="companion-trinket">{dressed}</span>{/if}
+    <span class="body"><CompanionFigure form={stage[1]} {dressed} wornTestId="companion-trinket" /></span>
     {#if onFire}<span class="mood">🔥</span>{/if}
   </button>
 {/if}
@@ -111,7 +109,6 @@
   }
   /* A hold has registered: let go to go inside. */
   .ready .body { transform: scale(1.25); transition: transform 0.12s ease-out; }
-  .trinket { position: absolute; top: -4px; left: -2px; font-size: 0.85rem; transform: rotate(-14deg); pointer-events: none; }
   .body { display: inline-block; }
   .mood { position: absolute; top: -2px; right: -2px; font-size: 0.8rem; }
   .wiggle .body { animation: wiggle 2.4s ease-in-out infinite; }

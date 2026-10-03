@@ -13,7 +13,7 @@
   import { appDayKey } from '../domain/time';
   import { MOMENTS } from './registry';
   import {
-    DEN_MARKS, SCRAPBOOK, TRINKETS, WEAR_PREFIX, companionForm, denOpen, wornTrinket, type Trinket,
+    DEN_MARKS, SCRAPBOOK, TRINKETS, WEAR_PREFIX, companionForm, denOpen, dressing, wornTrinket, type Trinket,
   } from './den';
   import { DEN_LINES, DEN_WAY_BACK, DEN_WELCOME } from './content/den';
   import { presenter } from './presenter.svelte';
@@ -22,15 +22,14 @@
   import { clock } from '../ui/clock.svelte';
   import { SPARKLE_STORY_BEAT, sparkleTally } from './sparkles';
   import { seasonNow } from './seasonNow.svelte';
-  import { SEASON_LOOKS } from './content/seasons';
+  import CompanionFigure from './CompanionFigure.svelte';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
   const form = $derived(companionForm(lifetime));
   const progress = $derived({ unlocks: app.eggUnlocks, marks: app.eggMarks });
   const worn = $derived(wornTrinket(progress));
-  /** What it has on: the reader's choice first, else the season's costume. */
-  const dressed = $derived(worn?.emoji ?? (seasonNow.current ? SEASON_LOOKS[seasonNow.current].costume : null));
+  const dressed = $derived(dressing(worn, seasonNow.current));
   const welcomed = $derived(app.eggMarks[DEN_MARKS.welcomed] !== undefined);
   const seen = $derived(MOMENTS.filter((m) => app.eggMarks[`moment:${m}`] !== undefined));
   const sparkles = $derived(sparkleTally(app.eggMarks));
@@ -100,8 +99,7 @@
     <section class="room">
       {#if bubble}<p class="bubble" data-testid="den-bubble">{bubble}</p>{/if}
       <button class="pet" class:hop={hopping} data-testid="den-companion" aria-label="poke {form[2]}" onclick={poke}>
-        <span class="body">{form[1]}</span>
-        {#if dressed}<span class="worn" data-testid="den-worn">{dressed}</span>{/if}
+        <span class="body"><CompanionFigure form={form[1]} {dressed} wornTestId="den-worn" /></span>
       </button>
       <p class="name">{form[2]}</p>
       <p class="mood" data-testid="den-mood">mood: {mood}</p>
@@ -196,7 +194,6 @@
   }
   .pet { position: relative; background: none; border: none; cursor: pointer; padding: 4px 12px; font-size: 4.2rem; line-height: 1.1; }
   .body { display: inline-block; transform-origin: 50% 100%; animation: breathe 3.4s ease-in-out infinite, look 11s steps(1) infinite; }
-  .worn { position: absolute; top: -0.05em; left: 0.05em; font-size: 0.42em; transform: rotate(-14deg); pointer-events: none; }
   .hop .body { animation: hop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1); }
   @keyframes breathe { 50% { transform: scale(1.03, 0.97); } }
   /* Now and then it turns to look the other way, then back. */

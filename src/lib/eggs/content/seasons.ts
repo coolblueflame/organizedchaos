@@ -5,6 +5,7 @@
  * season they are read in, never what the reader did that day.
  */
 import type { Season } from '../seasons';
+import type { WornSlot } from '../den';
 
 export interface SeasonLook {
   /** Replaces Home's tagline while the season lasts. */
@@ -13,6 +14,8 @@ export interface SeasonLook {
   accent: string;
   /** Worn by the companion while it is not wearing anything else. */
   costume: string;
+  /** Where on the companion the costume goes (see den.WornSlot). */
+  costumeSlot: WornSlot;
   /** The once-per-occurrence letter in the mailbox. */
   letter: { from: string; subject: string; text: string };
   /** Lines the app may say while the season lasts. */
@@ -24,6 +27,7 @@ export const SEASON_LOOKS: Readonly<Record<Season, SeasonLook>> = {
     tagline: '// a todo list with haunted dice',
     accent: '#ffa657',
     costume: '🎃',
+    costumeSlot: 'held',
     letter: {
       from: 'ENTROPY',
       subject: 'it’s getting dark early (open with the lights on)',
@@ -46,6 +50,7 @@ export const SEASON_LOOKS: Readonly<Record<Season, SeasonLook>> = {
     tagline: '// a todo list with frosted dice',
     accent: '#79c0ff',
     costume: '🧣',
+    costumeSlot: 'neck',
     letter: {
       from: 'ENTROPY',
       subject: 'it snowed in here (sorry about the floor)',
@@ -66,6 +71,7 @@ export const SEASON_LOOKS: Readonly<Record<Season, SeasonLook>> = {
     tagline: '// a todo list with fresh dice',
     accent: '#ffd479',
     costume: '🎉',
+    costumeSlot: 'held',
     letter: {
       from: 'organizedchaos.exe',
       subject: 'a whole new year of dice',
@@ -83,6 +89,7 @@ export const SEASON_LOOKS: Readonly<Record<Season, SeasonLook>> = {
     tagline: '// a todo list with loaded dice (and cake)',
     accent: '#ffd479',
     costume: '🎂',
+    costumeSlot: 'held',
     letter: {
       from: 'organizedchaos.exe',
       subject: 'it’s my birthday (the app’s, I mean)',
@@ -97,7 +104,8 @@ export const SEASON_LOOKS: Readonly<Record<Season, SeasonLook>> = {
   birthday: {
     tagline: '// a todo list with birthday dice',
     accent: '#f778ba',
-    costume: '🥳',
+    costume: '🎁',
+    costumeSlot: 'held',
     letter: {
       from: 'ENTROPY',
       subject: 'today is YOUR day (we checked)',

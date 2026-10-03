@@ -7,6 +7,8 @@ import type { MomentName } from './registry';
 import { PET_STAGES } from './content/extras';
 import { sparkleTally } from './sparkles';
 import { latestChoice } from './ledger';
+import type { Season } from './seasons';
+import { SEASON_LOOKS } from './content/seasons';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -46,10 +48,20 @@ export interface DenProgress {
   marks: Readonly<Record<string, number>>;
 }
 
+/**
+ * Where on the creature something is worn: on its head, over its eyes,
+ * over its ears, at its neck, in its hand, or floating just above it.
+ */
+export type WornSlot = 'head' | 'eyes' | 'ears' | 'neck' | 'held' | 'float';
+
+/** What the companion has on, and where it goes. */
+export interface Dressing { emoji: string; slot: WornSlot }
+
 /** A cosmetic the companion can wear. Purely decorative; earned, never bought. */
 export interface Trinket {
   id: string;
   emoji: string;
+  slot: WornSlot;
   label: string;
   /** Shown in place of the trinket until it is earned. */
   hint: string;
@@ -64,17 +76,17 @@ export function momentsSeen(marks: Readonly<Record<string, number>>): number {
 const duelWins = (p: DenProgress) => p.marks[DEN_MARKS.duelsWon] ?? 0;
 
 export const TRINKETS: readonly Trinket[] = [
-  { id: 'balloon', emoji: '🎈', label: 'a balloon', hint: 'for coming in', earned: () => true },
-  { id: 'bow', emoji: '🎀', label: 'a bow', hint: 'keep a flame alive for a week', earned: (p) => p.unlocks.includes('streak-7') },
-  { id: 'tophat', emoji: '🎩', label: 'a top hat', hint: 'beat ENTROPY at its own game', earned: (p) => duelWins(p) >= 1 },
-  { id: 'shades', emoji: '🕶️', label: 'sunglasses', hint: 'five pages in the scrapbook', earned: (p) => momentsSeen(p.marks) >= 5 },
-  { id: 'headphones', emoji: '🎧', label: 'headphones', hint: 'know things', earned: (p) => p.unlocks.includes('quiz-whiz') },
-  { id: 'flower', emoji: '🌼', label: 'a flower', hint: 'some things happen every day', earned: (p) => p.unlocks.includes('ritualist') },
-  { id: 'lantern', emoji: '🏮', label: 'a lantern', hint: 'the witching hours', earned: (p) => p.unlocks.includes('night-owl') },
-  { id: 'wand', emoji: '🪄', label: 'a wand', hint: 'a month of tomorrows', earned: (p) => p.unlocks.includes('streak-30') },
-  { id: 'die', emoji: '🎲', label: 'a lucky die', hint: 'win ten duels', earned: (p) => duelWins(p) >= 10 },
-  { id: 'star', emoji: '🌟', label: 'a star', hint: 'fill the whole scrapbook', earned: (p) => p.unlocks.includes('seen-it-all') },
-  { id: 'comet', emoji: '💫', label: 'a pocket sparkle', hint: 'find ten of ENTROPY’s sparkles', earned: (p) => sparkleTally(p.marks) >= 10 },
+  { id: 'balloon', emoji: '🎈', slot: 'float', label: 'a balloon', hint: 'for coming in', earned: () => true },
+  { id: 'bow', emoji: '🎀', slot: 'head', label: 'a bow', hint: 'keep a flame alive for a week', earned: (p) => p.unlocks.includes('streak-7') },
+  { id: 'tophat', emoji: '🎩', slot: 'head', label: 'a top hat', hint: 'beat ENTROPY at its own game', earned: (p) => duelWins(p) >= 1 },
+  { id: 'shades', emoji: '🕶️', slot: 'eyes', label: 'sunglasses', hint: 'five pages in the scrapbook', earned: (p) => momentsSeen(p.marks) >= 5 },
+  { id: 'headphones', emoji: '🎧', slot: 'ears', label: 'headphones', hint: 'know things', earned: (p) => p.unlocks.includes('quiz-whiz') },
+  { id: 'flower', emoji: '🌼', slot: 'head', label: 'a flower', hint: 'some things happen every day', earned: (p) => p.unlocks.includes('ritualist') },
+  { id: 'lantern', emoji: '🏮', slot: 'held', label: 'a lantern', hint: 'the witching hours', earned: (p) => p.unlocks.includes('night-owl') },
+  { id: 'wand', emoji: '🪄', slot: 'held', label: 'a wand', hint: 'a month of tomorrows', earned: (p) => p.unlocks.includes('streak-30') },
+  { id: 'die', emoji: '🎲', slot: 'held', label: 'a lucky die', hint: 'win ten duels', earned: (p) => duelWins(p) >= 10 },
+  { id: 'star', emoji: '🌟', slot: 'float', label: 'a star', hint: 'fill the whole scrapbook', earned: (p) => p.unlocks.includes('seen-it-all') },
+  { id: 'comet', emoji: '💫', slot: 'float', label: 'a pocket sparkle', hint: 'find ten of ENTROPY’s sparkles', earned: (p) => sparkleTally(p.marks) >= 10 },
 ];
 
 /**
@@ -85,6 +97,29 @@ export function wornTrinket(p: DenProgress): Trinket | null {
   const id = latestChoice(p.marks, WEAR_PREFIX);
   const t = TRINKETS.find((x) => x.id === id);
   return t && t.earned(p) ? t : null;
+}
+
+/**
+ * What the companion has on: the reader's choice first, else the season's
+ * costume, else nothing.
+ */
+export function dressing(worn: Trinket | null, season: Season | null): Dressing | null {
+  if (worn) return { emoji: worn.emoji, slot: worn.slot };
+  if (!season) return null;
+  const look = SEASON_LOOKS[season];
+  return { emoji: look.costume, slot: look.costumeSlot };
+}
+
+/**
+ * A companion form split into the creature itself (its last glyph: the
+ * dragon in "👑🐲") and whatever the form adds beside it (the crown).
+ * Things are worn on the creature, never on the adornment.
+ */
+export function splitForm(form: string): { adornment: string; creature: string } {
+  const glyphs = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(form), (s) => s.segment)
+    : Array.from(form);
+  return { adornment: glyphs.slice(0, -1).join(''), creature: glyphs.at(-1) ?? '' };
 }
 
 /** A scrapbook page: the moment's name once seen, a hint until then. */
