@@ -32,6 +32,8 @@ import type { MappedImport } from '../import/thingsMap';
 import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
 import { MOMENTS, REGISTRY } from '../eggs/registry';
 import { SPARKLE_PREFIX, sparkleTally } from '../eggs/sparkles';
+import { BIRTHDAY_KEY, nextBirthdayValue, namedSeason, seasonalEnabled, type MonthDay } from '../eggs/seasons';
+import { choiceStamp } from '../eggs/ledger';
 import { SPARKLE_FIRST, SPARKLE_FOUND } from '../eggs/content/sparkles';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
@@ -87,6 +89,13 @@ export class AppStore {
   eggStoryDeferred = $state(false);
   /** The delight ledger (see DelightProgress.marks) — synced. */
   eggMarks = $state<Record<string, number>>({});
+  /**
+   * True once the saved delight state has loaded. Until then the mirrors
+   * above are empty, which reads the same as "never happened": anything
+   * that shows until something is answered or opened (a letter, a question,
+   * a season the reader switched off) must wait for this.
+   */
+  eggsLoaded = $state(false);
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -140,6 +149,7 @@ export class AppStore {
     await this.eggs.ready;
     this.repairMisgrantedUnlocks();
     this.syncEggMirrors();
+    this.eggsLoaded = true;
     this.retellPendingStory();
     // Replay anything the UI reported while the engine was still loading (the
     // app is interactive from `ready`, which lands two IndexedDB reads earlier).
@@ -231,9 +241,22 @@ export class AppStore {
    * duel), and another device should know before it offers the same again.
    */
   markEgg(key: string, value?: number): void {
+    // Before load the engine holds a placeholder that the load replaces, so
+    // a mark made now would vanish; callers gate on eggsLoaded instead.
+    if (!this.eggsLoaded) return;
     if (!this.eggs?.mark(key, value)) return;
     this.syncEggMirrors();
     this.requestSync();
+  }
+
+  /** Make a choice kept in the ledger (see eggs/ledger): `option` under `prefix`, newest wins. */
+  chooseEgg(prefix: string, option: string): void {
+    this.markEgg(`${prefix}${option}`, choiceStamp(this.eggMarks, prefix));
+  }
+
+  /** Share the reader's birthday, or take it back with null (see eggs/seasons). */
+  setBirthday(birthday: MonthDay | null): void {
+    this.markEgg(BIRTHDAY_KEY, nextBirthdayValue(this.eggMarks, birthday));
   }
 
   /**
@@ -312,6 +335,8 @@ export class AppStore {
           streakDays: this.eggs.streakDays, storyStage: this.eggs.storyStage,
           triviaCorrect: this.eggs.triviaStats.correct, triviaTotal: this.eggs.triviaStats.total,
           unlocks: this.eggs.unlocks, daysSinceStoryBeat: null, now: new Date(), rng: Math.random,
+          // The season a test named, as the screens see it (see seasonNow).
+          season: seasonalEnabled(this.eggs.marks) ? namedSeason(localStorage.getItem('OC_SEASON')) : null,
         });
         // Same bookkeeping the picker does, so a forced beat behaves like a
         // real one — including owing an acknowledgement.

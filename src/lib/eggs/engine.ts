@@ -204,6 +204,13 @@ const EVENT_DAILY_CAP: Partial<Record<EggEvent, number>> = {
 export class EggEngine {
   readonly ready: Promise<void>;
   private state: EggState = freshState();
+  /**
+   * Set once the saved state has been read. Until then `state` is a blank
+   * placeholder, and saving it would write that blank over the library's
+   * real delight progress: so nothing is saved before this, and anything
+   * changed in that window is simply replaced by what loads.
+   */
+  private loaded = false;
   private registry: EggDef[];
   private rolloverHour: number;
   private rng: () => number;
@@ -241,8 +248,24 @@ export class EggEngine {
           unlocks: resolveHeldUnlocks(s.unlocks ?? [], s.unlockGrants, s.unlockRevokes),
         };
         this.healStoryStage();
+        this.settleStoryReadElsewhere();
       }
+      this.loaded = true;
     });
+  }
+
+  /**
+   * A beat owed on this device but already acknowledged on another (the
+   * synced stage has moved past it) is not owed any more. Without this it
+   * would sit in the mailbox, or be retold at launch, as a message unread
+   * that the reader has in fact read. Returns whether anything changed.
+   */
+  private settleStoryReadElsewhere(): boolean {
+    const owed = this.state.pendingStory;
+    if (owed === undefined || this.state.storyStage <= owed) return false;
+    this.state.pendingStory = undefined;
+    this.state.storyDeferred = undefined;
+    return true;
   }
 
   /**
@@ -288,6 +311,7 @@ export class EggEngine {
   get storyStage(): number { return this.state.storyStage; }
 
   private persist(): void {
+    if (!this.loaded) return; // see `loaded`
     void this.saveFn({ ...this.state });
   }
 
@@ -449,6 +473,7 @@ export class EggEngine {
       [...new Set([...this.state.unlocks, ...progress.unlocks])],
       this.state.unlockGrants, this.state.unlockRevokes);
     this.state.storyStage = Math.max(this.state.storyStage, progress.storyStage);
+    const settled = this.settleStoryReadElsewhere();
     this.state.trivia = {
       correct: Math.max(this.state.trivia.correct, progress.triviaCorrect),
       total: Math.max(this.state.trivia.total, progress.triviaTotal),
@@ -471,7 +496,7 @@ export class EggEngine {
       this.state.unlocks, this.state.storyStage, this.state.trivia,
       this.state.streakDays, this.state.lastCompletionDay, this.state.bestStreakDays,
       this.state.unlockGrants, this.state.unlockRevokes, this.state.marks,
-    ]) !== before;
+    ]) !== before || settled;
     if (changed) this.persist();
     return changed;
   }

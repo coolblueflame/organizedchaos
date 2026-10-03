@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import Sparkle from '../eggs/Sparkle.svelte';
-  import { SEASONAL_PREFIX, birthdayKey, birthdayOf, seasonalEnabled } from '../eggs/seasons';
+  import { SEASONAL_PREFIX, birthdayOf, seasonalEnabled } from '../eggs/seasons';
   import BirthdayPicker from '../eggs/BirthdayPicker.svelte';
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
@@ -109,9 +109,18 @@
   ];
   /** The birthday as shared, if it is. */
   const birthday = $derived(birthdayOf(app.eggMarks));
-  // The picker opens on the shared date, when there is one.
-  let bMonth = $state(birthdayOf(app.eggMarks)?.month ?? 1);
-  let bDay = $state(birthdayOf(app.eggMarks)?.day ?? 1);
+  let bMonth = $state(1);
+  let bDay = $state(1);
+  // The picker opens on the shared date, once there is one to read: seeded
+  // a single time after delight progress loads, never again, so a sync
+  // landing mid-edit cannot yank the picker out from under the reader.
+  let seeded = false;
+  $effect(() => {
+    if (seeded || !app.eggsLoaded) return;
+    seeded = true;
+    const b = birthdayOf(app.eggMarks);
+    if (b) { bMonth = b.month; bDay = b.day; }
+  });
 </script>
 
 <main>
@@ -359,14 +368,16 @@
     <!-- Kept in the synced delight ledger, so the choice follows the library to every device. -->
     <label class="toggle"><span>seasonal touches (holidays and birthdays)</span>
       <input type="checkbox" data-testid="settings-seasonal" checked={seasonalEnabled(app.eggMarks)}
-        onchange={(e) => app.markEgg(`${SEASONAL_PREFIX}${e.currentTarget.checked ? 'on' : 'off'}`, Date.now())} /></label>
+        disabled={!app.eggsLoaded}
+        onchange={(e) => app.chooseEgg(SEASONAL_PREFIX, e.currentTarget.checked ? 'on' : 'off')} /></label>
     <div class="birthday" data-testid="settings-birthday">
       <span class="label">your birthday (month and day, no year)</span>
       <BirthdayPicker bind:month={bMonth} bind:day={bDay} />
       <div class="birthday-moves">
-        <button data-testid="settings-birthday-save" onclick={() => app.markEgg(birthdayKey({ month: bMonth, day: bDay }), Date.now())}>save</button>
+        <button data-testid="settings-birthday-save" disabled={!app.eggsLoaded}
+          onclick={() => app.setBirthday({ month: bMonth, day: bDay })}>save</button>
         {#if birthday}
-          <button data-testid="settings-birthday-clear" onclick={() => app.markEgg(birthdayKey(null), Date.now())}>forget it</button>
+          <button data-testid="settings-birthday-clear" onclick={() => app.setBirthday(null)}>forget it</button>
         {/if}
       </div>
       <p class="hint" data-testid="settings-birthday-status">

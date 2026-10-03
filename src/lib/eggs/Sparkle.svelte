@@ -28,7 +28,7 @@
     }
     return app.eggStoryStage > SPARKLE_STORY_BEAT && sparkleSpot(day) === spot;
   });
-  const shown = $derived(hidesHere && !sparkleFound(app.eggMarks, day));
+  const shown = $derived(app.eggsLoaded && hidesHere && !sparkleFound(app.eggMarks, day));
 
   let el = $state<HTMLButtonElement | null>(null);
 

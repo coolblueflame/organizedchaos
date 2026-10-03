@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SEASON_MOMENTS, SEASONAL_ONLY_MOMENTS, activeSeason, birthdayAnswered, birthdayKey, birthdayOf,
-  seasonOccurrence, seasonOn, type Season,
+  BIRTHDAY_KEY, SEASON_MOMENTS, SEASONAL_ONLY_MOMENTS, activeSeason, birthdayAnswered, birthdayOf,
+  nextBirthdayValue, seasonOccurrence, seasonOn, type Season,
 } from './seasons';
-import { latestChoice } from './ledger';
+import { choiceStamp, latestChoice } from './ledger';
 import { SEASON_LOOKS } from './content/seasons';
 import { MOMENTS } from './registry';
 
@@ -11,6 +11,20 @@ describe('latestChoice', () => {
   it('is the newest stamp under the prefix, and nothing else counts', () => {
     expect(latestChoice({}, 'wear:')).toBeNull();
     expect(latestChoice({ 'wear:bow': 5, 'wear:hat': 9, 'seasonal:off': 99 }, 'wear:')).toBe('hat');
+  });
+
+  it('settles a tie the same way whatever order the keys arrived in', () => {
+    expect(latestChoice({ 'wear:bow': 5, 'wear:hat': 5 }, 'wear:')).toBe('hat');
+    expect(latestChoice({ 'wear:hat': 5, 'wear:bow': 5 }, 'wear:')).toBe('hat');
+  });
+
+  it('stamps a new choice past every one this device knows, even with its clock behind', () => {
+    // Another device, its clock ahead, chose at 5000; this one thinks it is 1000.
+    const marks = { 'seasonal:off': 5000 };
+    const stamp = choiceStamp(marks, 'seasonal:', 1000);
+    expect(stamp).toBe(5001);
+    expect(latestChoice({ ...marks, 'seasonal:on': stamp }, 'seasonal:')).toBe('on');
+    expect(choiceStamp(marks, 'seasonal:', 9000), 'a clock ahead just uses now').toBe(9000);
   });
 });
 
@@ -48,14 +62,24 @@ describe('the ledger switches', () => {
     expect(activeSeason('2026-10-20', { 'seasonal:off': 2, 'seasonal:on': 3 })).toBe('halloween');
   });
 
-  it('a birthday is shared, changed, or taken back by stamping', () => {
+  it('a birthday lives under one key, so clearing it really replaces the date', () => {
     expect(birthdayAnswered({})).toBe(false);
-    const shared = { [birthdayKey({ month: 3, day: 7 })]: 1 };
-    expect(Object.keys(shared)).toEqual(['birthday:03-07']);
+    const shared = { [BIRTHDAY_KEY]: nextBirthdayValue({}, { month: 3, day: 7 }, 1_000_000) };
     expect(birthdayOf(shared)).toEqual({ month: 3, day: 7 });
-    const declined = { ...shared, [birthdayKey(null)]: 2 };
-    expect(birthdayOf(declined)).toBeNull();
-    expect(birthdayAnswered(declined), 'a no is an answer too').toBe(true);
+    // Cleared a moment later on a device whose clock is behind: still the newer answer.
+    const cleared = { [BIRTHDAY_KEY]: nextBirthdayValue(shared, null, 0) };
+    expect(Object.keys(cleared)).toEqual(['birthday']);
+    expect(cleared[BIRTHDAY_KEY]! > shared[BIRTHDAY_KEY]!, 'the merge keeps the larger value').toBe(true);
+    expect(birthdayOf(cleared)).toBeNull();
+    expect(cleared[BIRTHDAY_KEY]! % 10_000, 'the date itself is gone').toBe(0);
+    expect(birthdayAnswered(cleared), 'a no is an answer too').toBe(true);
+  });
+
+  it('still reads an answer kept in the older one-key-per-answer form', () => {
+    expect(birthdayOf({ 'birthday:12-25': 7 })).toEqual({ month: 12, day: 25 });
+    expect(birthdayAnswered({ 'birthday:none': 7 })).toBe(true);
+    // A newer single-key answer outranks the older form.
+    expect(birthdayOf({ 'birthday:12-25': 7, [BIRTHDAY_KEY]: nextBirthdayValue({}, null, 5000) })).toBeNull();
   });
 });
 

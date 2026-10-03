@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { birthdayKey } from './seasons';
   import { presenter } from './presenter.svelte';
   import BirthdayPicker from './BirthdayPicker.svelte';
 
@@ -15,13 +14,13 @@
   let day = $state(1);
 
   function save() {
-    app.markEgg(birthdayKey({ month, day }), Date.now());
+    app.setBirthday({ month, day });
     onclose();
     presenter.show({ kind: 'note', emoji: '🎈', accent: 'orange', text: 'noted. ENTROPY has drawn a very small circle on the calendar. it keeps looking at it.' });
   }
 
   function decline() {
-    app.markEgg(birthdayKey(null), Date.now());
+    app.setBirthday(null);
     onclose();
     presenter.show({ kind: 'note', emoji: '💜', accent: 'orange', text: 'no problem at all. ENTROPY will just have to celebrate you on ordinary days instead.' });
   }
@@ -42,7 +41,7 @@
 <div class="backdrop" onclick={onclose}></div>
 <section class="sheet" data-testid="birthday-ask" aria-label="a question from ENTROPY">
   <p class="from">▚ ENTROPY</p>
-  <p>can I ask you something? when is your birthday? I would like to make a fuss. just the month and day, no year. it is kept with your lists and nowhere else, and you can change it or take it back in settings.</p>
+  <p>can I ask you something? when is your birthday? I would like to make a fuss. just the month and day, no year. it is kept with your lists and nowhere else, and you can change it or clear it in settings.</p>
   <BirthdayPicker bind:month bind:day />
   <div class="moves">
     <button class="primary" data-testid="birthday-save" onclick={save}>that’s my birthday</button>

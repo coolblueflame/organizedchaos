@@ -400,6 +400,61 @@ describe('a beat is told only when the reader says so', () => {
   });
 });
 
+describe('before the saved state loads', () => {
+  it('never saves the placeholder over the real thing', async () => {
+    const saved: EggState[] = [];
+    let release!: (s: EggState | null) => void;
+    const stored = { storyStage: 7, unlocks: ['century'] } as unknown as EggState;
+    const eng = new EggEngine({
+      registry: [], rolloverHour: 4,
+      load: () => new Promise((r) => { release = r; }),
+      save: async (s) => { saved.push(s); },
+    });
+    eng.mark('mail:den', 1);
+    eng.handle('appOpened', {});
+    expect(saved, 'nothing written while the real state is still loading').toEqual([]);
+    release(stored);
+    await eng.ready;
+    expect(eng.storyStage, 'what loaded is what counts').toBe(7);
+    eng.mark('den:welcomed', 2);
+    expect(saved.at(-1)!.storyStage).toBe(7);
+    expect(saved.at(-1)!.unlocks).toEqual(['century']);
+  });
+});
+
+describe('a beat read on another device', () => {
+  const progress = (storyStage: number) => ({
+    unlocks: [], storyStage, triviaCorrect: 0, triviaTotal: 0, streakDays: 0, lastCompletionDay: '',
+  });
+
+  it('is no longer owed here once the synced stage passes it', async () => {
+    const eng = new EggEngine({ registry: [], rolloverHour: 4, load: async () => null, save: async () => {} });
+    await eng.ready;
+    eng.noteStoryShown(6); // beat 5 shown here, owed
+    eng.deferStory();
+    expect(eng.storyDeferred).toBe(true);
+    expect(eng.absorb(progress(6)), 'settling the debt is a change worth saving').toBe(true);
+    expect(eng.pendingStory).toBeUndefined();
+    expect(eng.storyDeferred).toBe(false);
+  });
+
+  it('stays owed while the synced stage has not reached it', async () => {
+    const eng = new EggEngine({ registry: [], rolloverHour: 4, load: async () => null, save: async () => {} });
+    await eng.ready;
+    eng.noteStoryShown(6);
+    eng.absorb(progress(5));
+    expect(eng.pendingStory).toBe(5);
+  });
+
+  it('is settled at load too, for a device that synced while closed', async () => {
+    const stored = { storyStage: 9, pendingStory: 5, storyDeferred: 5, unlocks: [], seen: {} } as unknown as EggState;
+    const eng = new EggEngine({ registry: [], rolloverHour: 4, load: async () => stored, save: async () => {} });
+    await eng.ready;
+    expect(eng.pendingStory).toBeUndefined();
+    expect(eng.storyDeferred).toBe(false);
+  });
+});
+
 describe('the marks ledger', () => {
   it('keeps the larger value, survives a restart, and absorbs another device by maximum', async () => {
     let saved: EggState | null = null;

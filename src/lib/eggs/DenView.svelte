@@ -19,6 +19,7 @@
   import { presenter } from './presenter.svelte';
   import DiceDuel from './DiceDuel.svelte';
   import { haptic } from '../ui/fx/haptics';
+  import { clock } from '../ui/clock.svelte';
   import { SPARKLE_STORY_BEAT, sparkleTally } from './sparkles';
   import { seasonNow } from './seasonNow.svelte';
   import { SEASON_LOOKS } from './content/seasons';
@@ -38,7 +39,7 @@
     const streak = app.eggStreak;
     if (streak >= 7) return `radiant. the flame is ${streak} days old.`;
     if (streak >= 3) return 'toasty. the flame is going nicely.';
-    if (app.eggLastCompletionDay === appDayKey(new Date(), app.state.settings.rolloverHour)) {
+    if (app.eggLastCompletionDay === appDayKey(clock.now, app.state.settings.rolloverHour)) {
       return 'content. the list got fed today.';
     }
     return 'cozy. waiting patiently, as companions do.';
@@ -47,7 +48,7 @@
   // Walking in counts as opening the invitation, so it stops waiting in the
   // mailbox however the reader found the door.
   $effect(() => {
-    if (open && app.eggMarks[DEN_MARKS.invited] === undefined) app.markEgg(DEN_MARKS.invited);
+    if (open && app.eggsLoaded && app.eggMarks[DEN_MARKS.invited] === undefined) app.markEgg(DEN_MARKS.invited);
   });
 
   let bubble = $state('');
@@ -73,7 +74,7 @@
   function wear(t: Trinket) {
     haptic('tick');
     const off = worn?.id === t.id;
-    app.markEgg(`${WEAR_PREFIX}${off ? 'none' : t.id}`, Date.now());
+    app.chooseEgg(WEAR_PREFIX, off ? 'none' : t.id);
     caption = off ? `took off ${t.label}.` : `wearing ${t.label}.`;
   }
 </script>
@@ -87,7 +88,7 @@
   {#if !open || !form}
     <p class="locked" data-testid="den-locked">// the door is shut. something behind it is still growing.</p>
   {:else}
-    {#if !welcomed}
+    {#if app.eggsLoaded && !welcomed}
       <section class="welcome" data-testid="den-welcome">
         <p class="from">▚ ENTROPY</p>
         <p>{DEN_WELCOME}</p>

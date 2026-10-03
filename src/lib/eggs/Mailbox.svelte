@@ -30,6 +30,9 @@
 
   const waiting = $derived.by((): Waiting[] => {
     const items: Waiting[] = [];
+    // Nothing is known to be waiting until delight progress has loaded: an
+    // empty ledger would otherwise offer letters already opened.
+    if (!app.eggsLoaded) return items;
     if (app.eggStoryDeferred) {
       items.push({
         id: 'story', from: 'organizedchaos.exe', subject: 'a message, unread',

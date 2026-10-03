@@ -180,7 +180,7 @@ export const STORY_BEATS: readonly string[] = [
   'the companion is afraid of exactly one thing: the dark under the shelf. ENTROPY sat with it there all night with a lantern until the dark was just a place again. I was proud of them both.',
   'ENTROPY found an old game in the archive that said "it’s dangerous to go alone." it handed the companion a die and said "take this." the companion has not let go of it since.',
   'I asked ENTROPY the old question: what if the list is ever empty? it used to call that a horror. this time it said "then we make a new one with the human." it called it a holiday.',
-  'the scrapbook has a new section: "small ones." an odd-hour finish. a streak that held. a quiet night. ENTROPY says the small ones were always the story. it had to grow into seeing it.',
+  'the scrapbook has a new section: "small ones." the companion’s first sentence. a lantern under the shelf. a quiet night. ENTROPY says the small ones were always the story.',
   'chapter nine has no ending yet. ENTROPY says that is the point: "the human is still writing it." so: to be continued, by you, whenever you like. no rush. the den will keep. 💜',
 ] as const;
 

@@ -10,9 +10,7 @@
 import { app } from '../state/app.svelte';
 import { clock } from '../ui/clock.svelte';
 import { appDayKey } from '../domain/time';
-import { activeSeason, seasonOccurrence, seasonalEnabled, type Season } from './seasons';
-
-const SEASONS: readonly Season[] = ['halloween', 'winter', 'new-year', 'anniversary', 'birthday'];
+import { activeSeason, namedSeason, seasonOccurrence, seasonalEnabled, type Season } from './seasons';
 
 class SeasonNow {
   /** Today's app-day key. */
@@ -20,12 +18,13 @@ class SeasonNow {
     return appDayKey(clock.now, app.state.settings.rolloverHour);
   }
 
-  /** The season in force, or null. */
+  /** The season in force, or null (also until delight progress has loaded, so a switched-off season never flashes). */
   get current(): Season | null {
+    if (!app.eggsLoaded) return null;
     if (typeof navigator !== 'undefined' && navigator.webdriver) {
       // The named season stands in for the calendar; the switch still applies.
       const named = typeof localStorage !== 'undefined' ? localStorage.getItem('OC_SEASON') : null;
-      return seasonalEnabled(app.eggMarks) ? SEASONS.find((s) => s === named) ?? null : null;
+      return seasonalEnabled(app.eggMarks) ? namedSeason(named) : null;
     }
     return activeSeason(this.day, app.eggMarks);
   }

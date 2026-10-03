@@ -34,21 +34,34 @@
   /** How long a press must last to count as a hold rather than a tap. */
   const HOLD_MS = 550;
   let holdTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Set when a hold has just carried the reader inside, so the release that follows is not also a poke. */
-  let held = false;
+  /**
+   * Set once a press has lasted long enough to count as a hold. The den
+   * opens on the RELEASE, not the moment the hold is reached: opened under
+   * a finger still on the glass, the release would land on whatever the den
+   * draws in that corner and press it. Also tells the click that follows a
+   * release not to poke.
+   */
+  let held = $state(false);
 
   function pressStart() {
     if (!canEnter) return;
     clearTimeout(holdTimer);
+    held = false;
     holdTimer = setTimeout(() => {
       held = true;
       haptic('heavy');
-      navigate({ name: 'den' });
     }, HOLD_MS);
   }
 
-  function pressEnd() {
+  function pressRelease() {
     clearTimeout(holdTimer);
+    if (held) navigate({ name: 'den' });
+  }
+
+  /** The finger slid off or the system took the gesture: no hold, no den. */
+  function pressCancel() {
+    clearTimeout(holdTimer);
+    held = false;
   }
 
   function poke() {
@@ -75,7 +88,8 @@
 {#if stage}
   <button bind:this={el} class="pet" class:wiggle={nearHatch && motionOk()} class:bounce={bouncing}
     data-testid="companion" title={stage[2]} aria-label={stage[2]} onclick={poke}
-    onpointerdown={pressStart} onpointerup={pressEnd} onpointerleave={pressEnd} onpointercancel={pressEnd}
+    class:ready={held}
+    onpointerdown={pressStart} onpointerup={pressRelease} onpointerleave={pressCancel} onpointercancel={pressCancel}
     oncontextmenu={(e) => { if (canEnter) e.preventDefault(); }}>
     <span class="body">{stage[1]}</span>
     {#if dressed}<span class="trinket" data-testid="companion-trinket">{dressed}</span>{/if}
@@ -95,6 +109,8 @@
        hold with a text-selection callout over the companion. */
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
   }
+  /* A hold has registered: let go to go inside. */
+  .ready .body { transform: scale(1.25); transition: transform 0.12s ease-out; }
   .trinket { position: absolute; top: -4px; left: -2px; font-size: 0.85rem; transform: rotate(-14deg); pointer-events: none; }
   .body { display: inline-block; }
   .mood { position: absolute; top: -2px; right: -2px; font-size: 0.8rem; }
