@@ -487,6 +487,9 @@ export class EggEngine {
   /** The value recorded for a mark, if any. */
   getMark(key: string): number | undefined { return this.state.marks?.[key]; }
 
+  /** A copy of the whole ledger. */
+  get marks(): Record<string, number> { return { ...this.state.marks }; }
+
   /** Every mark under a namespace, without the prefix, sorted. */
   marked(prefix: string): string[] {
     return Object.keys(this.state.marks ?? {})

@@ -320,4 +320,8 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'out-of-office', label: 'Out of Office — told the dice to ignore every list’s hours', hint: 'hours are a suggestion' },
   { id: 'oracle', label: 'Oracle — finished within a minute of your own estimate', hint: 'know thyself, to the minute' },
   { id: 'named-it', label: 'Named the Other One — you said its name', hint: 'read the story' },
+  { id: 'duelist', label: 'House Rules — beat ENTROPY at dice', hint: 'its table, its dice' },
+  { id: 'high-roller', label: 'High Roller — won ten duels', hint: 'keep the dice warm' },
+  { id: 'scrapbooker', label: 'Scrapbooker — half the big moments, seen', hint: 'a scrapbook, half full' },
+  { id: 'seen-it-all', label: 'Seen It All — every big moment, seen', hint: 'a scrapbook, full' },
 ] as const;

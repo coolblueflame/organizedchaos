@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { UNLOCKS } from '../eggs/content/extras';
+  import { denOpen } from '../eggs/den';
   import Glyph from './Glyph.svelte';
   import FlameGlyph from './FlameGlyph.svelte';
   import { app } from '../state/app.svelte';
@@ -13,7 +14,7 @@
     averageActiveMs, BURDEN_WINDOWS, burdenChange, burdenSeries, burdenShift, burdenTasks,
     completionSeries, formatDuration, formatDurationLong, formatElapsed,
     totalEstimateHours, type BurdenShiftEntry, type BurdenWindow,
-    onThisDay,
+    onThisDay, lifetimeCompletions,
   } from '../domain/stats';
   import { formatEstimate } from '../domain/estimate';
   import { lockedListIds, withoutLocked } from '../domain/lock';
@@ -346,6 +347,11 @@
     {#if app.eggStoryStage > 0}
       <button class="story-link" data-testid="stats-story-link" onclick={() => navigate({ name: 'story' })}>
         <span aria-hidden="true">▚</span> the story so far
+      </button>
+    {/if}
+    {#if denOpen(lifetimeCompletions(plainTasks), app.eggMarks)}
+      <button class="story-link" data-testid="stats-den-link" onclick={() => navigate({ name: 'den' })}>
+        <span aria-hidden="true">⌂</span> the den
       </button>
     {/if}
     <ul class="discoveries" data-testid="discoveries">

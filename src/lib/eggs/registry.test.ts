@@ -81,6 +81,7 @@ describe('registry shape', () => {
       'konami', 'load-bearing', 'quiz-master', 'quiz-whiz', 'sweeper',
       'time-capsule', 'archaeologist', 'marathon', 'empty-shelf', 'spice-rack',
       'bouncer', 'out-of-office', 'oracle', 'named-it',
+      'duelist', 'high-roller', 'scrapbooker', 'seen-it-all',
     ]);
     const wired = new Set(
       REGISTRY.filter((r) => r.id.startsWith('unlock-')).map((r) => r.id.slice('unlock-'.length)),

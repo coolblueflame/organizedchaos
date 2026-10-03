@@ -4,7 +4,7 @@ import {
   formatDurationLong,
   burdenChange, burdenSeries, burdenShift, burdenTasks, completionCounts, completionSeries,
   formatDuration, maxCompletionsInOneDay, onThisDay, shouldRecordBurden, totalEstimateHours, winsList,
-  estimateOutcome,
+  estimateOutcome, lifetimeCompletions,
 } from './stats';
 
 const now = new Date('2026-07-15T12:00:00'); // a Wednesday
@@ -31,6 +31,18 @@ describe('completionCounts', () => {
     ];
     const c = completionCounts(tasks, now, 4);
     expect(c).toEqual({ today: 1, week: 4, month: 6, year: 7, lifetime: 8 });
+  });
+
+  it('the lifetime-only count credits exactly the tasks the full count does', () => {
+    const tasks = [
+      doneAt('2026-07-15T10:00:00'),
+      doneAt('2024-01-01T10:00:00'),
+      { ...doneAt('2026-07-15T09:00:00'), importedHistory: true },
+      { ...doneAt('2026-07-15T08:00:00'), deleted: true },
+      task({ priority: 'low' }),
+    ];
+    expect(lifetimeCompletions(tasks)).toBe(2);
+    expect(lifetimeCompletions(tasks)).toBe(completionCounts(tasks, now, 4).lifetime);
   });
 
   it('imported history stays out of the scoreboard but still feeds the graphs', () => {

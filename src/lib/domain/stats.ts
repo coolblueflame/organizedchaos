@@ -97,6 +97,18 @@ export interface CompletionCounts {
   today: number; week: number; month: number; year: number; lifetime: number;
 }
 
+/**
+ * Lifetime completions alone: the same tasks completionCounts credits, but
+ * without dating each one, for callers that only need the total (the
+ * companion, the den's door) and would otherwise pay for a calendar pass
+ * over the whole library on every change.
+ */
+export function lifetimeCompletions(tasks: Task[]): number {
+  let n = 0;
+  for (const t of tasks) if (!t.deleted && t.completedAt !== undefined && !t.importedHistory) n += 1;
+  return n;
+}
+
 export function completionCounts(tasks: Task[], now: Date, rolloverHour: number): CompletionCounts {
   const todayKey = appDayKey(now, rolloverHour);
   const thisWeek = weekStartKey(todayKey);

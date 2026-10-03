@@ -24,6 +24,7 @@ export type Route =
   | { name: 'week' }
   | { name: 'wrapped' }
   | { name: 'story' }
+  | { name: 'den' }
   | { name: 'sweep'; mode?: 'estimates' };
 
 function parse(hash: string): Route {
@@ -49,6 +50,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'week') return { name: 'week' };
   if (parts[0] === 'wrapped') return { name: 'wrapped' };
   if (parts[0] === 'story') return { name: 'story' };
+  if (parts[0] === 'den') return { name: 'den' };
   if (parts[0] === 'sweep') {
     return parts[1] === 'estimates' ? { name: 'sweep', mode: 'estimates' } : { name: 'sweep' };
   }
@@ -73,6 +75,7 @@ function toHash(r: Route): string {
     case 'week': return '#/week';
     case 'wrapped': return '#/wrapped';
     case 'story': return '#/story';
+    case 'den': return '#/den';
     case 'sweep': return r.mode === 'estimates' ? '#/sweep/estimates' : '#/sweep';
   }
 }

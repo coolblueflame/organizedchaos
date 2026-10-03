@@ -30,7 +30,7 @@ import { GithubClient } from '../sync/githubClient';
 import { nanoid } from 'nanoid';
 import type { MappedImport } from '../import/thingsMap';
 import { EggEngine, type EggEvent, type EggState } from '../eggs/engine';
-import { REGISTRY } from '../eggs/registry';
+import { MOMENTS, REGISTRY } from '../eggs/registry';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
 import {
@@ -83,8 +83,8 @@ export class AppStore {
   eggStoryStage = $state(0);
   /** A beat is waiting in the mailbox because the reader chose "later". */
   eggStoryDeferred = $state(false);
-  /** Every full-screen moment this library has seen (synced). */
-  eggMomentsSeen = $state<string[]>([]);
+  /** The delight ledger (see DelightProgress.marks) — synced. */
+  eggMarks = $state<Record<string, number>>({});
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -220,7 +220,29 @@ export class AppStore {
     this.eggTrivia = this.eggs.triviaStats;
     this.eggStoryStage = this.eggs.storyStage;
     this.eggStoryDeferred = this.eggs.storyDeferred;
-    this.eggMomentsSeen = this.eggs.marked('moment:');
+    this.eggMarks = this.eggs.marks;
+  }
+
+  /**
+   * Record something in the delight ledger and send it on its way: a mark is
+   * usually something the reader did on purpose (opened a letter, finished a
+   * duel), and another device should know before it offers the same again.
+   */
+  markEgg(key: string, value?: number): void {
+    if (!this.eggs?.mark(key, value)) return;
+    this.syncEggMirrors();
+    this.requestSync();
+  }
+
+  /**
+   * Add one to a ledger tally. Merged by maximum, so the same tally bumped on
+   * two devices between syncs keeps the larger rather than the sum — a
+   * tally here counts the reader's history loosely, never money.
+   */
+  bumpEggTally(key: string): number {
+    const next = (this.eggs?.getMark(key) ?? 0) + 1;
+    this.markEgg(key, next);
+    return next;
   }
 
   /**
@@ -230,7 +252,11 @@ export class AppStore {
    * only counted one of those would miss the ones people remember most.
    */
   noteMomentShown(moment: string): void {
-    if (this.eggs?.mark(`moment:${moment}`)) this.syncEggMirrors();
+    if (!this.eggs?.mark(`moment:${moment}`)) return;
+    this.syncEggMirrors();
+    const seen = this.eggs.marked('moment:').filter((m) => (MOMENTS as readonly string[]).includes(m)).length;
+    if (seen * 2 >= MOMENTS.length) this.grantUnlockAndShow('scrapbooker');
+    if (seen >= MOMENTS.length) this.grantUnlockAndShow('seen-it-all');
   }
 
   /** Report an app event; at most one delight presentation may result. */

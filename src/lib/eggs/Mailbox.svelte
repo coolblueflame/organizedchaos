@@ -9,11 +9,17 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
   import Glyph from '../ui/Glyph.svelte';
+  import { navigate } from '../ui/router.svelte';
+  import { lifetimeCompletions } from '../domain/stats';
+  import { DEN_MARKS, denOpen } from './den';
+  import { DEN_INVITE } from './content/den';
 
   /** One waiting item: what the list shows, and what opening it does. */
   interface Waiting { id: string; from: string; subject: string; open: () => void }
 
   let sheetOpen = $state(false);
+
+  const lifetime = $derived(lifetimeCompletions(app.state.tasks));
 
   const waiting = $derived.by((): Waiting[] => {
     const items: Waiting[] = [];
@@ -22,6 +28,10 @@
         id: 'story', from: 'organizedchaos.exe', subject: 'a message, unread',
         open: () => app.openDeferredStory(),
       });
+    }
+    // The den's invitation: waits until the den is first visited, on any device.
+    if (denOpen(lifetime, app.eggMarks) && app.eggMarks[DEN_MARKS.invited] === undefined) {
+      items.push({ id: 'den', ...DEN_INVITE, open: () => navigate({ name: 'den' }) });
     }
     return items;
   });
