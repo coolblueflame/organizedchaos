@@ -400,6 +400,56 @@ describe('a beat is told only when the reader says so', () => {
   });
 });
 
+describe('a beat set aside for later', () => {
+  const beat = (): EggDef => ({
+    id: 'story-0', weight: 1, triggers: ['appOpened'], exactStoryStage: 0,
+    present: () => ({ kind: 'story', text: 'once upon a time', stage: 1 }),
+  });
+
+  it('stays owed, stops asking, and only OK moves the story on', async () => {
+    let saved: EggState | null = null;
+    const eng = new EggEngine({
+      registry: [beat()], rolloverHour: 4, rng: () => 0, baseChance: { appOpened: 1 },
+      load: async () => null, save: async (s) => { saved = s; },
+    });
+    await eng.ready;
+    expect(eng.handle('appOpened', {})?.kind).toBe('story');
+    expect(eng.storyDeferred).toBe(false);
+    eng.deferStory();
+    expect(eng.storyDeferred, 'set aside').toBe(true);
+    expect(eng.pendingStory, 'still owed').toBe(0);
+    expect(eng.storyStage, 'not told yet').toBe(0);
+    eng.advanceStory(1);
+    expect(eng.storyStage).toBe(1);
+    expect(eng.storyDeferred, 'settled, so nothing waits').toBe(false);
+    expect(saved!.storyDeferred).toBeUndefined();
+  });
+
+  it('survives a restart', async () => {
+    let saved: EggState | null = null;
+    const first = new EggEngine({
+      registry: [beat()], rolloverHour: 4, rng: () => 0, baseChance: { appOpened: 1 },
+      load: async () => null, save: async (s) => { saved = s; },
+    });
+    await first.ready;
+    first.handle('appOpened', {});
+    first.deferStory();
+    const again = new EggEngine({
+      registry: [beat()], rolloverHour: 4, load: async () => saved, save: async () => {},
+    });
+    await again.ready;
+    expect(again.storyDeferred).toBe(true);
+    expect(again.pendingStory).toBe(0);
+  });
+
+  it('is a no-op with nothing owed', async () => {
+    const eng = new EggEngine({ registry: [], rolloverHour: 4, load: async () => null, save: async () => {} });
+    await eng.ready;
+    eng.deferStory();
+    expect(eng.storyDeferred).toBe(false);
+  });
+});
+
 describe('the story-stage heal (2026-08-22 stall repair)', () => {
   it('steps the stage past beats already SHOWN, and stops at the first unread one', async () => {
     // Ben's live shape: two beats told, but a tap-away dismissal left the

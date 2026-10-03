@@ -81,6 +81,8 @@ export class AppStore {
   eggTrivia = $state({ correct: 0, total: 0 });
   /** How many story beats have been read and acknowledged (synced). */
   eggStoryStage = $state(0);
+  /** A beat is waiting in the mailbox because the reader chose "later". */
+  eggStoryDeferred = $state(false);
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
@@ -177,7 +179,24 @@ export class AppStore {
   private retellPendingStory(): void {
     // Not gated on automation like the lottery is: re-telling a beat the
     // reader is owed involves no dice, and suppressing it would make the
-    // debt itself untestable.
+    // debt itself untestable. A beat set aside for later is still owed, but
+    // it waits in the mailbox — retelling it here would undo the choice.
+    if (this.eggs?.storyDeferred) return;
+    this.presentOwedBeat();
+  }
+
+  /** Set the beat on screen aside for later; it moves to the mailbox. */
+  deferStory(): void {
+    this.eggs?.deferStory();
+    this.syncEggMirrors();
+  }
+
+  /** Open the beat waiting in the mailbox. OK still settles it; later keeps it there. */
+  openDeferredStory(): void {
+    this.presentOwedBeat();
+  }
+
+  private presentOwedBeat(): void {
     const owed = this.eggs?.pendingStory;
     if (owed === undefined) return;
     const def = REGISTRY.find((r) => r.id === `story-${owed}`);
@@ -198,6 +217,7 @@ export class AppStore {
     this.eggUnlocks = this.eggs.unlocks;
     this.eggTrivia = this.eggs.triviaStats;
     this.eggStoryStage = this.eggs.storyStage;
+    this.eggStoryDeferred = this.eggs.storyDeferred;
   }
 
   /** Report an app event; at most one delight presentation may result. */

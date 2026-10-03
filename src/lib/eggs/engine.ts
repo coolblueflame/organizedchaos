@@ -110,6 +110,14 @@ export interface EggState {
    */
   pendingStory?: number;
   /**
+   * The owed beat the reader chose to read LATER, as its index. Set aside,
+   * it waits in the mailbox instead of reappearing on every open — the app
+   * may be opened to add one task in a hurry, and a story that insists on
+   * being read first stands in the way. Device-local: the beat was set aside
+   * on this device. Meaningful only while it still equals `pendingStory`.
+   */
+  storyDeferred?: number;
+  /**
    * Per-unlock ownership clocks (see DelightProgress.unlockGrants): newest of
    * grant vs revoke wins, a clock-less held unlock counts as granted at 0.
    * They exist so a wrongly-granted discovery can be taken back without the
@@ -502,12 +510,31 @@ export class EggEngine {
     const settles = owed !== undefined && toStage >= owed + 1;
     if (toStage <= this.state.storyStage && !settles) return;
     if (toStage > this.state.storyStage) this.state.storyStage = toStage;
-    if (settles) this.state.pendingStory = undefined;
+    if (settles) {
+      this.state.pendingStory = undefined;
+      this.state.storyDeferred = undefined;
+    }
     this.persist();
   }
 
   /** The beat still owed an acknowledgement, if any (see EggState.pendingStory). */
   get pendingStory(): number | undefined { return this.state.pendingStory; }
+
+  /**
+   * Set the owed beat aside for later (see EggState.storyDeferred). It stays
+   * owed — only acknowledging it moves the story on — but it stops asking.
+   * A no-op when nothing is owed.
+   */
+  deferStory(): void {
+    if (this.state.pendingStory === undefined) return;
+    this.state.storyDeferred = this.state.pendingStory;
+    this.persist();
+  }
+
+  /** True while the owed beat is one the reader set aside to read later. */
+  get storyDeferred(): boolean {
+    return this.state.pendingStory !== undefined && this.state.storyDeferred === this.state.pendingStory;
+  }
 
   /**
    * Record the same debt for a beat shown outside the picker (the forced

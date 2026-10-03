@@ -222,3 +222,54 @@ test('every moment renders on demand without throwing', async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+test('a story beat can wait in the mailbox, and the story moves on only when it is read', async ({ page }) => {
+  // The app is often opened to add one task in a hurry; a beat must be able
+  // to step aside without being lost.
+  await reset(page, 'story-0');
+  await expect(page.getByTestId('delight-story')).toBeVisible();
+  await expect(page.getByTestId('mailbox-chip')).toHaveCount(0);
+
+  await page.getByTestId('delight-story-later').click();
+  await expect(page.getByTestId('delight-story')).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-chip')).toContainText('1');
+
+  // Set aside means set aside: a reload must not throw it back on screen.
+  // The choice is written to storage asynchronously; wait for it to land,
+  // since what is under test is the reload, not the write's latency.
+  await expect.poll(() => page.evaluate(() => new Promise<number | null>((resolve) => {
+    const open = indexedDB.open('organizedchaos');
+    open.onsuccess = () => {
+      const req = open.result.transaction('kv').objectStore('kv').get('eggState');
+      req.onsuccess = () => resolve((req.result?.value as { storyDeferred?: number })?.storyDeferred ?? null);
+    };
+  }))).toBe(0);
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId('delight-story')).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-chip')).toContainText('1');
+
+  // Opened from the mailbox it is the same beat; "later" again keeps it there.
+  await page.getByTestId('mailbox-chip').click();
+  await page.getByTestId('mailbox-item-story').click();
+  await expect(page.getByTestId('delight-story')).toBeVisible();
+  await page.getByTestId('delight-story-later').click();
+  await expect(page.getByTestId('mailbox-chip')).toContainText('1');
+
+  // OK settles it: the story moves on and the mailbox empties.
+  await page.getByTestId('mailbox-chip').click();
+  await page.getByTestId('mailbox-item-story').click();
+  await page.getByTestId('delight-story-ok').click();
+  await expect(page.getByTestId('mailbox-chip')).toHaveCount(0);
+  const stage = await page.evaluate(() => new Promise<number>((resolve, reject) => {
+    const open = indexedDB.open('organizedchaos');
+    open.onsuccess = () => {
+      const req = open.result.transaction('kv').objectStore('kv').get('eggState');
+      req.onsuccess = () => resolve((req.result?.value as { storyStage?: number })?.storyStage ?? 0);
+      req.onerror = () => reject(req.error);
+    };
+    open.onerror = () => reject(open.error);
+  }));
+  expect(stage).toBe(1);
+});

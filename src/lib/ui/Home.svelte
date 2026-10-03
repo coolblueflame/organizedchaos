@@ -26,6 +26,7 @@
   import { nextPhrase } from './phrases';
   import CurrentTaskCard from './CurrentTaskCard.svelte';
   import StatsStrip from './StatsStrip.svelte';
+  import Mailbox from '../eggs/Mailbox.svelte';
   import Companion from '../eggs/Companion.svelte';
   import QuickAdd from './QuickAdd.svelte';
   import InstallBanner from './InstallBanner.svelte';
@@ -417,7 +418,10 @@
 
 <main>
   <h1 class="wordmark" onpointerdown={wordmarkTap}>organized<span class="accent">chaos</span><span class="cursor">▊</span></h1>
-  <p class="tagline">// a todo list with loaded dice</p>
+  <div class="tagline-row">
+    <p class="tagline">// a todo list with loaded dice</p>
+    <Mailbox />
+  </div>
 
   <InstallBanner />
 
@@ -638,7 +642,13 @@
   .accent { color: var(--acc-purple); }
   .cursor { color: var(--acc-green); animation: blink 1.1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 4px 0 20px; }
+  .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0; }
+  /* The mailbox chip shares the tagline's line, right-aligned, so waiting
+     things are visible without pushing the day's work down the screen. */
+  .tagline-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin: 4px 0 20px; min-height: 26px;
+  }
 
   .capture-row { display: flex; gap: 8px; margin-bottom: 10px; }
   .quick-add {

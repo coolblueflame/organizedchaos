@@ -45,6 +45,15 @@
     presenter.dismiss();
   }
 
+  /*
+    The other way out: the beat stays owed, but waits in the mailbox instead
+    of standing between a hurried reader and the task they came to add.
+  */
+  function laterStory() {
+    app.deferStory();
+    presenter.dismiss();
+  }
+
   // On unlock display: confetti-adjacent celebration.
   $effect(() => {
     if (current?.kind === 'unlock') {
@@ -347,6 +356,7 @@
           <p class="glitch-text">{current.text}</p>
         </div>
         <div class="xp-actions">
+          <button class="xp-later" data-testid="delight-story-later" onclick={laterStory}>later</button>
           <button class="xp-ok" data-testid="delight-story-ok" use:focusOnMount onclick={closeStory}>OK</button>
         </div>
       </div>
@@ -464,6 +474,12 @@
     display: flex; justify-content: flex-end; gap: 8px;
     padding: 0 14px 14px;
   }
+  .xp-later {
+    padding: 6px 12px; cursor: pointer;
+    background: none; border: 1px solid rgb(126 231 135 / 0.35); border-radius: 3px;
+    color: rgb(126 231 135 / 0.8); font-family: var(--font-mono); font-size: 0.78rem;
+  }
+  @media (hover: hover) { .xp-later:hover { border-color: var(--acc-green); color: var(--acc-green); } }
   .xp-ok {
     min-width: 84px; padding: 6px 14px; cursor: pointer;
     background: linear-gradient(180deg, #1c3a1c, #102a12);
