@@ -94,7 +94,7 @@
 
     <section class="room">
       {#if bubble}<p class="bubble" data-testid="den-bubble">{bubble}</p>{/if}
-      <button class="pet" class:hop={hopping} data-testid="den-companion" aria-label="{form[2]} — poke" onclick={poke}>
+      <button class="pet" class:hop={hopping} data-testid="den-companion" aria-label="poke {form[2]}" onclick={poke}>
         <span class="body">{form[1]}</span>
         {#if worn}<span class="worn" data-testid="den-worn">{worn.emoji}</span>{/if}
       </button>
