@@ -122,6 +122,12 @@ export function splitForm(form: string): { adornment: string; creature: string }
   return { adornment: glyphs.slice(0, -1).join(''), creature: glyphs.at(-1) ?? '' };
 }
 
+/**
+ * Adornments a form puts ON the creature rather than beside it, and where.
+ * Anything worn in the same spot stacks on top (see CompanionFigure).
+ */
+export const WORN_ADORNMENTS: Readonly<Record<string, WornSlot>> = { '👑': 'head' };
+
 /** A scrapbook page: the moment's name once seen, a hint until then. */
 export interface ScrapbookPage { name: string; hint: string }
 

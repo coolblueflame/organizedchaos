@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, companionForm, denOpen, dressing, momentsSeen, splitForm, wornTrinket,
+  DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, WORN_ADORNMENTS, companionForm, denOpen, dressing, momentsSeen,
+  splitForm, wornTrinket,
 } from './den';
 import { MOMENTS } from './registry';
 import { PET_STAGES } from './content/extras';
@@ -78,6 +79,12 @@ describe('dressing the companion', () => {
       expect(adornment + creature, form).toBe(form);
       expect(creature.length, form).toBeGreaterThan(0);
     }
+  });
+
+  it('wears the crown on its head, and only names adornments some form really has', () => {
+    expect(WORN_ADORNMENTS[splitForm('👑🐲').adornment]).toBe('head');
+    const adornments = new Set(PET_STAGES.map(([, form]) => splitForm(form).adornment));
+    for (const a of Object.keys(WORN_ADORNMENTS)) expect(adornments.has(a), a).toBe(true);
   });
 
   it('puts the reader’s choice first, then the season’s costume, then nothing', () => {
