@@ -11,7 +11,7 @@ export const SELF_CARE: readonly string[] = [
   'Put on one song you love and do absolutely nothing else during it.',
   'Write down one thing that went well today. Anywhere. A napkin counts.',
   'Pet an animal. If none available, view pictures of one (medically necessary).',
-  'Eat a snack that has ever been near a plant.',
+  'Eat a snack that has at least met a fruit or a vegetable. The bar is low on purpose.',
   'Two-minute tidy: make one surface near you beautiful.',
   'Close your eyes for 90 seconds. That’s it. That’s the task.',
   'Do 10 of any exercise. Interpretive dance counts.',
