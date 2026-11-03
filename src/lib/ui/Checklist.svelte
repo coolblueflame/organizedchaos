@@ -12,6 +12,7 @@
   } from '../domain/checklist';
   import Glyph from './Glyph.svelte';
   import { focusOnMount } from './focusOnMount';
+  import { recapitalize } from './recapitalize';
   import { app } from '../state/app.svelte';
 
   let { notes, taskId, onchange, allowAdd = false }: {
@@ -88,7 +89,8 @@
               <!-- CAPTURE phase, not onkeydown: Svelte 5 delegates keydown to the
                    app root, so a bubble-phase stopPropagation cannot beat the
                    document-level Escape that collapses the whole task editor. -->
-              <input class="edit" data-testid="check-edit-{taskId}-{item.line}" use:focusOnMount
+              <input class="edit" data-testid="check-edit-{taskId}-{item.line}" use:focusOnMount use:recapitalize
+                autocapitalize="sentences"
                 bind:value={draft}
                 onblur={() => {
                   // Only save if this session is still OURS: chaining to the
