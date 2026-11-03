@@ -9,7 +9,7 @@
   import { app } from '../state/app.svelte';
   import { lifetimeCompletions } from '../domain/stats';
   import { PET_LINES } from './content/extras';
-  import { companionForm, denOpen, dressing, wornTrinket } from './den';
+  import { companionForm, denOpen, outfit } from './den';
   import CompanionFigure from './CompanionFigure.svelte';
   import { navigate } from '../ui/router.svelte';
   import { seasonNow } from './seasonNow.svelte';
@@ -20,8 +20,9 @@
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const stage = $derived(companionForm(lifetime));
   const canEnter = $derived(denOpen(lifetime, app.eggMarks));
-  const worn = $derived(wornTrinket({ unlocks: app.eggUnlocks, marks: app.eggMarks }));
-  const dressed = $derived(dressing(worn, seasonNow.current));
+  const fit = $derived(outfit(
+    { unlocks: app.eggUnlocks, marks: app.eggMarks, lifetime },
+    seasonNow.current, seasonNow.day, app.state.settings.rolloverHour));
 
   const nearHatch = $derived(stage?.[1] === '🥚' && lifetime >= 20);
   const onFire = $derived(app.eggStreak >= 3);
@@ -90,7 +91,7 @@
     class:ready={held}
     onpointerdown={pressStart} onpointerup={pressRelease} onpointerleave={pressCancel} onpointercancel={pressCancel}
     oncontextmenu={(e) => { if (canEnter) e.preventDefault(); }}>
-    <span class="body"><CompanionFigure form={stage[1]} {dressed} wornTestId="companion-trinket" /></span>
+    <span class="body"><CompanionFigure form={stage[1]} outfit={fit} testIdPrefix="companion-worn" /></span>
     {#if onFire}<span class="mood">🔥</span>{/if}
   </button>
 {/if}

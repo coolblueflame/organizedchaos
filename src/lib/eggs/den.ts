@@ -6,9 +6,10 @@
 import type { MomentName } from './registry';
 import { PET_STAGES } from './content/extras';
 import { sparkleTally } from './sparkles';
-import { latestChoice } from './ledger';
-import type { Season } from './seasons';
+import { latestChoiceAt } from './ledger';
+import { seasonStartDay, type Season } from './seasons';
 import { SEASON_LOOKS } from './content/seasons';
+import { appDayKey } from '../domain/time';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -23,8 +24,11 @@ export const DEN_MARKS = {
   duelsWon: 'duel:wins',
 } as const;
 
-/** Prefix of the stamp recorded each time a trinket is put on (`wear:none` takes it off). */
-export const WEAR_PREFIX = 'wear:';
+/**
+ * Prefix of a choice for one spot on the companion: `wear:<spot>:<id>`, with
+ * `none` for wearing nothing there (see ./ledger for how choices are kept).
+ */
+export const wearPrefix = (slot: WornSlot): string => `wear:${slot}:`;
 
 /**
  * Whether the den is open: the library is big enough, or it was opened once
@@ -46,6 +50,8 @@ export function companionForm(lifetime: number): readonly [number, string, strin
 export interface DenProgress {
   unlocks: readonly string[];
   marks: Readonly<Record<string, number>>;
+  /** Lifetime completions (the crown is earned by the count, like the form that shows it). */
+  lifetime: number;
 }
 
 /**
@@ -54,8 +60,19 @@ export interface DenProgress {
  */
 export type WornSlot = 'head' | 'eyes' | 'ears' | 'neck' | 'held' | 'float';
 
-/** What the companion has on, and where it goes. */
-export interface Dressing { emoji: string; slot: WornSlot }
+/** Every spot, in the order the shelf lists them. One thing can be worn in each. */
+export const SLOTS: readonly WornSlot[] = ['head', 'eyes', 'ears', 'neck', 'held', 'float'];
+
+/** What the shelf calls each spot's kind of thing. */
+export const SLOT_NAMES: Readonly<Record<WornSlot, string>> = {
+  head: 'hats', eyes: 'glasses', ears: 'ears', neck: 'scarves', held: 'in paw', float: 'floating',
+};
+
+/** Something being worn: which thing, and where. */
+export interface Dressing { id: string; emoji: string; slot: WornSlot }
+
+/** Everything being worn, at most one thing per spot. */
+export type Outfit = Partial<Record<WornSlot, Dressing>>;
 
 /** A cosmetic the companion can wear. Purely decorative; earned, never bought. */
 export interface Trinket {
@@ -75,7 +92,11 @@ export function momentsSeen(marks: Readonly<Record<string, number>>): number {
 
 const duelWins = (p: DenProgress) => p.marks[DEN_MARKS.duelsWon] ?? 0;
 
+/** The crown's rung on the companion's ladder. */
+const CROWN_AT = PET_STAGES[PET_STAGES.length - 1]![0];
+
 export const TRINKETS: readonly Trinket[] = [
+  { id: 'crown', emoji: '👑', slot: 'head', label: 'the crown', hint: 'four digits of done', earned: (p) => p.lifetime >= CROWN_AT },
   { id: 'balloon', emoji: '🎈', slot: 'float', label: 'a balloon', hint: 'for coming in', earned: () => true },
   { id: 'bow', emoji: '🎀', slot: 'head', label: 'a bow', hint: 'keep a flame alive for a week', earned: (p) => p.unlocks.includes('streak-7') },
   { id: 'tophat', emoji: '🎩', slot: 'head', label: 'a top hat', hint: 'beat ENTROPY at its own game', earned: (p) => duelWins(p) >= 1 },
@@ -89,25 +110,56 @@ export const TRINKETS: readonly Trinket[] = [
   { id: 'comet', emoji: '💫', slot: 'float', label: 'a pocket sparkle', hint: 'find ten of ENTROPY’s sparkles', earned: (p) => sparkleTally(p.marks) >= 10 },
 ];
 
-/**
- * The trinket being worn: the newest `wear:` choice (see ./ledger). An
- * unearned or unknown choice wears nothing rather than something unearned.
- */
-export function wornTrinket(p: DenProgress): Trinket | null {
-  const id = latestChoice(p.marks, WEAR_PREFIX);
-  const t = TRINKETS.find((x) => x.id === id);
-  return t && t.earned(p) ? t : null;
+/** The id a season's costume goes by when it is chosen on the shelf. */
+export const costumeId = (season: Season): string => `season-${season}`;
+
+/** A season's costume as something to wear. */
+export function costume(season: Season): Dressing {
+  const look = SEASON_LOOKS[season];
+  return { id: costumeId(season), emoji: look.costume, slot: look.costumeSlot };
 }
 
 /**
- * What the companion has on: the reader's choice first, else the season's
- * costume, else nothing.
+ * The newest choice from before each spot had its own (`wear:<id>`, one
+ * thing worn in all), read as a choice for that thing's spot. Its "none"
+ * meant nothing extra over the crown, so it chooses nothing at all now.
  */
-export function dressing(worn: Trinket | null, season: Season | null): Dressing | null {
-  if (worn) return { emoji: worn.emoji, slot: worn.slot };
-  if (!season) return null;
-  const look = SEASON_LOOKS[season];
-  return { emoji: look.costume, slot: look.costumeSlot };
+function legacyChoice(marks: Readonly<Record<string, number>>): { slot: WornSlot; option: string; at: number } | null {
+  let newest: { option: string; at: number } | null = null;
+  for (const [key, at] of Object.entries(marks)) {
+    const m = key.match(/^wear:([^:]+)$/);
+    if (m && (!newest || at > newest.at)) newest = { option: m[1]!, at };
+  }
+  const t = newest && TRINKETS.find((x) => x.id === newest!.option);
+  return t ? { slot: t.slot, option: newest!.option, at: newest!.at } : null;
+}
+
+/**
+ * Everything the companion has on: per spot, the reader's newest choice
+ * (see ./ledger), else what that spot wears by default (the crown, once
+ * earned). A season's costume is put on in its spot when the season starts,
+ * over anything chosen before then; a choice made since, including taking
+ * it off, wins. An unearned or unknown choice wears nothing in that spot
+ * rather than something unearned.
+ *
+ * @param today The app-day it is, for telling choices made this season from older ones.
+ */
+export function outfit(p: DenProgress, season: Season | null, today: string, rolloverHour: number): Outfit {
+  const out: Outfit = {};
+  const legacy = legacyChoice(p.marks);
+  for (const slot of SLOTS) {
+    const choice = latestChoiceAt(p.marks, wearPrefix(slot)) ?? (legacy?.slot === slot ? legacy : null);
+    const seasonal = season && SEASON_LOOKS[season].costumeSlot === slot ? costume(season) : null;
+    if (seasonal) {
+      const chosenThisSeason = choice !== null
+        && appDayKey(new Date(choice.at), rolloverHour) >= seasonStartDay(season!, today);
+      if (!chosenThisSeason || choice!.option === seasonal.id) { out[slot] = seasonal; continue; }
+    }
+    const id = choice ? choice.option : slot === 'head' ? 'crown' : null;
+    const t = TRINKETS.find((x) => x.id === id && x.slot === slot);
+    if (t && t.earned(p)) out[slot] = { id: t.id, emoji: t.emoji, slot };
+  }
+  return out;
 }
 
 /**
@@ -123,10 +175,10 @@ export function splitForm(form: string): { adornment: string; creature: string }
 }
 
 /**
- * Adornments a form puts ON the creature rather than beside it, and where.
- * Anything worn in the same spot stacks on top (see CompanionFigure).
+ * Adornments of a form that are really things to wear: drawn from the
+ * outfit, where they can be swapped for something else, never from the form.
  */
-export const WORN_ADORNMENTS: Readonly<Record<string, WornSlot>> = { '👑': 'head' };
+export const WEARABLE_ADORNMENTS: ReadonlySet<string> = new Set(['👑']);
 
 /** A scrapbook page: the moment's name once seen, a hint until then. */
 export interface ScrapbookPage { name: string; hint: string }

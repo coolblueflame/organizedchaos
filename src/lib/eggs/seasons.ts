@@ -103,6 +103,20 @@ export function seasonOccurrence(season: Season, dayKey: string): string {
   return `${season}-${season === 'new-year' && m === 12 ? y + 1 : y}`;
 }
 
+/**
+ * The first app-day of the occurrence of `season` that `dayKey` falls in.
+ * New Year opens on 31 December, so in January it began the year before.
+ */
+export function seasonStartDay(season: Season, dayKey: string): string {
+  const [y, m] = dayKey.split('-').map(Number) as [number, number];
+  switch (season) {
+    case 'halloween': return `${y}-10-17`;
+    case 'winter': return `${y}-12-01`;
+    case 'new-year': return `${m === 12 ? y : y - 1}-12-31`;
+    default: return dayKey; // one-day occasions begin the day they are
+  }
+}
+
 /** `name` if it names a season, else null: for test hooks that name one in storage. */
 export function namedSeason(name: string | null): Season | null {
   return name !== null && Object.hasOwn(SEASON_MOMENTS, name) ? (name as Season) : null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, WORN_ADORNMENTS, companionForm, denOpen, dressing, momentsSeen,
-  splitForm, wornTrinket,
+  DEN_MARKS, DEN_OPENS_AT, SCRAPBOOK, TRINKETS, WEARABLE_ADORNMENTS, companionForm, costumeId, denOpen, momentsSeen,
+  outfit, splitForm, type DenProgress,
 } from './den';
 import { MOMENTS } from './registry';
 import { PET_STAGES } from './content/extras';
@@ -26,26 +26,7 @@ describe('companionForm', () => {
 });
 
 describe('trinkets', () => {
-  const tophat = { 'duel:wins': 1 };
-
-  it('wears whichever was put on most recently', () => {
-    const marks = { ...tophat, 'wear:balloon': 100, 'wear:tophat': 200 };
-    expect(wornTrinket({ unlocks: [], marks })!.id).toBe('tophat');
-    expect(wornTrinket({ unlocks: [], marks: { ...marks, 'wear:balloon': 300 } })!.id).toBe('balloon');
-  });
-
-  it('wears nothing when taken off, or before anything was put on', () => {
-    expect(wornTrinket({ unlocks: [], marks: { 'wear:balloon': 100, 'wear:none': 200 } })).toBeNull();
-    expect(wornTrinket({ unlocks: [], marks: {} })).toBeNull();
-  });
-
-  it('never shows an unearned trinket, even when its stamp is newest', () => {
-    // A stamp can arrive from a device whose unlocks have not synced here yet.
-    expect(wornTrinket({ unlocks: [], marks: { 'wear:balloon': 100, 'wear:wand': 200 } })).toBeNull();
-    expect(wornTrinket({ unlocks: ['streak-30'], marks: { 'wear:wand': 200 } })!.id).toBe('wand');
-  });
-
-  it('has unique ids, and every trinket says how to earn it', () => {
+  it('has unique ids, a spot for each, and every trinket says how to earn it', () => {
     const ids = TRINKETS.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).not.toContain('none');
@@ -60,6 +41,57 @@ describe('trinkets', () => {
   });
 });
 
+describe('the outfit', () => {
+  const DAY = '2026-11-03';
+  const NOW = new Date('2026-11-03T12:00:00').getTime();
+  const crowned = (marks: Record<string, number> = {}, unlocks: string[] = []): DenProgress =>
+    ({ unlocks, marks, lifetime: 1000 });
+  const ids = (o: ReturnType<typeof outfit>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v!.id]));
+
+  it('wears the crown on a crowned companion until another hat replaces it', () => {
+    expect(ids(outfit(crowned(), null, DAY, 4))).toEqual({ head: 'crown' });
+    expect(ids(outfit(crowned({ 'wear:head:tophat': NOW, 'duel:wins': 1 }), null, DAY, 4))).toEqual({ head: 'tophat' });
+    expect(ids(outfit(crowned({ 'wear:head:none': NOW }), null, DAY, 4)), 'a bare head is a choice too').toEqual({});
+    expect(ids(outfit({ unlocks: [], marks: {}, lifetime: 999 }, null, DAY, 4)), 'no crown before it is earned').toEqual({});
+  });
+
+  it('wears one thing in every spot at once', () => {
+    const marks = { 'wear:head:bow': NOW, 'wear:eyes:shades': NOW, 'wear:held:lantern': NOW, 'wear:float:balloon': NOW,
+      'moment:a': 1, 'moment:b': 1, 'moment:c': 1, 'moment:d': 1, 'moment:e': 1 };
+    expect(ids(outfit(crowned(marks, ['streak-7', 'night-owl']), null, DAY, 4)))
+      .toEqual({ head: 'bow', eyes: 'shades', held: 'lantern', float: 'balloon' });
+  });
+
+  it('carries an outfit chosen before each spot had its own choice into that thing’s spot', () => {
+    expect(ids(outfit(crowned({ 'wear:balloon': 5, 'wear:bow': 9 }, ['streak-7']), null, DAY, 4)))
+      .toEqual({ head: 'bow' });
+    expect(ids(outfit(crowned({ 'wear:balloon': 5, 'wear:none': 9 }), null, DAY, 4)), 'the old "none" leaves the crown on')
+      .toEqual({ head: 'crown' });
+    expect(ids(outfit(crowned({ 'wear:bow': 9, 'wear:head:crown': 10 }, ['streak-7']), null, DAY, 4)),
+      'a choice in the spot itself outranks the old one').toEqual({ head: 'crown' });
+  });
+
+  it('never wears something unearned, even when it is the newest choice', () => {
+    expect(ids(outfit(crowned({ 'wear:held:wand': NOW }), null, DAY, 4))).toEqual({ head: 'crown' });
+  });
+
+  it('puts the season’s costume on over anything chosen before the season began', () => {
+    const before = new Date('2026-10-10T12:00:00').getTime();
+    const o = outfit(crowned({ 'wear:held:lantern': before }, ['night-owl']), 'halloween', '2026-10-20', 4);
+    expect(ids(o)).toEqual({ head: 'crown', held: costumeId('halloween') });
+  });
+
+  it('lets a choice made during the season win over the costume, or bring it back', () => {
+    const during = new Date('2026-10-20T12:00:00').getTime();
+    const lantern = outfit(crowned({ 'wear:held:lantern': during }, ['night-owl']), 'halloween', '2026-10-21', 4);
+    expect(ids(lantern).held).toBe('lantern');
+    const bare = outfit(crowned({ 'wear:held:none': during }), 'halloween', '2026-10-21', 4);
+    expect(bare.held, 'taking the costume off sticks').toBeUndefined();
+    const back = outfit(crowned({ 'wear:held:none': during, [`wear:held:${costumeId('halloween')}`]: during + 1 }), 'halloween', '2026-10-21', 4);
+    expect(ids(back).held).toBe(costumeId('halloween'));
+  });
+});
+
 describe('the scrapbook', () => {
   it('has a page for every moment, and nothing else', () => {
     expect(Object.keys(SCRAPBOOK).sort()).toEqual([...MOMENTS].sort());
@@ -70,8 +102,8 @@ describe('the scrapbook', () => {
   });
 });
 
-describe('dressing the companion', () => {
-  it('wears things on the creature, never on what its form adds beside it', () => {
+describe('drawing the companion', () => {
+  it('splits a form into the creature and what the form adds', () => {
     expect(splitForm('👑🐲')).toEqual({ adornment: '👑', creature: '🐲' });
     expect(splitForm('✨🐲')).toEqual({ adornment: '✨', creature: '🐲' });
     for (const [, form] of PET_STAGES) {
@@ -81,16 +113,8 @@ describe('dressing the companion', () => {
     }
   });
 
-  it('wears the crown on its head, and only names adornments some form really has', () => {
-    expect(WORN_ADORNMENTS[splitForm('👑🐲').adornment]).toBe('head');
-    const adornments = new Set(PET_STAGES.map(([, form]) => splitForm(form).adornment));
-    for (const a of Object.keys(WORN_ADORNMENTS)) expect(adornments.has(a), a).toBe(true);
-  });
-
-  it('puts the reader’s choice first, then the season’s costume, then nothing', () => {
-    const bow = TRINKETS.find((t) => t.id === 'bow')!;
-    expect(dressing(bow, 'halloween')).toEqual({ emoji: '🎀', slot: 'head' });
-    expect(dressing(null, 'winter')).toEqual({ emoji: SEASON_LOOKS.winter.costume, slot: 'neck' });
-    expect(dressing(null, null)).toBeNull();
+  it('draws the crown from the outfit, as a trinket, never from the form', () => {
+    expect(WEARABLE_ADORNMENTS.has(splitForm('👑🐲').adornment)).toBe(true);
+    for (const a of WEARABLE_ADORNMENTS) expect(TRINKETS.some((t) => t.emoji === a), a).toBe(true);
   });
 });

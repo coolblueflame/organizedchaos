@@ -44,14 +44,14 @@ test('an ordinary day looks like itself, with no letter waiting', async ({ page 
   await seed(page, null);
   await expect(page.getByTestId('tagline')).toHaveText('// a todo list with loaded dice');
   await expect(page.getByTestId('companion')).toBeVisible();
-  await expect(page.getByTestId('companion-trinket')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="companion-worn"]')).toHaveCount(0);
   await expect(page.getByTestId('mailbox-chip')).toHaveCount(0);
 });
 
 test('a season dresses Home and the companion, and its letter is read once', async ({ page }) => {
   await seed(page, 'halloween');
   await expect(page.getByTestId('tagline')).toHaveText('// a todo list with haunted dice');
-  await expect(page.getByTestId('companion-trinket')).toHaveText('🎃');
+  await expect(page.getByTestId('companion-worn-held')).toHaveText('🎃');
 
   await page.getByTestId('mailbox-chip').click();
   await page.getByTestId('mailbox-item-season').click();
@@ -81,7 +81,7 @@ test('seasonal touches can be switched off, and stay off', async ({ page }) => {
   await page.getByTestId('settings-seasonal').uncheck();
   await page.getByTestId('back').click();
   await expect(page.getByTestId('tagline')).toHaveText('// a todo list with loaded dice');
-  await expect(page.getByTestId('companion-trinket')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="companion-worn"]')).toHaveCount(0);
   await expect(page.getByTestId('mailbox-chip')).toHaveCount(0);
   // The switch reaches storage asynchronously; reload only once it has.
   await expect.poll(() => page.evaluate(() => new Promise<boolean>((resolve) => {

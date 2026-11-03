@@ -13,7 +13,8 @@
   import { appDayKey } from '../domain/time';
   import { MOMENTS } from './registry';
   import {
-    DEN_MARKS, SCRAPBOOK, TRINKETS, WEAR_PREFIX, companionForm, denOpen, dressing, wornTrinket, type Trinket,
+    DEN_MARKS, SCRAPBOOK, SLOTS, SLOT_NAMES, TRINKETS, companionForm, costume, denOpen, outfit, wearPrefix,
+    type WornSlot,
   } from './den';
   import { DEN_LINES, DEN_WAY_BACK, DEN_WELCOME } from './content/den';
   import { presenter } from './presenter.svelte';
@@ -27,9 +28,26 @@
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
   const form = $derived(companionForm(lifetime));
-  const progress = $derived({ unlocks: app.eggUnlocks, marks: app.eggMarks });
-  const worn = $derived(wornTrinket(progress));
-  const dressed = $derived(dressing(worn, seasonNow.current));
+  const progress = $derived({ unlocks: app.eggUnlocks, marks: app.eggMarks, lifetime });
+  const fit = $derived(outfit(progress, seasonNow.current, seasonNow.day, app.state.settings.rolloverHour));
+
+  /** One thing on the shelf: a trinket, or the season's costume while it lasts. */
+  interface ShelfItem { id: string; emoji: string; slot: WornSlot; label: string; hint: string; earned: boolean }
+
+  /** The shelf, a row per kind of thing; a kind with nothing in it is left out. */
+  const shelf = $derived.by(() => {
+    const season = seasonNow.current;
+    return SLOTS.map((slot) => {
+      const items: ShelfItem[] = TRINKETS.filter((t) => t.slot === slot).map((t) => ({
+        id: t.id, emoji: t.emoji, slot, label: t.label, hint: t.hint, earned: t.earned(progress),
+      }));
+      const seasonal = season ? costume(season) : null;
+      if (seasonal && seasonal.slot === slot) {
+        items.push({ ...seasonal, label: 'this season’s costume', hint: '', earned: true });
+      }
+      return { slot, name: SLOT_NAMES[slot], items };
+    }).filter((row) => row.items.length > 0);
+  });
   const welcomed = $derived(app.eggMarks[DEN_MARKS.welcomed] !== undefined);
   const seen = $derived(MOMENTS.filter((m) => app.eggMarks[`moment:${m}`] !== undefined));
   const sparkles = $derived(sparkleTally(app.eggMarks));
@@ -69,12 +87,12 @@
   /** What the line under the shelf says about the trinket tapped last. */
   let caption = $state('tap something to try it on.');
 
-  /** Put a trinket on, or take off the one being worn. */
-  function wear(t: Trinket) {
+  /** Put something on in its spot, replacing what was there, or take it off if it is already on. */
+  function wear(item: ShelfItem) {
     haptic('tick');
-    const off = worn?.id === t.id;
-    app.chooseEgg(WEAR_PREFIX, off ? 'none' : t.id);
-    caption = off ? `took off ${t.label}.` : `wearing ${t.label}.`;
+    const off = fit[item.slot]?.id === item.id;
+    app.chooseEgg(wearPrefix(item.slot), off ? 'none' : item.id);
+    caption = off ? `took off ${item.label}.` : `wearing ${item.label}.`;
   }
 </script>
 
@@ -99,7 +117,7 @@
     <section class="room">
       {#if bubble}<p class="bubble" data-testid="den-bubble">{bubble}</p>{/if}
       <button class="pet" class:hop={hopping} data-testid="den-companion" aria-label="poke {form[2]}" onclick={poke}>
-        <span class="body"><CompanionFigure form={form[1]} {dressed} wornTestId="den-worn" /></span>
+        <span class="body"><CompanionFigure form={form[1]} outfit={fit} testIdPrefix="den-worn" /></span>
       </button>
       <p class="name">{form[2]}</p>
       <p class="mood" data-testid="den-mood">mood: {mood}</p>
@@ -112,17 +130,20 @@
 
     <section class="shelf">
       <h2>the shelf <span class="count">{TRINKETS.filter((t) => t.earned(progress)).length} of {TRINKETS.length}</span></h2>
-      <div class="trinkets">
-        {#each TRINKETS as t (t.id)}
-          {#if t.earned(progress)}
-            <button class="trinket" class:on={worn?.id === t.id} data-testid="trinket-{t.id}"
-              aria-pressed={worn?.id === t.id} aria-label={t.label} onclick={() => wear(t)}>{t.emoji}</button>
-          {:else}
-            <button class="trinket locked" data-testid="trinket-{t.id}" aria-label="locked: {t.hint}"
-              onclick={() => (caption = `locked: ${t.hint}.`)}>?</button>
-          {/if}
-        {/each}
-      </div>
+      {#each shelf as row (row.slot)}
+        <h3 class="kind">{row.name}</h3>
+        <div class="trinkets">
+          {#each row.items as t (t.id)}
+            {#if t.earned}
+              <button class="trinket" class:on={fit[t.slot]?.id === t.id} data-testid="trinket-{t.id}"
+                aria-pressed={fit[t.slot]?.id === t.id} aria-label={t.label} onclick={() => wear(t)}>{t.emoji}</button>
+            {:else}
+              <button class="trinket locked" data-testid="trinket-{t.id}" aria-label="locked: {t.hint}"
+                onclick={() => (caption = `locked: ${t.hint}.`)}>?</button>
+            {/if}
+          {/each}
+        </div>
+      {/each}
       <p class="caption" data-testid="shelf-caption">{caption}</p>
     </section>
 
@@ -202,6 +223,10 @@
   .name { margin: 0; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text); }
   .mood { margin: 0; font-family: var(--font-mono); font-size: 0.72rem; color: var(--dim); }
 
+  .kind {
+    margin: 10px 0 6px; font-family: var(--font-mono); font-size: 0.66rem; font-weight: 400;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim);
+  }
   .trinkets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
   .trinket {
     aspect-ratio: 1; display: grid; place-items: center;

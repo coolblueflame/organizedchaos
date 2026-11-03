@@ -135,9 +135,9 @@ test('a duel won with loaded dice is remembered, and earns a hat worth wearing h
   // The win earned a discovery and a trinket; wearing it shows on Home.
   await page.getByTestId('trinket-tophat').click();
   await expect(page.getByTestId('trinket-tophat')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('den-worn')).toHaveText('🎩');
+  await expect(page.getByTestId('den-worn-head')).toHaveText('🎩');
   await page.getByTestId('back').click();
-  await expect(page.getByTestId('companion-trinket')).toHaveText('🎩');
+  await expect(page.getByTestId('companion-worn-head')).toHaveText('🎩');
   await page.goto('./#/stats');
   await expect(page.getByTestId('discoveries')).toContainText('House Rules');
 });
@@ -165,4 +165,29 @@ test('the scrapbook shows what has been seen, replays it, and keeps the rest a m
   const moment = page.getByTestId('delight-moment');
   await expect(moment).toBeVisible();
   await expect(moment).toHaveClass(/m-aurora/);
+});
+
+test('a crowned companion can trade the crown for another hat, and wear one thing of each kind', async ({ page }) => {
+  const moments = { 'moment:aurora': 1, 'moment:disco': 1, 'moment:petals': 1, 'moment:bubbles': 1, 'moment:sunrise': 1 };
+  await seedLibrary(page, 1000, { unlocks: ['streak-7'], marks: { 'mail:den': 1, 'den:welcomed': 1, 'duel:wins': 1, ...moments } });
+  await page.goto('./#/den');
+  await expect(page.getByTestId('den-worn-head'), 'the crown is worn by default').toHaveText('👑');
+  await expect(page.getByTestId('trinket-crown')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('trinket-tophat').click();
+  await expect(page.getByTestId('den-worn-head'), 'a hat replaces the crown').toHaveText('🎩');
+  await page.getByTestId('trinket-shades').click();
+  await expect(page.getByTestId('den-worn-eyes')).toHaveText('🕶️');
+  await expect(page.getByTestId('den-worn-head'), 'glasses do not take the hat off').toHaveText('🎩');
+
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('companion-worn-head')).toHaveText('🎩');
+  await expect(page.getByTestId('companion-worn-eyes')).toHaveText('🕶️');
+
+  await page.goto('./#/den');
+  await page.getByTestId('trinket-crown').click();
+  await expect(page.getByTestId('den-worn-head'), 'the crown comes back on').toHaveText('👑');
+  await page.getByTestId('trinket-crown').click();
+  await expect(page.getByTestId('den-worn-head'), 'and off again, leaving a bare head').toHaveCount(0);
+  await expect(page.getByTestId('den-worn-eyes')).toHaveText('🕶️');
 });

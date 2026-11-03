@@ -15,14 +15,19 @@
  * device settles a tie the same way whatever order its keys arrived in.
  */
 export function latestChoice(marks: Readonly<Record<string, number>>, prefix: string): string | null {
-  let newest: string | null = null;
-  let at = -Infinity;
+  return latestChoiceAt(marks, prefix)?.option ?? null;
+}
+
+/** latestChoice, with the stamp the choice was made at. */
+export function latestChoiceAt(
+  marks: Readonly<Record<string, number>>, prefix: string,
+): { option: string; at: number } | null {
+  let newest: { option: string; at: number } | null = null;
   for (const [key, stamp] of Object.entries(marks)) {
     if (!key.startsWith(prefix)) continue;
     const option = key.slice(prefix.length);
-    if (stamp < at || (stamp === at && option < newest!)) continue;
-    newest = option;
-    at = stamp;
+    if (newest && (stamp < newest.at || (stamp === newest.at && option < newest.option))) continue;
+    newest = { option, at: stamp };
   }
   return newest;
 }
