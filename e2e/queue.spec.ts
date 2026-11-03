@@ -66,7 +66,7 @@ test('queued tasks pre-empt the tiers in the draw and show their provenance', as
   await expect(page.getByTestId('draw-card')).toContainText('planned first');
 });
 
-test('"not now" on a queued draw advances the plan permanently', async ({ page }) => {
+test('"not now" on a queued draw moves the dice along the plan and leaves the task queued', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Plan');
   await addTask(page, 'first thing');
@@ -80,12 +80,17 @@ test('"not now" on a queued draw advances the plan permanently', async ({ page }
   await page.getByTestId('draw-not-now').click();
   // The next in line is served…
   await expect(page.getByTestId('draw-card')).toContainText('second thing');
-  // …and the skipped one is OUT of the queue, not just out of this session.
+  // …and the skipped one is still in the queue, in its own place.
   await page.getByTestId('back').click();
-  await expect.poll(() => queueNames(page)).toEqual(['second thing']);
-  // Leaving and re-rolling must not resurrect the skipped task at the top.
+  await expect.poll(() => queueNames(page)).toEqual(['first thing', 'second thing']);
+  // Leaving and re-rolling must not serve the skipped task straight back.
   await page.getByTestId('big-button').click();
   await expect(page.getByTestId('draw-card')).toContainText('second thing');
+  // Once the rest have had their turn, the skipped one comes round again.
+  await page.getByTestId('draw-not-now').click();
+  await page.getByTestId('back').click();
+  await page.getByTestId('big-button').click();
+  await expect(page.getByTestId('draw-card')).toContainText('first thing');
 });
 
 test('the queue reorders by grip-drag and the order is data', async ({ page }) => {

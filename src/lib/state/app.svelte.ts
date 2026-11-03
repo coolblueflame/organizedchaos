@@ -21,7 +21,7 @@ import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
 import { lockedTaskIds } from '../domain/lock';
 import { lockSession } from './lockSession.svelte';
-import { liveQueueIds } from '../domain/dayQueue';
+import { drawOrder, liveQueueIds } from '../domain/dayQueue';
 import { ensureNotificationPermission } from '../ui/notify';
 import { reorderPatches } from '../domain/listOrder';
 import { customOrderPatches } from '../domain/views';
@@ -98,6 +98,13 @@ export class AppStore {
   eggsLoaded = $state(false);
   /** Daily backlog measurements (see domain/stats.BurdenLedger) — synced. */
   burdenLedger = $state<BurdenLedger>({});
+  /**
+   * Queued tasks given a "not now" today on this device, in the order they
+   * were skipped (see domain/dayQueue.drawOrder). Stored, so leaving the
+   * dice and coming back does not serve the same task straight back; reset
+   * by the rollover, since tomorrow is a fresh pass through the plan.
+   */
+  private queueSkips: { day: string; ids: string[] } = { day: '', ids: [] };
   /** Recently-removed rows kept for the undo toast's 5s window (session-only). */
   private trashTasks = new Map<string, Task>();
   private trashLists = new Map<string, List>();
@@ -116,6 +123,7 @@ export class AppStore {
     this.state.queueIds = loaded.queueIds;
     this.state.queueUpdatedAt = loaded.queueUpdatedAt;
     this.burdenLedger = (await this.repo.getKv<BurdenLedger>('burdenLedger')) ?? {};
+    this.queueSkips = (await this.repo.getKv<{ day: string; ids: string[] }>('queueSkips')) ?? this.queueSkips;
     // Materialize any recurrences that came due while the app was closed.
     // (This also takes the day's burden measurement — see runSpawnSweepBody.)
     await this.runSpawnSweep();
@@ -583,6 +591,27 @@ export class AppStore {
     if (fresh.length === 0) return;
     await this.writeQueue([...this.state.queueIds, ...fresh]);
     this.fireEgg('queuePlanned');
+  }
+
+  /** Today's skipped queue ids; empty once the day has rolled over. */
+  private skippedToday(): string[] {
+    const day = appDayKey(new Date(), this.state.settings.rolloverHour);
+    return this.queueSkips.day === day ? this.queueSkips.ids : [];
+  }
+
+  /**
+   * "Not now" on a queued task: it keeps its place in the queue, and
+   * today's draws serve the rest of the queue before it comes round again.
+   */
+  async skipQueued(id: string): Promise<void> {
+    const day = appDayKey(new Date(), this.state.settings.rolloverHour);
+    this.queueSkips = { day, ids: [...this.skippedToday().filter((x) => x !== id), id] };
+    await this.repo.setKv('queueSkips', this.queueSkips);
+  }
+
+  /** The order the draw takes the queue in today (see domain/dayQueue.drawOrder). */
+  queueDrawOrder(): string[] {
+    return drawOrder(liveQueueIds(this.state.queueIds, this.state.tasks), this.skippedToday());
   }
 
   async removeFromQueue(id: string): Promise<void> {
@@ -1288,7 +1317,7 @@ export class AppStore {
           // user would read its name out loud.
           ...lockedTaskIds(this.state.tasks, this.state.lists, lockSession.unlocked),
         ],
-        queueFirst: liveQueueIds(this.state.queueIds, this.state.tasks),
+        queueFirst: this.queueDrawOrder(),
         dueFirst: dueRitualIds(this.state.tasks, this.state.settings, now),
         peppers: this.pepperCandidates(),
       },

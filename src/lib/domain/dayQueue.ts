@@ -19,6 +19,18 @@ export function liveQueueIds(ids: string[], tasks: Task[]): string[] {
   return ids.filter((id) => open.has(id));
 }
 
+/**
+ * The order the draw takes the queue in: everything not skipped today, in
+ * queue order, then today's skips in the order they were skipped. A "not
+ * now" moves the draw along the queue without taking the task out of it,
+ * and the skipped task comes round again once the rest have had their turn.
+ */
+export function drawOrder(queue: readonly string[], skipped: readonly string[]): string[] {
+  const skippedSet = new Set(skipped);
+  const queuedSet = new Set(queue);
+  return [...queue.filter((id) => !skippedSet.has(id)), ...skipped.filter((id) => queuedSet.has(id))];
+}
+
 /** Snoozed for the day ("not today") as of `nowMs`: out of the draw until the rollover. */
 export function snoozedForDay(t: Task, nowMs: number): boolean {
   return t.notTodayUntil !== undefined && t.notTodayUntil > nowMs;

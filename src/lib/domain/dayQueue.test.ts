@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Priority, Task } from './types';
-import { displayQueue, liveQueueIds, mergeReorder } from './dayQueue';
+import { displayQueue, drawOrder, liveQueueIds, mergeReorder } from './dayQueue';
 
 let n = 0;
 const task = (over: Partial<Task> & { priority: Priority }): Task => ({
@@ -55,5 +55,20 @@ describe('mergeReorder', () => {
   it('an unchanged order is a no-op', () => {
     const stored = ['a', 's1', 'b'];
     expect(mergeReorder(stored, ['a', 'b'])).toEqual(stored);
+  });
+});
+
+describe('drawOrder', () => {
+  it('serves the rest of the queue before a task skipped today, without moving it in the queue', () => {
+    expect(drawOrder(['a', 'b', 'c'], ['a'])).toEqual(['b', 'c', 'a']);
+  });
+
+  it('brings skipped tasks round again in the order they were skipped', () => {
+    expect(drawOrder(['a', 'b', 'c'], ['b', 'a'])).toEqual(['c', 'b', 'a']);
+  });
+
+  it('ignores skips for tasks no longer queued', () => {
+    expect(drawOrder(['a', 'b'], ['x', 'a'])).toEqual(['b', 'a']);
+    expect(drawOrder(['a', 'b'], [])).toEqual(['a', 'b']);
   });
 });

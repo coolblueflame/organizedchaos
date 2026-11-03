@@ -125,7 +125,7 @@
     // A running work period narrows the pool to what actually fits.
     maxEstimateHours: app.workPeriodHoursLeft() ?? undefined,
     // The hand-planned order outranks the tiers (2026-07-29 request).
-    queueFirst: liveQueueIds(app.state.queueIds, app.state.tasks),
+    queueFirst: app.queueDrawOrder(),
     // And a ritual whose window is open outranks even that: windows close.
     // Same clock as the deriveds above, or the two halves of the draw can
     // disagree about whether a window is open.
@@ -334,11 +334,11 @@
 
   function notNowClick() {
     if (!drawn) return;
-    // Skipping the queue's top advances THE PLAN, not just this session:
-    // without this, leaving the screen reset the skip and the dice served
-    // the same "not now" task again (2026-07-30 ask). Ordinary un-queued
-    // tasks keep the session-only semantics.
-    if (app.state.queueIds.includes(drawn.id)) void app.removeFromQueue(drawn.id);
+    // A queued task stays in the queue; the skip is remembered for the day
+    // instead. Kept only in this screen's session, it was a boomerang: leave
+    // the dice, come back, and the same task is served straight back.
+    // Ordinary un-queued tasks keep the session-only semantics.
+    if (app.state.queueIds.includes(drawn.id)) void app.skipQueued(drawn.id);
     notNow = [...notNow, drawn.id];
     redraw();
   }
