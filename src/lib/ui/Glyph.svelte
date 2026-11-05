@@ -19,7 +19,7 @@
     | 'notes' | 'blocked' | 'timebox' | 'period' | 'pause' | 'play'
     | 'dice' | 'moon' | 'bolt' | 'install' | 'upload' | 'award' | 'locked' | 'unlocked'
     | 'flame' | 'settings' | 'escalate' | 'grip'
-    | 'box' | 'box-checked' | 'box-all' | 'check' | 'plus' | 'mail';
+    | 'box' | 'box-checked' | 'box-all' | 'check' | 'plus' | 'mail' | 'den';
 
   let { name, size = 11, title }: {
     name: GlyphName;
@@ -138,6 +138,11 @@
     <!-- Envelope: the body, and a flap meeting in the middle. -->
     <rect x="1" y="2.5" width="10" height="7" rx="1.2" />
     <path d="M1.6 3.2 L6 6.6 L10.4 3.2" />
+  {:else if name === 'den'}
+    <!-- A little house: the roof, the walls, and a door. -->
+    <path d="M1.4 6 L6 1.8 L10.6 6" />
+    <path d="M2.6 5 V10.2 H9.4 V5" />
+    <path d="M5 10.2 V7.4 H7 V10.2" />
   {:else if name === 'plus'}
     <!-- Drawn, not typed: a "+" character's ink sits off-centre in most fonts,
          which is exactly why the floating button looked lopsided (the rule:

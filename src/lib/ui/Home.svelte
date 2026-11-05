@@ -27,6 +27,8 @@
   import CurrentTaskCard from './CurrentTaskCard.svelte';
   import StatsStrip from './StatsStrip.svelte';
   import Mailbox from '../eggs/Mailbox.svelte';
+  import { denOpen } from '../eggs/den';
+  import { lifetimeCompletions } from '../domain/stats';
   import Companion from '../eggs/Companion.svelte';
   import Sparkle from '../eggs/Sparkle.svelte';
   import { seasonNow } from '../eggs/seasonNow.svelte';
@@ -403,6 +405,9 @@
 
   /** The season's touches (tagline, accent), or null on an ordinary day. */
   const look = $derived(seasonNow.current ? SEASON_LOOKS[seasonNow.current] : null);
+
+  /** The den's chip shows once the den is open (see den.denOpen). */
+  const denVisible = $derived(denOpen(lifetimeCompletions(app.state.tasks), app.eggMarks));
 </script>
 
 <svelte:window
@@ -427,7 +432,14 @@
   <div class="tagline-row">
     <!-- The sparkle rides with the tagline, not with the row's far end. -->
     <span class="tagline-wrap"><p class="tagline" data-testid="tagline">{look?.tagline ?? '// a todo list with loaded dice'}</p><Sparkle spot="home" /></span>
-    <Mailbox />
+    <span class="tag-chips">
+      <Mailbox />
+      {#if denVisible}
+        <button class="den-chip" data-testid="den-chip" aria-label="the den" onclick={() => navigate({ name: 'den' })}>
+          <Glyph name="den" size={13} /><span>den</span>
+        </button>
+      {/if}
+    </span>
   </div>
 
   <InstallBanner />
@@ -652,6 +664,15 @@
   @keyframes blink { 50% { opacity: 0; } }
   .tagline { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; margin: 0; }
   .tagline-wrap { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+  .tag-chips { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+  /* The den's door: the mailbox chip's shape, in the companion's colour. */
+  .den-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--bg1); border: 1px solid var(--acc-purple); border-radius: 999px;
+    color: var(--acc-purple); font-family: var(--font-mono); font-size: 0.75rem;
+    padding: 4px 10px; cursor: pointer;
+  }
+  @media (hover: hover) { .den-chip:hover { background: var(--bg2); } }
   /* The mailbox chip shares the tagline's line, right-aligned, so waiting
      things are visible without pushing the day's work down the screen. */
   .tagline-row {

@@ -77,6 +77,7 @@ test('below the dragon rung there is no letter, no door and no way in', async ({
   await seedLibrary(page, 249);
   await expect(page.getByTestId('companion')).toBeVisible();
   await expect(page.getByTestId('mailbox-chip')).toHaveCount(0);
+  await expect(page.getByTestId('den-chip'), 'no door before there is a den').toHaveCount(0);
   await holdCompanion(page, 900);
   await expect(page.getByTestId('den')).toHaveCount(0);
   await page.goto('./#/stats');
@@ -112,6 +113,11 @@ test('the den arrives as a letter, and afterwards opens from the companion', asy
 
   await page.goto('./#/stats');
   await page.getByTestId('stats-den-link').click();
+  await expect(page.getByTestId('den')).toBeVisible();
+
+  // And the door at the top of Home, one tap away.
+  await page.getByTestId('back').click();
+  await page.getByTestId('den-chip').click();
   await expect(page.getByTestId('den')).toBeVisible();
 });
 
