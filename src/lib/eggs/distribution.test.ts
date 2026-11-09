@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { EggEngine, type EggState, type Presentation } from './engine';
 import { REGISTRY } from './registry';
-import { UNLOCKS } from './content/extras';
+import { STORY_BEATS, UNLOCKS } from './content/extras';
 
 /** A day of use: a completion every few minutes, with browsing in between. */
 function simulate(opts: { completions: number; navsPerCompletion: number; seed?: number }) {
@@ -21,11 +21,13 @@ function simulate(opts: { completions: number; navsPerCompletion: number; seed?:
     n = (n * 1103515245 + 12345) % 2147483648;
     return n / 2147483648;
   };
-  // An established user: every one-time award already earned, so what we are
-  // measuring is the ONGOING mix rather than a burst of first-time unlocks.
+  // An established user: every one-time award already earned and the story
+  // read to its end, so what we are measuring is the ONGOING mix rather than
+  // a burst of first-time unlocks or beats. The end is the story's length, not
+  // a number: a fixed one lands mid-story the day new chapters are appended.
   let saved: EggState | null = {
     seen: {}, trivia: { correct: 0, total: 0 }, unlocks: UNLOCKS.map((u) => u.id),
-    storyStage: 99, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+    storyStage: STORY_BEATS.length, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
     lastCompletionDay: '', streakDays: 4,
   };
   const engine = new EggEngine({
@@ -159,7 +161,7 @@ describe('delight distribution over a realistic day', () => {
     let clock = new Date('2026-08-11T09:00:00').getTime();
     let saved: EggState | null = {
       seen: {}, trivia: { correct: 0, total: 0 }, unlocks: UNLOCKS.map((u) => u.id),
-      storyStage: 99, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
+      storyStage: STORY_BEATS.length, lastPresentedAt: 0, presentedDay: '', presentedToday: 0,
       lastCompletionDay: '', streakDays: 4,
     };
     const engine = new EggEngine({
