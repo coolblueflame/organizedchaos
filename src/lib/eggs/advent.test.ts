@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ADVENT_DOORS, GIFTS, adventKey, doorEverOpened, doorsOpenable } from './advent';
+import { ADVENT_DOORS, GIFTS, adventKey, calendarUp, doorEverOpened, doorsOpenable } from './advent';
 import { MOMENTS } from './registry';
 
 describe('ENTROPY’s winter calendar', () => {
@@ -10,6 +10,14 @@ describe('ENTROPY’s winter calendar', () => {
     expect(doorsOpenable('2026-12-24')).toBe(ADVENT_DOORS);
     expect(doorsOpenable('2026-12-30')).toBe(ADVENT_DOORS);
     expect(doorsOpenable('2027-01-01')).toBe(0);
+  });
+
+  it('hangs through December, even on a December birthday, and comes down for New Year or with touches off', () => {
+    expect(calendarUp('winter', '2026-12-05')).toBe(true);
+    expect(calendarUp('birthday', '2026-12-05'), 'a birthday outranks winter for its day').toBe(true);
+    expect(calendarUp('new-year', '2026-12-31')).toBe(false);
+    expect(calendarUp(null, '2026-12-05'), 'seasonal touches off').toBe(false);
+    expect(calendarUp('birthday', '2026-07-05')).toBe(false);
   });
 
   it('has a gift behind every door, in reader-safe words, whose moments exist', () => {

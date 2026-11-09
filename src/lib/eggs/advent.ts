@@ -6,6 +6,7 @@
  * (`advent:<year>-<n>`), so they sync. Lives only in the winter season.
  */
 import type { MomentName } from './registry';
+import type { Season } from './seasons';
 
 /** How many doors the calendar has. */
 export const ADVENT_DOORS = 24;
@@ -20,6 +21,16 @@ export const adventKey = (year: number, n: number): string => `advent:${year}-${
 export function doorsOpenable(dayKey: string): number {
   const [, m, d] = dayKey.split('-').map(Number) as [number, number, number];
   return m === 12 ? Math.min(d, ADVENT_DOORS) : 0;
+}
+
+/**
+ * Whether the calendar hangs in the den: through December, while seasonal
+ * touches are on (a season is in force), until New Year takes over. Not
+ * "the season is winter": a December birthday outranks winter for its day,
+ * and the calendar must not vanish on someone's birthday.
+ */
+export function calendarUp(season: Season | null, dayKey: string): boolean {
+  return season !== null && season !== 'new-year' && dayKey.slice(5, 7) === '12';
 }
 
 /** Whether door `n` of any year's calendar has been opened (the prizes behind doors 12 and 24 are kept for good). */

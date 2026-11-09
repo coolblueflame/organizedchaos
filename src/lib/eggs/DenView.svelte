@@ -25,7 +25,7 @@
   import { seasonNow } from './seasonNow.svelte';
   import CompanionFigure from './CompanionFigure.svelte';
   import { RIDDLES, openRiddles, riddleSolved } from './riddles';
-  import { ADVENT_DOORS, GIFTS, adventKey, doorsOpenable } from './advent';
+  import { ADVENT_DOORS, GIFTS, adventKey, calendarUp as calendarHangs, doorsOpenable } from './advent';
   import Glyph from '../ui/Glyph.svelte';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
@@ -58,8 +58,8 @@
   const riddlesSolved = $derived(RIDDLES.filter((r) => riddleSolved(app.eggMarks, r.id)).length);
   const prizeOf = (id: string) => TRINKETS.find((t) => t.id === id)?.emoji ?? '';
 
-  /** ENTROPY's winter calendar (see ./advent): on the wall only while it is winter. */
-  const calendarUp = $derived(seasonNow.current === 'winter');
+  /** ENTROPY's winter calendar (see ./advent.calendarUp for when it hangs). */
+  const calendarUp = $derived(calendarHangs(seasonNow.current, seasonNow.day));
   const calendarYear = $derived(Number(seasonNow.day.slice(0, 4)));
   const openable = $derived(doorsOpenable(seasonNow.day));
   const doorOpen = (n: number) => app.eggMarks[adventKey(calendarYear, n)] !== undefined;

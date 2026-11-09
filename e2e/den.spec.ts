@@ -240,6 +240,9 @@ test('in December the den has a calendar: today’s doors open, tomorrow’s sta
   await expect(page.getByTestId('calendar-count')).toHaveText('2 of 24');
   await expect(page.getByTestId('trinket-snowflake'), 'the prize behind door twelve').toHaveAttribute('aria-pressed', 'false');
 
+  // Saving is asynchronous; reload only once both doors have reached storage.
+  await expect.poll(async () => Object.keys(await savedMarks(page)).filter((k) => k.startsWith('advent:')).sort())
+    .toEqual(['advent:2026-12', 'advent:2026-2']);
   await page.reload();
   await expect(page.getByTestId('calendar-count'), 'opened doors stay open').toHaveText('2 of 24');
 });
