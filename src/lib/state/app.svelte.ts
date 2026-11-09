@@ -34,6 +34,8 @@ import { MOMENTS, REGISTRY } from '../eggs/registry';
 import { SPARKLE_PREFIX, sparkleTally } from '../eggs/sparkles';
 import { BIRTHDAY_KEY, nextBirthdayValue, namedSeason, seasonalEnabled, type MonthDay } from '../eggs/seasons';
 import { choiceStamp } from '../eggs/ledger';
+import { RIDDLES, RIDDLE_PREFIX, riddleSolved, type Riddle } from '../eggs/riddles';
+import { TRINKETS } from '../eggs/den';
 import { SPARKLE_FIRST, SPARKLE_FOUND } from '../eggs/content/sparkles';
 import { UNLOCKS } from '../eggs/content/extras';
 import { presenter } from '../eggs/presenter.svelte';
@@ -284,6 +286,24 @@ export class AppStore {
     this.grantUnlockAndShow('finders-keepers');
     if (n >= 10) this.grantUnlockAndShow('magpie');
     if (n >= 50) this.grantUnlockAndShow('hoard');
+  }
+
+  /**
+   * One of ENTROPY's riddles was answered in the search bar (see
+   * eggs/riddles): record it, say so, then grant what it earned. The note
+   * goes first for the same reason a found sparkle's does (collectSparkle).
+   */
+  solveRiddle(riddle: Riddle): void {
+    if (!this.eggsLoaded) return;
+    this.markEgg(`${RIDDLE_PREFIX}${riddle.id}`);
+    const prize = TRINKETS.find((t) => t.id === riddle.reward);
+    const all = RIDDLES.every((r) => riddleSolved(this.eggMarks, r.id));
+    const text = all
+      ? `that was the last page. ENTROPY closed the notebook, opened it again, and closed it again. it is very proud of you. ${prize ? `behind it: ${prize.label}.` : ''}`
+      : `solved! ENTROPY is delighted and a little annoyed. ${prize ? `behind that page: ${prize.label}. it is on the den shelf.` : ''}`;
+    presenter.show({ kind: 'note', emoji: prize?.emoji ?? '📓', accent: 'purple', celebrate: true, text: text.trim() });
+    this.grantUnlockAndShow('riddler');
+    if (all) this.grantUnlockAndShow('sphinx');
   }
 
   /**

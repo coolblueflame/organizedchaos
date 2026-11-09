@@ -15,6 +15,9 @@
   import { closeOnOutsideOrEscape } from './dismiss';
   import { adoptKeyboard } from './keyboardBridge';
   import { presenter } from '../eggs/presenter.svelte';
+  import { riddleAnsweredBy } from '../eggs/riddles';
+  import { denOpen } from '../eggs/den';
+  import { lifetimeCompletions } from '../domain/stats';
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let editingTaskId = $state<string | null>(null);
@@ -25,6 +28,24 @@
   $effect(() => {
     if (searchQuery.value.trim().toLowerCase() !== 'entropy') return;
     if (app.grantUnlockAndShow('named-it')) presenter.show({ kind: 'moment', moment: 'crt-flicker' });
+  });
+
+  /*
+    ENTROPY's riddles are answered here too (see eggs/riddles), once the den
+    that keeps the notebook is open. Checked when typing pauses rather than
+    on every keystroke: a search for "levels" passes through "level" on the
+    way, and must not solve a riddle halfway through a word.
+  */
+  $effect(() => {
+    const query = searchQuery.value;
+    // Everything else is read inside the timer: counting the library to
+    // check the den is a pass over every task, which must not run per keystroke.
+    const timer = setTimeout(() => {
+      if (!app.eggsLoaded || !denOpen(lifetimeCompletions(app.state.tasks), app.eggMarks)) return;
+      const riddle = riddleAnsweredBy(query, app.eggMarks);
+      if (riddle) app.solveRiddle(riddle);
+    }, 600);
+    return () => clearTimeout(timer);
   });
 
   /*

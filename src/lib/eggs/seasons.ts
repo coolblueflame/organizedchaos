@@ -126,10 +126,10 @@ export function namedSeason(name: string | null): Season | null {
 export const SEASON_MOMENTS: Readonly<Record<Season, MomentName>> = {
   halloween: 'eyes-in-the-dark',
   winter: 'snowfall',
-  'new-year': 'fireworks',
+  'new-year': 'countdown',
   anniversary: 'balloons',
   birthday: 'balloons',
 };
 
 /** Seasonal-only moments: the year-round roll leaves these out. */
-export const SEASONAL_ONLY_MOMENTS: ReadonlySet<MomentName> = new Set(['eyes-in-the-dark', 'snowfall', 'balloons']);
+export const SEASONAL_ONLY_MOMENTS: ReadonlySet<MomentName> = new Set(['eyes-in-the-dark', 'snowfall', 'balloons', 'countdown']);

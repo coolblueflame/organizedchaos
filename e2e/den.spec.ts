@@ -197,3 +197,56 @@ test('a crowned companion can trade the crown for another hat, and wear one thin
   await expect(page.getByTestId('den-worn-head'), 'and off again, leaving a bare head').toHaveCount(0);
   await expect(page.getByTestId('den-worn-eyes')).toHaveText('🕶️');
 });
+
+test('a riddle in the notebook is answered in the search bar, opening the next page and a prize', async ({ page }) => {
+  await seedLibrary(page, 250, { marks: { 'mail:den': 1, 'den:welcomed': 1 } });
+  await page.goto('./#/den');
+  await expect(page.getByTestId('notebook-count')).toHaveText('0 of 8');
+  await expect(page.getByTestId('riddle-keys')).toBeVisible();
+  await expect(page.getByTestId('riddle-hands'), 'only the first pages are open').toHaveCount(0);
+
+  // An answer to a page nobody has seen yet solves nothing.
+  await page.goto('./#/search');
+  await page.getByTestId('search-input').fill('kevin');
+  await page.waitForTimeout(900);
+  await expect(page.getByTestId('delight-note')).toHaveCount(0);
+
+  await page.getByTestId('search-input').fill('The Keyboard!');
+  await expect(page.getByTestId('delight-note')).toContainText('solved');
+
+  await page.goto('./#/den');
+  await expect(page.getByTestId('notebook-count')).toHaveText('1 of 8');
+  await expect(page.getByTestId('riddle-keys')).toContainText('keyboard');
+  await expect(page.getByTestId('riddle-hands'), 'a solve opens one more page').toBeVisible();
+  await expect(page.getByTestId('trinket-key'), 'the prize is on the shelf').toHaveAttribute('aria-pressed', 'false');
+  await page.goto('./#/stats');
+  await expect(page.getByTestId('discoveries')).toContainText('Riddle Me This');
+});
+
+test('in December the den has a calendar: today’s doors open, tomorrow’s stay shut, a prize waits behind door twelve', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-12-12T12:00:00'));
+  await page.goto('./');
+  await page.evaluate(() => localStorage.setItem('OC_SEASON', 'winter'));
+  await seedLibrary(page, 250, { marks: { 'mail:den': 1, 'den:welcomed': 1 } });
+  await page.goto('./#/den');
+  await expect(page.getByTestId('calendar-count')).toHaveText('0 of 24');
+  await expect(page.getByTestId('door-13'), 'not yet').toBeDisabled();
+  await expect(page.getByTestId('trinket-snowflake'), 'not yet earned').not.toHaveAttribute('aria-pressed');
+
+  await page.getByTestId('door-2').click();
+  await expect(page.getByTestId('calendar-gift')).toContainText('door two');
+  await page.getByTestId('door-12').click();
+  await expect(page.getByTestId('calendar-gift')).toContainText('door twelve');
+  await expect(page.getByTestId('calendar-count')).toHaveText('2 of 24');
+  await expect(page.getByTestId('trinket-snowflake'), 'the prize behind door twelve').toHaveAttribute('aria-pressed', 'false');
+
+  await page.reload();
+  await expect(page.getByTestId('calendar-count'), 'opened doors stay open').toHaveText('2 of 24');
+});
+
+test('outside winter there is no calendar on the wall', async ({ page }) => {
+  await seedLibrary(page, 250, { marks: { 'mail:den': 1, 'den:welcomed': 1 } });
+  await page.goto('./#/den');
+  await expect(page.getByTestId('notebook')).toBeVisible();
+  await expect(page.getByTestId('calendar')).toHaveCount(0);
+});

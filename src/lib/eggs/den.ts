@@ -10,6 +10,8 @@ import { latestChoiceAt } from './ledger';
 import { seasonStartDay, type Season } from './seasons';
 import { SEASON_LOOKS } from './content/seasons';
 import { appDayKey } from '../domain/time';
+import { RIDDLE_PREFIX } from './riddles';
+import { doorEverOpened } from './advent';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -91,6 +93,10 @@ export function momentsSeen(marks: Readonly<Record<string, number>>): number {
 }
 
 const duelWins = (p: DenProgress) => p.marks[DEN_MARKS.duelsWon] ?? 0;
+/** Whether one of ENTROPY's riddles has been solved (see ./riddles). */
+const riddle = (id: string) => (p: DenProgress) => p.marks[`${RIDDLE_PREFIX}${id}`] !== undefined;
+/** What a locked riddle prize says it takes. */
+const NOTEBOOK_HINT = 'a riddle in ENTROPY’s notebook';
 
 /** The crown's rung on the companion's ladder. */
 const CROWN_AT = PET_STAGES[PET_STAGES.length - 1]![0];
@@ -108,6 +114,18 @@ export const TRINKETS: readonly Trinket[] = [
   { id: 'die', emoji: '🎲', slot: 'held', label: 'a lucky die', hint: 'win ten duels', earned: (p) => duelWins(p) >= 10 },
   { id: 'star', emoji: '🌟', slot: 'float', label: 'a star', hint: 'fill the whole scrapbook', earned: (p) => p.unlocks.includes('seen-it-all') },
   { id: 'comet', emoji: '💫', slot: 'float', label: 'a pocket sparkle', hint: 'find ten of ENTROPY’s sparkles', earned: (p) => sparkleTally(p.marks) >= 10 },
+  // The prizes behind ENTROPY's riddles (see ./riddles).
+  { id: 'key', emoji: '🔑', slot: 'held', label: 'a little key', hint: NOTEBOOK_HINT, earned: riddle('keys') },
+  { id: 'cap', emoji: '🧢', slot: 'head', label: 'a cap', hint: NOTEBOOK_HINT, earned: riddle('steps') },
+  { id: 'candle', emoji: '🕯️', slot: 'held', label: 'a candle', hint: NOTEBOOK_HINT, earned: riddle('later') },
+  { id: 'specs', emoji: '👓', slot: 'eyes', label: 'reading glasses', hint: NOTEBOOK_HINT, earned: riddle('hands') },
+  { id: 'butterfly', emoji: '🦋', slot: 'float', label: 'a butterfly', hint: NOTEBOOK_HINT, earned: riddle('mirror') },
+  { id: 'kevin', emoji: '🐇', slot: 'float', label: 'Kevin (he insisted)', hint: NOTEBOOK_HINT, earned: riddle('morale') },
+  { id: 'moon', emoji: '🌙', slot: 'float', label: 'a little moon', hint: NOTEBOOK_HINT, earned: riddle('shelf') },
+  // Behind doors of ENTROPY's winter calendar (see ./advent), kept for good once found.
+  { id: 'snowflake', emoji: '❄️', slot: 'float', label: 'a snowflake that never melts', hint: 'the middle of a winter calendar', earned: (p) => doorEverOpened(p.marks, 12) },
+  { id: 'tree', emoji: '🎄', slot: 'held', label: 'a very small tree', hint: 'the last door of a winter calendar', earned: (p) => doorEverOpened(p.marks, 24) },
+  { id: 'scholar', emoji: '🎓', slot: 'head', label: 'a scholar’s cap', hint: 'the last page of ENTROPY’s notebook', earned: riddle('last') },
 ];
 
 /** The id a season's costume goes by when it is chosen on the shelf. */
@@ -210,4 +228,5 @@ export const SCRAPBOOK: Readonly<Record<MomentName, ScrapbookPage>> = {
   'eyes-in-the-dark': { name: 'Eyes in the Dark', hint: 'only in the dark half of october' },
   'snowfall': { name: 'Snowfall', hint: 'only in december' },
   'balloons': { name: 'Balloons', hint: 'only on a birthday (yours, or the app’s)' },
+  'countdown': { name: 'Countdown', hint: 'only as one year turns into the next' },
 };

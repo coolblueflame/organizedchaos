@@ -24,6 +24,9 @@
   import { SPARKLE_STORY_BEAT, sparkleTally } from './sparkles';
   import { seasonNow } from './seasonNow.svelte';
   import CompanionFigure from './CompanionFigure.svelte';
+  import { RIDDLES, openRiddles, riddleSolved } from './riddles';
+  import { ADVENT_DOORS, GIFTS, adventKey, doorsOpenable } from './advent';
+  import Glyph from '../ui/Glyph.svelte';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
@@ -51,6 +54,31 @@
   const welcomed = $derived(app.eggMarks[DEN_MARKS.welcomed] !== undefined);
   const seen = $derived(MOMENTS.filter((m) => app.eggMarks[`moment:${m}`] !== undefined));
   const sparkles = $derived(sparkleTally(app.eggMarks));
+  const riddles = $derived(openRiddles(app.eggMarks));
+  const riddlesSolved = $derived(RIDDLES.filter((r) => riddleSolved(app.eggMarks, r.id)).length);
+  const prizeOf = (id: string) => TRINKETS.find((t) => t.id === id)?.emoji ?? '';
+
+  /** ENTROPY's winter calendar (see ./advent): on the wall only while it is winter. */
+  const calendarUp = $derived(seasonNow.current === 'winter');
+  const calendarYear = $derived(Number(seasonNow.day.slice(0, 4)));
+  const openable = $derived(doorsOpenable(seasonNow.day));
+  const doorOpen = (n: number) => app.eggMarks[adventKey(calendarYear, n)] !== undefined;
+  const doorsDone = $derived(
+    Array.from({ length: ADVENT_DOORS }, (_, i) => i + 1).filter((n) => doorOpen(n)).length);
+  /** What the door tapped last had behind it. */
+  let gift = $state('');
+
+  /** Open a door (or look behind one again): its words, and its moment if it has one. */
+  function openDoor(n: number) {
+    if (!doorOpen(n)) {
+      if (n > openable) return;
+      haptic('success');
+      app.markEgg(adventKey(calendarYear, n));
+    }
+    const g = GIFTS[n - 1]!;
+    gift = g.text;
+    if (g.moment) presenter.show({ kind: 'moment', moment: g.moment });
+  }
 
   const mood = $derived.by(() => {
     const streak = app.eggStreak;
@@ -127,6 +155,40 @@
     </section>
 
     <DiceDuel />
+
+    {#if calendarUp}
+      <section class="calendar" data-testid="calendar">
+        <h2>ENTROPY’s winter calendar <span class="count" data-testid="calendar-count">{doorsDone} of {ADVENT_DOORS}</span></h2>
+        <div class="doors">
+          {#each Array.from({ length: ADVENT_DOORS }, (_, i) => i + 1) as n (n)}
+            <button class="door" class:open={doorOpen(n)} data-testid="door-{n}"
+              disabled={!doorOpen(n) && n > openable}
+              aria-label={doorOpen(n) ? `door ${n}, opened` : n > openable ? `door ${n}, not yet` : `open door ${n}`}
+              onclick={() => openDoor(n)}>{n}</button>
+          {/each}
+        </div>
+        <p class="dim" data-testid="calendar-gift">{gift || '// one door a day. a door you missed stays shut until you get to it.'}</p>
+      </section>
+    {/if}
+
+    <section class="notebook" data-testid="notebook">
+      <h2>ENTROPY’s notebook <span class="count" data-testid="notebook-count">{riddlesSolved} of {RIDDLES.length}</span></h2>
+      <p class="dim">// answers go in the search bar. ENTROPY is watching it.</p>
+      {#each riddles as r (r.id)}
+        {@const solved = riddleSolved(app.eggMarks, r.id)}
+        <div class="riddle" class:solved data-testid="riddle-{r.id}">
+          <p>{r.text}</p>
+          {#if solved}
+            <p class="answer"><Glyph name="check" size={11} /> {r.answers[0]} <span class="prize">{prizeOf(r.reward)}</span></p>
+          {/if}
+        </div>
+      {/each}
+      {#if riddles.length < RIDDLES.length}
+        <p class="dim">// {RIDDLES.length - riddles.length} more pages, stuck together.</p>
+      {:else if riddlesSolved === RIDDLES.length}
+        <p class="dim" data-testid="notebook-blank">// the last page is blank, with a pencil beside it. for whatever you want to figure out next.</p>
+      {/if}
+    </section>
 
     <section class="shelf">
       <h2>the shelf <span class="count">{TRINKETS.filter((t) => t.earned(progress)).length} of {TRINKETS.length}</span></h2>
@@ -223,6 +285,28 @@
   .name { margin: 0; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text); }
   .mood { margin: 0; font-family: var(--font-mono); font-size: 0.72rem; color: var(--dim); }
 
+  .doors { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0; }
+  .door {
+    aspect-ratio: 1; display: grid; place-items: center;
+    background: var(--bg1); border: 1px solid var(--acc-cyan); border-radius: 8px;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.85rem; cursor: pointer;
+  }
+  /* An opened door reads as lit from inside; a door not yet due, as shut. */
+  .door.open { background: rgb(121 192 255 / 0.18); color: var(--text); border-style: solid; }
+  .door:disabled { border-style: dashed; border-color: var(--line); color: var(--dim); cursor: default; }
+  .calendar [data-testid='calendar-gift'] { min-height: 2.6em; }
+  .notebook { display: flex; flex-direction: column; gap: 8px; }
+  .riddle {
+    background: var(--bg1); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .riddle p { margin: 0; font-size: 0.86rem; line-height: 1.5; }
+  .riddle.solved { border-style: solid; border-color: rgb(210 168 255 / 0.5); }
+  .riddle.solved > p:first-child { color: var(--dim); }
+  .riddle .answer {
+    margin-top: 6px; display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 0.78rem; color: var(--acc-purple);
+  }
+  .prize { font-size: 1rem; }
   .kind {
     margin: 10px 0 6px; font-family: var(--font-mono); font-size: 0.66rem; font-weight: 400;
     text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim);

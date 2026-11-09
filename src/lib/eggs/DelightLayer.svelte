@@ -15,7 +15,7 @@
   const CANVAS_MOMENTS = new Set([
     'matrix-rain', 'starfield', 'confetti-storm', 'fireworks', 'bubbles', 'meteor-shower', 'petals',
     'lava-lamp', 'card-cascade', 'level-clear', 'constellation', 'fireflies',
-    'eyes-in-the-dark', 'snowfall', 'balloons',
+    'eyes-in-the-dark', 'snowfall', 'balloons', 'countdown',
   ]);
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
@@ -685,6 +685,38 @@
         raf = requestAnimationFrame(draw);
       };
       draw();
+    } else if (current.moment === 'countdown') {
+      // Ten to one, each number popping in large and settling, then the new
+      // year arrives in fireworks from the shared particle layer.
+      const t0 = performance.now();
+      const STEP = 0.6;
+      let bursts = 0;
+      const draw = () => {
+        const t = (performance.now() - t0) / 1000;
+        const size = Math.min(W, H);
+        ctx.clearRect(0, 0, W, H);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffd479';
+        if (t < STEP * 10) {
+          const k = (t % STEP) / STEP; // 0 → 1 through one number
+          const scale = 1.5 - 0.5 * Math.min(1, k * 3);
+          ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+          ctx.font = `bold ${Math.round(size * 0.32 * scale)}px ui-monospace, monospace`;
+          ctx.fillText(String(10 - Math.floor(t / STEP)), W / 2, H / 2);
+        } else {
+          if (bursts < 6 && t > STEP * 10 + bursts * 0.35) {
+            burstAt(W * (0.15 + Math.random() * 0.7), H * (0.15 + Math.random() * 0.4), { count: 26, power: 1.2 });
+            bursts += 1;
+          }
+          ctx.globalAlpha = Math.min(1, (t - STEP * 10) / 0.4);
+          ctx.font = `bold ${Math.round(size * 0.09)}px ui-monospace, monospace`;
+          ctx.fillText('HAPPY NEW YEAR', W / 2, H / 2);
+        }
+        ctx.globalAlpha = 1;
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     } else if (current.moment === 'fireflies') {
       // A summer field at dusk: soft lights drift and blink on and off. Each
       // glow is drawn as a gradient, never a filter, so nothing here asks
@@ -986,6 +1018,7 @@
   .m-eyes-in-the-dark { background: rgb(3, 3, 5); }
   .m-snowfall { background: rgba(10, 16, 28, 0.88); }
   .m-balloons { background: rgba(11, 14, 20, 0.55); }
+  .m-countdown { background: rgba(6, 9, 18, 0.92); }
   .m-power-off { background: #030405; display: grid; place-items: center; }
   .crt-off {
     position: absolute; inset: 0; background: #eaf4ff;

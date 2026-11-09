@@ -49,6 +49,7 @@
   .slot-head { left: 50%; top: -34%; font-size: 0.56em; transform: translateX(-50%); }
   /* Flatter than a hat, so they sit lower to rest on the head rather than hover over it. */
   .slot-head.item-bow, .slot-head.item-flower { top: -20%; }
+  .slot-head.item-cap { top: -26%; }
   .slot-eyes { left: 50%; top: 15%; font-size: 0.64em; transform: translateX(-50%); }
   /* Turned on its side, a scarf wraps under the chin instead of hanging over the snout. */
   .slot-neck { left: 50%; bottom: -20%; font-size: 0.6em; transform: translateX(-50%) rotate(-78deg); }

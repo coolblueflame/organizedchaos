@@ -14,7 +14,7 @@ export const DEN_WELCOME =
   'there is a scrapbook, a shelf of small hats, and a table with dice on it. the dice are mine. you may borrow them.';
 
 /** How to come back, said once on the welcome card and quietly at the bottom of the room. */
-export const DEN_WAY_BACK = 'to come back: press and hold your companion on the home screen.';
+export const DEN_WAY_BACK = 'to come back: tap the den at the top of the home screen, or press and hold your companion.';
 
 /** What the companion says when poked in its own room. */
 export const DEN_LINES: readonly string[] = [
