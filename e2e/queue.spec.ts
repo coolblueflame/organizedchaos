@@ -165,17 +165,31 @@ test('check-off drains the queue; clear is two-tap and undoable', async ({ page 
   await expect.poll(() => queueNames(page)).toEqual(['two']);
 });
 
-test('tapping a queued task opens THAT task, expanded', async ({ page }) => {
+test('tapping a queued task opens its editor in place, so the plan can be worked down without leaving it', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Plans');
-  await addTask(page, 'the one I queued');
-  await queueByEditor(page, 'the one I queued');
+  await addTask(page, 'first queued');
+  await addTask(page, 'second queued');
+  await queueByEditor(page, 'first queued');
+  await queueByEditor(page, 'second queued');
   await page.getByTestId('back').click();
 
-  // Pre-fix this landed on the list with nothing open — you then had to go
-  // find the row you were just looking at (2026-08-19 report).
   await page.locator('[data-queue-row] .q-main').first().click();
-  await expect(page.getByTestId('task-name-input')).toHaveValue('the one I queued');
+  await expect(page.getByTestId('task-name-input')).toHaveValue('first queued');
+  await expect(page.getByTestId('queue-section'), 'still on Home, in the queue').toBeVisible();
+
+  // Edit in place: the rename sticks and the queue keeps its order.
+  await page.getByTestId('task-name-input').fill('first, renamed');
+  await page.getByTestId('task-name-input').press('Enter');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
+  await expect.poll(() => queueNames(page)).toEqual(['first, renamed', 'second queued']);
+
+  // And straight on to the next one.
+  await page.locator('[data-queue-row] .q-main').nth(1).click();
+  await expect(page.getByTestId('task-name-input')).toHaveValue('second queued');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('task-name-input')).toHaveCount(0);
+  await expect(page.getByTestId('queue-section')).toBeVisible();
 });
 
 test('a completed ritual leaves the day queue', async ({ page }) => {

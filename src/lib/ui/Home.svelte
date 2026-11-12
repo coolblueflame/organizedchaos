@@ -39,6 +39,8 @@
   import { haptic } from './fx/haptics';
   import Glyph from './Glyph.svelte';
   import VaultToggle from './VaultToggle.svelte';
+  import TaskRow from './TaskRow.svelte';
+  import { closeOnOutsideOrEscape } from './dismiss';
   import { celebrateFromElement } from './fx/celebrate';
   import { completionCounts } from '../domain/stats';
 
@@ -318,6 +320,24 @@
     withoutLocked(queueTasks, app.state.lists, lock.unlocked), clock.now.getTime()));
 
   /** The rows to render: the live drag order while a drag is in flight. */
+  /**
+   * The queued task open for editing in place, if any. Editing here rather
+   * than jumping to the task's list keeps the reader in the plan, so they can
+   * work down it without losing their place.
+   */
+  let queueEditId = $state<string | null>(null);
+  // Only "open" while that task is still in the queue: a task completed from
+  // its own editor leaves the queue, and a stale id would swallow the next Escape.
+  $effect(() => closeOnOutsideOrEscape(
+    () => queueEditId !== null && shownQueue.some((t) => t.id === queueEditId),
+    () => (queueEditId = null)));
+
+  /** Open a queued task's editor in place, or close it if it is the one open. */
+  function toggleQueueEdit(id: string) {
+    queueEditId = queueEditId === id ? null : id;
+    if (queueEditId) void app.markReviewed(id);
+  }
+
   const shownQueue = $derived.by(() => {
     const { active, snoozed } = queueParts;
     if (!queueOrder) return [...active, ...snoozed];
@@ -588,9 +608,13 @@
       {#each shownQueue.slice(0, 80) as t, i (t.id)}
         {@const out = queueParts.snoozed.includes(t)}
         <div class="q-row" class:lifted={queueDragId === t.id} class:snoozed={out}
+          class:editing={queueEditId === t.id}
           data-queue-row={t.id} data-queue-snoozed={out ? '' : undefined} data-testid="queue-row-{t.id}"
           animate:flip={{ duration: queueDragId ? rowFlipMs : 0 }}>
-          {#if out}
+          {#if queueEditId === t.id}
+            <!-- The same row-and-editor every list uses, opened in place. -->
+            <TaskRow task={t} showList expanded ontoggle={() => toggleQueueEdit(t.id)} />
+          {:else if out}
             <!-- Out for the day: not draggable, and the moon says why. -->
             <span class="list-grip q-out" data-testid="queue-snoozed-{t.id}"
               title="not today — back in its place tomorrow" aria-label="snoozed until tomorrow">
@@ -604,19 +628,18 @@
             </button>
             <span class="q-pos">{i + 1}</span>
           {/if}
+          {#if queueEditId !== t.id}
           <!-- Celebrated like every other checkbox in the app (2026-08-22
                report: the queue was the one that finished in silence). -->
           <button class="q-check" data-testid="queue-check-{t.id}" aria-label="mark done"
             onclick={(e) => completeFromQueue(e, t.id)}><Glyph name="box" size={15} /></button>
-          <!-- The deep link, not just the list: tapping a plan entry means
-               "show me THIS one" — landing on the list and hunting for the
-               row again was the whole trip twice (2026-08-19 report). -->
-          <button class="q-main" onclick={() => navigate({ name: 'list', id: t.listId, taskId: t.id })}>
+          <button class="q-main" data-testid="queue-open-{t.id}" onclick={() => toggleQueueEdit(t.id)}>
             <span class="q-name">{t.name || 'untitled'}</span>
             <span class="q-list">{listTitle(t.listId)}</span>
           </button>
           <button class="q-remove" data-testid="queue-remove-{t.id}" aria-label="remove from queue"
             onclick={() => void app.removeFromQueue(t.id)}><span aria-hidden="true">✕</span></button>
+          {/if}
         </div>
       {/each}
       {#if shownQueue.length > 80}
@@ -874,6 +897,8 @@
     background: var(--bg1); border: 1px solid color-mix(in srgb, var(--acc-cyan) 25%, var(--line));
     border-radius: 8px; padding: 6px 8px 6px 2px;
   }
+  /* Open for editing: the task row brings its own frame. */
+  .q-row.editing { display: block; padding: 0; background: none; border: none; }
   .q-row.lifted {
     border-color: var(--acc-cyan);
     box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
