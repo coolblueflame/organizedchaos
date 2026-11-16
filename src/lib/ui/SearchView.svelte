@@ -13,7 +13,6 @@
   import { searchQuery } from './searchState.svelte';
   import TaskRow from './TaskRow.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
-  import { adoptKeyboard } from './keyboardBridge';
   import { presenter } from '../eggs/presenter.svelte';
   import { riddleAnsweredBy } from '../eggs/riddles';
   import { denOpen } from '../eggs/den';
@@ -76,8 +75,11 @@
   /** True while the box is ahead of the results, so the count can't read as final. */
   const scanning = $derived(scanned !== searchQuery.value);
 
+  // Focus on mount. Home's search bar renders this screen inside its tap
+  // (navigateNow), so on iOS this focus still counts as the tap's and the
+  // keyboard opens with it.
   $effect(() => {
-    adoptKeyboard(inputEl); // takes over the keyboard the home tap primed
+    inputEl?.focus();
   });
 
   $effect(() => closeOnOutsideOrEscape(() => editingTaskId !== null, () => (editingTaskId = null)));

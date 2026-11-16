@@ -238,10 +238,15 @@ test('new todo focuses its name field in the same gesture', async ({ page }) => 
   await expect(page.getByTestId('task-name-input')).toBeFocused();
 });
 
-test('the search bar hands focus to the search field in one tap', async ({ page }) => {
+test('the search bar focuses the search field inside its own tap', async ({ page }) => {
+  // iOS opens the keyboard only for a focus made within the tap's event turn,
+  // so the search field must be focused by the time click() RETURNS, not a
+  // task later. The keyboard itself is only provable on a real device.
   await reset(page);
-  await page.getByTestId('search-entry').click();
+  const focusedInTap = await page.evaluate(() => {
+    (document.querySelector('[data-testid="search-entry"]') as HTMLElement).click();
+    return (document.activeElement as HTMLElement | null)?.dataset.testid ?? null;
+  });
+  expect(focusedInTap).toBe('search-input');
   await expect(page.getByTestId('search-input')).toBeFocused();
-  // The keyboard bridge cleans up after itself.
-  await expect(page.locator('#kb-bridge')).toHaveCount(0);
 });

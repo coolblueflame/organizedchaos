@@ -7,6 +7,8 @@
  * Unknown hashes fall back to home. Back/forward work for free via hashchange.
  */
 
+import { flushSync } from 'svelte';
+
 export type Route =
   | { name: 'home' }
   | { name: 'list'; id: string; taskId?: string }
@@ -131,6 +133,21 @@ export function liveRoute(): Route {
 
 export function navigate(r: Route): void {
   window.location.hash = toHash(r);
+}
+
+/**
+ * Navigates AND renders the new screen before returning, instead of waiting
+ * for the async hashchange. For a tap whose job is to land the caret in the
+ * new screen's field: iOS opens the software keyboard only for a focus made
+ * inside the tap's own event turn, and a field that mounts a task later gets
+ * focus with no keyboard (a second tap needed). The later hashchange then
+ * finds the route already current and changes nothing but the scroll.
+ */
+export function navigateNow(r: Route): void {
+  navigate(r);
+  router.current = r;
+  window.scrollTo(0, 0);
+  flushSync();
 }
 
 export function back(): void {

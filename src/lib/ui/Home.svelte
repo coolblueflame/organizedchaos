@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import { app } from '../state/app.svelte';
-  import { navigate } from './router.svelte';
+  import { navigate, navigateNow } from './router.svelte';
   import { toast } from './toast.svelte';
   import { openTasks } from '../domain/views';
   import { describeWindow, isListActiveAt } from '../domain/schedule';
@@ -17,7 +17,6 @@
   import { isRitualDue, isRitualTask } from '../domain/ritual';
   import { clock } from './clock.svelte';
   import { createDragScroller } from './dragScroll';
-  import { primeKeyboard } from './keyboardBridge';
   import { searchQuery } from './searchState.svelte';
   import ListSettings from './ListSettings.svelte';
   import { flip } from 'svelte/animate';
@@ -477,7 +476,7 @@
 
   <div class="capture-row">
     <button class="search-bar" data-testid="search-entry"
-      onclick={() => { searchQuery.beginFresh(); primeKeyboard(); navigate({ name: 'search' }); }}>
+      onclick={() => { searchQuery.beginFresh(); navigateNow({ name: 'search' }); }}>
       <span class="mag">⌕</span> search everything…
     </button>
     {#if app.state.lists.length > 0}
