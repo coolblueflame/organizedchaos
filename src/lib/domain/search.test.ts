@@ -75,4 +75,26 @@ describe('searchTasks', () => {
     expect(searchTasks([live], '   ', settings, now))
       .toEqual({ open: [], completed: [], openTotal: 0, completedTotal: 0, terms: [] });
   });
+
+  it('keeps the open-for-editing task even once an edit stops it matching', () => {
+    const editing = task({ priority: 'low', name: 'do', id: 'kept' }); // was "yoga"
+    const other = task({ priority: 'low', name: 'yoga mat' });
+    const res = searchTasks([editing, other], 'yoga', settings, now, undefined, 'kept');
+    expect(names(res.open).sort()).toEqual(['do', 'yoga mat']);
+    // Without the keep it is fair game again.
+    expect(names(searchTasks([editing, other], 'yoga', settings, now).open)).toEqual(['yoga mat']);
+  });
+
+  it('never slices the kept task off the end of a long result list', () => {
+    const many = Array.from({ length: 5 }, (_, i) => task({ priority: 'high', name: `milk ${i}` }));
+    const kept = task({ priority: 'low', name: 'milk kept', id: 'low-kept' });
+    const res = searchTasks([...many, kept], 'milk', settings, now, 3, 'low-kept');
+    expect(res.open).toHaveLength(3);
+    expect(names(res.open)).toContain('milk kept');
+  });
+
+  it('a deleted kept task still disappears', () => {
+    const gone = { ...task({ priority: 'low', name: 'milk', id: 'gone' }), deleted: true };
+    expect(searchTasks([gone], 'milk', settings, now, undefined, 'gone').open).toEqual([]);
+  });
 });

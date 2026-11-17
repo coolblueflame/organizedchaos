@@ -121,3 +121,30 @@ test('the "/" shortcut opens search, and results are editable in place', async (
   await page.getByTestId('priority-high').click();
   await expect(page.getByTestId('task-name-input')).toHaveValue('water the ferns');
 });
+
+test('renaming an open result so it no longer matches keeps it until it closes', async ({ page }) => {
+  await reset(page);
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Errands');
+  await page.getByTestId('new-list-input').press('Enter');
+  const id = await addTask(page, 'Yoga');
+  await page.getByTestId('back').click();
+
+  await page.keyboard.press('/');
+  await page.getByTestId('search-input').fill('yoga');
+  await page.getByText('Yoga', { exact: true }).click();
+
+  // Retyped a key at a time, as a person does: "Do" alone no longer matches.
+  const name = page.getByTestId('task-name-input');
+  await name.press('ControlOrMeta+a');
+  await name.pressSequentially('Do');
+  await page.waitForTimeout(400); // past the search's own typing lag
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Do');
+  await expect(page.getByTestId(`task-row-${id}`)).toBeVisible();
+
+  // Closed, it is fair game: no longer matching, it leaves the results.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId(`task-row-${id}`)).toHaveCount(0);
+  await expect(page.getByTestId('search-empty')).toBeVisible();
+});

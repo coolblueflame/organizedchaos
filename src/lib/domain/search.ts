@@ -64,6 +64,7 @@ export function searchTasks(
   settings: Settings,
   now: Date,
   limit = SEARCH_LIMIT,
+  keepId?: string,
 ): SearchResults {
   const needles = terms(query);
   if (needles.length === 0) {
@@ -73,7 +74,10 @@ export function searchTasks(
   const open: Task[] = [];
   const completed: Task[] = [];
   for (const task of tasks) {
-    if (task.deleted || !matches(task, needles)) continue;
+    // The kept task (one open in its editor) counts as a match even after an
+    // edit stops it matching, so renaming "yoga" to "do yoga" can't pull the
+    // row out from under the caret mid-word.
+    if (task.deleted || (task.id !== keepId && !matches(task, needles))) continue;
     (task.completedAt === undefined ? open : completed).push(task);
   }
 
@@ -95,10 +99,26 @@ export function searchTasks(
   completed.sort((a, b) => b.completedAt! - a.completedAt!);
 
   return {
-    open: open.slice(0, limit),
-    completed: completed.slice(0, limit),
+    open: head(open, limit, keepId),
+    completed: head(completed, limit, keepId),
     openTotal: open.length,
     completedTotal: completed.length,
     terms: needles,
   };
+}
+
+/**
+ * The first `limit` tasks, with the kept task guaranteed a place: an edit
+ * that re-ranks it (a lower priority) must not slice it off the end.
+ * @param tasks Sorted matches.
+ * @param limit Most rows to return.
+ * @param keepId The task that must stay visible, if it is among `tasks`.
+ * @returns At most `limit` tasks.
+ */
+function head(tasks: Task[], limit: number, keepId: string | undefined): Task[] {
+  const shown = tasks.slice(0, limit);
+  if (keepId === undefined || shown.some((t) => t.id === keepId)) return shown;
+  const kept = tasks.find((t) => t.id === keepId);
+  if (kept && shown.length > 0) shown[shown.length - 1] = kept;
+  return shown;
 }

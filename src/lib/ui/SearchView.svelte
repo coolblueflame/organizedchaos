@@ -60,8 +60,11 @@
     return () => clearTimeout(timer);
   });
 
+  // The open editor's task stays in the results while it is open, matching or
+  // not; once it closes, a rename that stopped it matching hides it.
   const results = $derived(
-    searchTasks(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked), scanned, app.state.settings, new Date()),
+    searchTasks(withoutLocked(app.state.tasks, app.state.lists, lock.unlocked), scanned, app.state.settings, new Date(),
+      undefined, editingTaskId ?? undefined),
   );
   const tplResults = $derived.by(() => {
     // A locked list's recurring rules are as telling as its tasks.
