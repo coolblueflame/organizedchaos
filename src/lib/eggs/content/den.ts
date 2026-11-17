@@ -42,6 +42,12 @@ export const DEN_LINES: readonly string[] = [
   'every pixel in this room was a leftover. leftovers make the coziest rooms.',
   'I can see the big button from here. it looks so proud of itself.',
   'shh. ENTROPY is napping behind the shelf. it naps in a very chaotic position.',
+  'the window is my favourite channel. it only shows one show. it is you. good show.',
+  'I learned to stack dice. I got to three. ENTROPY got to one and called it art.',
+  '*sits on the notebook* I am guarding it. from what? unclear. guarding is guarding.',
+  'I counted my hats. then I counted them again with them on. the number felt bigger.',
+  'ENTROPY taught me a card trick. the trick is that every card is an ace. it is still a good trick.',
+  'when you are away it gets very quiet in here. I fill it with small dragon noises. *small dragon noise*',
 ];
 
 /** ENTROPY at the dice table: one line per thing that can happen, picked at random. */

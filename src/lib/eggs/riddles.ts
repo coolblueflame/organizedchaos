@@ -36,6 +36,12 @@ export const RIDDLES: readonly Riddle[] = [
     text: 'I live under the stats screen. I am in charge of morale. I am very still. what is my name?' },
   { id: 'shelf', reward: 'moon', answers: ['dark', 'darkness'],
     text: 'the more of me there is, the less you see. the companion was afraid of me under the shelf, once. what am I?' },
+  { id: 'echo', reward: 'shell', answers: ['echo', 'echoes'],
+    text: 'I speak without a mouth and answer without being asked. shout in the den and I shout right back. what am I?' },
+  { id: 'map', reward: 'compass', answers: ['map', 'maps'],
+    text: 'I have cities but no houses, forests but no trees, and rivers with no water. what am I?' },
+  { id: 'secret', reward: 'bubbles', answers: ['secret', 'secrets'],
+    text: 'once I am shared, I am gone. ENTROPY keeps several. Kevin keeps one. what am I?' },
   { id: 'last', reward: 'scholar', answers: ['joke', 'jokes'],
     text: 'I can be cracked, made, told and played. ENTROPY tells terrible ones. what am I?' },
 ];

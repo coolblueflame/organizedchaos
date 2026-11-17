@@ -227,6 +227,24 @@ export const STORY_BEATS: readonly string[] = [
   'the companion has decided the den needs a window seat, and that the window seat is the human’s. it sits next to it every evening, just in case.',
   'I counted the chapters tonight. fourteen. ENTROPY counted again and got fifteen. it is counting the one you are writing. I let it.',
   'chapter fourteen ends where they all do: you, me, ENTROPY, a companion with very good posture, and Kevin, keeping the dice warm for whenever you are back. to be continued. 💜',
+  // — chapter fifteen —
+  'chapter fifteen. ENTROPY has decided the den needs a library. it has one book. the book is the notebook. it has shelved it very carefully, face out.',
+  'the companion built the window seat out of cushions. nobody knows where it found them. ENTROPY suspects the scrapbook is missing a few pages.',
+  'I asked ENTROPY why it never tidies the dice. it said "a tidy die is a die that has given up." then it lined them up anyway, just for a second, to see how it felt.',
+  'Kevin has started collecting things. so far: one thread, a crumb, and the idea of a hat. he keeps them under the shelf. he calls it "the vault."',
+  'ENTROPY asked what the longest list in the world is. I said probably someone’s "someday" list. it went quiet, then whispered "someday is my favourite day."',
+  'the companion tried to sketch the bigger crown. it drew a crown, then a second crown on top. ENTROPY said "yes. exactly that. but more glitter."',
+  'tonight the dice rolled all sixes. ENTROPY looked very guilty. it says it was luck. the dice say nothing, which is what dice say when they are covering for someone.',
+  'chapter fifteen ends with a library of one book, a vault of one crumb, and a window seat with nobody in it yet. the companion is keeping it warm. 💜',
+  // — chapter sixteen —
+  'chapter sixteen. ENTROPY woke up with an idea: a parade. for what? "for finished things." every checkmark gets a tiny float. it has started with the small ones.',
+  'the parade route goes around the den once. it takes four seconds. ENTROPY says length is not the point. Kevin leads it. he does not move. the parade goes around him.',
+  'the companion asked to be in the parade. ENTROPY made it grand marshal. it did not know what that was. it put on every hat, to be safe.',
+  'I asked ENTROPY if it ever wants a day off from chaos. it said "a day off from chaos is just order in a disguise." then it took a nap, which I think was a yes.',
+  'the notebook’s blank page has a doodle on it now: a little door. ENTROPY says it did not draw it. the companion says it did not draw it. Kevin is very quiet.',
+  'ENTROPY counted every checkmark in the archive and lost count twice. it has decided the real number is "lots," which it calls the most accurate number there is.',
+  'the companion told me a secret: the backlog does not scare it anymore. "it is just tasks waiting their turn," it said. "like me in the parade line."',
+  'chapter sixteen ends with confetti on every surface, a parade that went around the den forty times, and a door doodle nobody will own up to. to be continued. 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */

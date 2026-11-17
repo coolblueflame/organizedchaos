@@ -201,7 +201,7 @@ test('a crowned companion can trade the crown for another hat, and wear one thin
 test('a riddle in the notebook is answered in the search bar, opening the next page and a prize', async ({ page }) => {
   await seedLibrary(page, 250, { marks: { 'mail:den': 1, 'den:welcomed': 1 } });
   await page.goto('./#/den');
-  await expect(page.getByTestId('notebook-count')).toHaveText('0 of 8');
+  await expect(page.getByTestId('notebook-count')).toHaveText('0 of 11');
   await expect(page.getByTestId('riddle-keys')).toBeVisible();
   await expect(page.getByTestId('riddle-hands'), 'only the first pages are open').toHaveCount(0);
 
@@ -215,7 +215,7 @@ test('a riddle in the notebook is answered in the search bar, opening the next p
   await expect(page.getByTestId('delight-note')).toContainText('solved');
 
   await page.goto('./#/den');
-  await expect(page.getByTestId('notebook-count')).toHaveText('1 of 8');
+  await expect(page.getByTestId('notebook-count')).toHaveText('1 of 11');
   await expect(page.getByTestId('riddle-keys')).toContainText('keyboard');
   await expect(page.getByTestId('riddle-hands'), 'a solve opens one more page').toBeVisible();
   await expect(page.getByTestId('trinket-key'), 'the prize is on the shelf').toHaveAttribute('aria-pressed', 'false');

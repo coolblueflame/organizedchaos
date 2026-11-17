@@ -125,6 +125,9 @@ export const TRINKETS: readonly Trinket[] = [
   // Behind doors of ENTROPY's winter calendar (see ./advent), kept for good once found.
   { id: 'snowflake', emoji: '❄️', slot: 'float', label: 'a snowflake that never melts', hint: 'the middle of a winter calendar', earned: (p) => doorEverOpened(p.marks, 12) },
   { id: 'tree', emoji: '🎄', slot: 'held', label: 'a very small tree', hint: 'the last door of a winter calendar', earned: (p) => doorEverOpened(p.marks, 24) },
+  { id: 'shell', emoji: '🐚', slot: 'held', label: 'a seashell (it hums)', hint: NOTEBOOK_HINT, earned: riddle('echo') },
+  { id: 'compass', emoji: '🧭', slot: 'held', label: 'a compass', hint: NOTEBOOK_HINT, earned: riddle('map') },
+  { id: 'bubbles', emoji: '🫧', slot: 'float', label: 'some bubbles', hint: NOTEBOOK_HINT, earned: riddle('secret') },
   { id: 'scholar', emoji: '🎓', slot: 'head', label: 'a scholar’s cap', hint: 'the last page of ENTROPY’s notebook', earned: riddle('last') },
 ];
 

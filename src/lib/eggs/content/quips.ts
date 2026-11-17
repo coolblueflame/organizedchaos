@@ -401,6 +401,12 @@ export const QUEUE_LINES: readonly string[] = [
   'Front of the line? Not yet. But it’s in the building.',
   'Deck stacked. The deal comes whenever you press the button.',
   'Ah, premeditated productivity. The best kind.',
+  'In the queue. It can’t hide from you now.',
+  'Lined up and ready. The dice are taking notes.',
+  'Booked. Future-you has a reservation.',
+  'One more for the itinerary.',
+  'The plan grows. Chaos takes a respectful step back.',
+  'Penciled in. In pen. Lightly.',
 ] as const;
 
 /**
