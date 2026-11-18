@@ -79,6 +79,7 @@
   import { celebrateFromElement } from './fx/celebrate';
   import { haptic } from './fx/haptics';
   import Linkify from './Linkify.svelte';
+  import { onlySkippedToday } from '../domain/skip';
 
   let {
     task, expanded = false, ontoggle, onenter, showList = false, completedMode = false,
@@ -117,6 +118,8 @@
      window mid-stare is not worth a ticking timer, and every navigation or edit
      re-renders anyway. */
   const ritual = $derived(ritualState(task, new Date(), app.state.settings.rolloverHour));
+  /** A day marked only by skips is not done, and must not read as done. */
+  const ritualSkipped = $derived(onlySkippedToday(task, new Date(), app.state.settings.rolloverHour));
   /** A page marker so you can see there's detail worth expanding for. */
   const hasNotes = $derived(task.notes.trim().length > 0);
   /** A checklist inside the notes upgrades the marker to a live count. */
@@ -331,10 +334,10 @@
           </span>
         {/if}
         {#if isRitualTask(task) && !completedMode}
-          <span class="mark" class:ritual-due={ritual === 'due'} class:ritual-done={ritual === 'done'}
+          <span class="mark" class:ritual-due={ritual === 'due'} class:ritual-done={ritual === 'done' && !ritualSkipped}
             data-testid="ritual-mark-{task.id}">
             <Glyph name="period" size={11}
-              title={ritual === 'done' ? `done today · ${describeRitualTask(task)}`
+              title={ritual === 'done' ? `${ritualSkipped ? 'skipped' : 'done'} today · ${describeRitualTask(task)}`
                 : ritual === 'due' ? `due now · ${describeRitualTask(task)}`
                 : `daily · ${describeRitualTask(task)}`} />
           </span>

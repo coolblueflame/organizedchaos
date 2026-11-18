@@ -13,6 +13,7 @@
   import { app } from '../state/app.svelte';
   import { navigate } from './router.svelte';
   import { describeRitualTask, isRitualTask, ritualProgress, ritualState } from '../domain/ritual';
+  import { onlySkippedToday, skippedToday } from '../domain/skip';
   import type { Task } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import TaskEditor from './TaskEditor.svelte';
@@ -44,6 +45,7 @@
   );
 
   const stateOf = (t: Task) => ritualState(t, new Date(), app.state.settings.rolloverHour);
+  const onlySkipped = (t: Task) => onlySkippedToday(t, new Date(), app.state.settings.rolloverHour);
   const progressOf = (t: Task) => ritualProgress(t, new Date(), app.state.settings.rolloverHour);
   /** Per-window rituals stay tickable until every window is marked. */
   const dayDone = (t: Task) => {
@@ -105,15 +107,15 @@
               class="tick {tone}"
               data-testid="ritual-complete-{task.id}"
               disabled={dayDone(task)}
-              aria-label={dayDone(task) ? 'done today' : 'mark done for today'}
+              aria-label={dayDone(task) ? (onlySkipped(task) ? 'skipped today' : 'done today') : 'mark done for today'}
               onclick={() => void app.completeTask(task.id)}>
-              <Glyph name={dayDone(task) ? 'box-checked' : 'box'} size={16} />
+              <Glyph name={dayDone(task) && !onlySkipped(task) ? 'box-checked' : 'box'} size={16} />
             </button>
             {/if}
             <button class="info" data-testid="ritual-edit-{task.id}"
               onclick={() => (selecting ? togglePick(task.id) : (editingId = task.id))}>
               <span class="name">{task.name || 'untitled'}</span>
-              <span class="meta">{describeRitualTask(task)}{#if progressOf(task)}&nbsp;· {progressOf(task)!.done}/{progressOf(task)!.total} today{/if}</span>
+              <span class="meta">{describeRitualTask(task)}{#if progressOf(task)}&nbsp;· {progressOf(task)!.done}/{progressOf(task)!.total} today{/if}{#if skippedToday(task, new Date(), app.state.settings.rolloverHour)}&nbsp;· <span data-testid="ritual-skipped-{task.id}">skipped</span>{/if}</span>
             </button>
             {#if listName(task.listId)}
               <button class="go-list" data-testid="ritual-list-{task.id}"
@@ -129,7 +131,7 @@
 
   {@render section('due now', due, 'due')}
   {@render section('waiting for their window', waiting, 'waiting')}
-  {@render section('done today', done, 'done')}
+  {@render section(done.some(onlySkipped) ? 'done or skipped today' : 'done today', done, 'done')}
 
   {#if selecting}
     <div class="bulk" data-testid="rituals-bulk-bar">

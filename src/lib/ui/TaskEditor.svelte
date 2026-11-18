@@ -17,6 +17,7 @@
   import BlockedBy from './BlockedBy.svelte';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import { describeRecurrence } from './recurrenceText';
+  import { skipKind } from '../domain/skip';
   import { appDayKey } from '../domain/time';
   import { activeMs, formatElapsed } from '../domain/stats';
   import { liveQueueIds } from '../domain/dayQueue';
@@ -151,7 +152,7 @@
   async function removeRitual() {
     await app.patchTask(task.id, {
       ritual: undefined, rituals: undefined, ritualPerWindow: undefined,
-      ritualDoneDay: undefined, ritualDoneSlots: undefined,
+      ritualDoneDay: undefined, ritualDoneSlots: undefined, ritualSkips: undefined,
     });
     ritualOpen = false;
   }
@@ -348,6 +349,12 @@
       <span class="dot">≡</span>
       {queuePos === null ? 'add to queue' : `in queue · #${queuePos + 1}`}
     </button>
+    {#if skipKind(task, app.state.templates, new Date(), app.state.settings.rolloverHour)}
+      <button class="flow" data-testid="task-skip-round" title="skip until its next time, without counting it as done"
+        onclick={() => { flush(); void app.skipRound(task.id); }}>
+        <span class="dot">↷</span> skip round
+      </button>
+    {/if}
   </div>
   {/if}
 

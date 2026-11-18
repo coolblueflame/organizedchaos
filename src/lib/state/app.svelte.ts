@@ -7,7 +7,8 @@ import {
   DEFAULT_SETTINGS,
   type List, type RecurrenceMode, type RecurrenceTemplate, type SortMode, type Tag, type Task,
 } from '../domain/types';
-import { appDayKey, nextRolloverTs } from '../domain/time';
+import { appDayKey, dateKey, nextRolloverTs } from '../domain/time';
+import { skipKind } from '../domain/skip';
 import {
   alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, startsAfterToday, sweepSpawns,
 } from '../domain/recurrence';
@@ -940,7 +941,7 @@ export class AppStore {
    * @returns How many tasks changed.
    */
   async bulkSetRitual(taskIds: string[], windows: HoursRule[], perWindow: boolean): Promise<number> {
-    const RITUAL_FIELDS = ['ritual', 'rituals', 'ritualPerWindow', 'ritualDoneDay', 'ritualDoneSlots'] as const;
+    const RITUAL_FIELDS = ['ritual', 'rituals', 'ritualPerWindow', 'ritualDoneDay', 'ritualDoneSlots', 'ritualSkips'] as const;
     const targets = taskIds
       .map((id) => this.state.tasks.find((t) => t.id === id))
       .filter((t): t is Task => t !== undefined && !t.deleted && t.completedAt === undefined);
@@ -1642,6 +1643,103 @@ export class AppStore {
    * "Not Today": excluded from the randomizer pool until the next 4am rollover.
    * Touches NOTHING else — stays visible in lists/views and keeps inProgress.
    */
+  /**
+   * "Skip this round" (2026-11-18 ask, see domain/skip.ts): quiet a repeating
+   * copy or an owed ritual until its next time without counting it as done.
+   * No history record, no completion events. Undoable.
+   * @returns false when the task can't skip (see skipKind).
+   */
+  async skipRound(taskId: string): Promise<boolean> {
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    const now = new Date();
+    const rollover = this.state.settings.rolloverHour;
+    const kind = task ? skipKind(task, this.state.templates, now, rollover) : null;
+    if (!task || !kind) return false;
+    const priorCurrent = this.state.currentTask;
+    const wasCurrent = priorCurrent?.taskId === taskId;
+    // Put down first: it banks the clock and stops a timebox, which the
+    // snapshots below then capture as the state undo returns to.
+    if (wasCurrent) await this.clearCurrent();
+    const putBackCurrent = async () => {
+      if (!wasCurrent) return;
+      this.state.currentTaskUpdatedAt = await this.repo.setCurrentTask(priorCurrent);
+      this.state.currentTask = priorCurrent;
+    };
+    const name = task.name || 'task';
+
+    if (kind === 'repeat') {
+      const tpl = this.state.templates.find((t) => t.id === task.recurrenceId)!;
+      const priorNext = tpl.nextSpawnAt;
+      // Weekly and monthly rules are already armed for their next date; an
+      // after-completion rule is unarmed while its copy is open, and arms as
+      // if this round had been dealt with now.
+      const next = tpl.mode.kind === 'afterCompletion'
+        ? scheduleAfterCompletion(tpl, now, rollover) ?? undefined
+        : priorNext;
+      const rearm = async () => {
+        if (next !== priorNext) await this.updateRecurring(tpl.id, { nextSpawnAt: next });
+      };
+      await this.removeTask(taskId, { silent: true });
+      await rearm();
+      const when = next !== undefined ? ` - next on ${shortDay(dateKey(new Date(next)))}` : '';
+      this.pushUndo(`Skipped "${name}"${when}`, async () => {
+        await this.restoreTask(taskId);
+        if (next !== priorNext) await this.updateRecurring(tpl.id, { nextSpawnAt: priorNext });
+        await putBackCurrent();
+      }, async () => {
+        if (this.state.currentTask?.taskId === taskId) await this.clearCurrent();
+        await this.removeTask(taskId, { silent: true });
+        await rearm();
+      });
+      return true;
+    }
+
+    // A ritual: the same done-mark a completion would write, flagged as a skip.
+    const day = appDayKey(now, rollover);
+    const perWindow = isPerWindow(task);
+    const mark = perWindow ? ritualSlot(day, creditWindowIndex(task, now, rollover)) : day;
+    const slots = perWindow
+      ? [...(task.ritualDoneSlots ?? []).filter((x) => x.startsWith(`${day}#`)), mark]
+      : undefined;
+    const dayComplete = !perWindow || slots!.length >= ritualWindows(task).length;
+    const stamp: Partial<Task> = {
+      ...(slots ? { ritualDoneSlots: slots } : {}),
+      ...(dayComplete ? { ritualDoneDay: day } : {}),
+      ritualSkips: [...(task.ritualSkips ?? []).filter((k) => k === day || k.startsWith(`${day}#`)), mark],
+      // The clock resets as a completion's does: time banked on a skipped
+      // round must not land on the next real completion's record.
+      inProgress: false,
+      startedAt: undefined,
+      activeAccumulatedMs: undefined,
+      timeboxEndsAt: undefined,
+    };
+    const unstamp: Partial<Task> = {
+      ritualDoneDay: task.ritualDoneDay,
+      ritualDoneSlots: task.ritualDoneSlots ? [...task.ritualDoneSlots] : undefined,
+      ritualSkips: task.ritualSkips ? [...task.ritualSkips] : undefined,
+      inProgress: task.inProgress,
+      startedAt: task.startedAt,
+      activeAccumulatedMs: task.activeAccumulatedMs,
+      timeboxEndsAt: task.timeboxEndsAt,
+    };
+    // Same rule as a completion: a ritual owing nothing more today leaves the plan.
+    const leavesQueue = dayComplete && this.state.queueIds.includes(taskId);
+    await this.patchTask(taskId, stamp);
+    if (leavesQueue) await this.removeFromQueue(taskId);
+    this.pushUndo(`Skipped "${name}" ${dayComplete ? 'for today' : 'this time'}`, async () => {
+      await this.patchTask(taskId, unstamp);
+      if (leavesQueue && !this.state.queueIds.includes(taskId)) {
+        await this.writeQueue([...this.state.queueIds, taskId]);
+      }
+      await putBackCurrent();
+    }, async () => {
+      if (this.state.currentTask?.taskId === taskId) await this.clearCurrent();
+      await this.patchTask(taskId, stamp);
+      if (leavesQueue) await this.removeFromQueue(taskId);
+    });
+    return true;
+  }
+
   async sendNotToday(taskId: string): Promise<void> {
     const task = this.state.tasks.find((t) => t.id === taskId);
     const priorSnooze = task?.notTodayUntil;
@@ -2174,6 +2272,7 @@ export class AppStore {
       // Rituals, planning, and time-tracking exist only in this app.
       ritual: prior.ritual, rituals: prior.rituals, ritualPerWindow: prior.ritualPerWindow,
       ritualDoneDay: prior.ritualDoneDay, ritualDoneSlots: prior.ritualDoneSlots,
+      ritualSkips: prior.ritualSkips,
       order: prior.order, estimateHours: prior.estimateHours,
       timeboxMinutes: prior.timeboxMinutes, timeboxEndsAt: prior.timeboxEndsAt,
       activeMs: prior.activeMs, activeAccumulatedMs: prior.activeAccumulatedMs,

@@ -28,6 +28,7 @@
   import { lockedTaskIds } from '../domain/lock';
   import { lock } from './lock.svelte';
   import { liveQueueIds } from '../domain/dayQueue';
+  import { skipKind } from '../domain/skip';
   import { pickerListGroups } from '../domain/listOrder';
   import { SELF_CARE } from '../eggs/content/extras';
   import { pickFresh } from '../eggs/freshPick';
@@ -366,6 +367,12 @@
     redraw();
   }
 
+  async function skipRoundClick() {
+    if (!drawn) return;
+    await app.skipRound(drawn.id);
+    redraw();
+  }
+
   function accept(e: MouseEvent) {
     if (!drawn || accepting) return;
     accepting = true;
@@ -555,6 +562,10 @@
       <div class="secondary">
         <button data-testid="draw-not-now" disabled={accepting} onclick={notNowClick}>not now</button>
         <button data-testid="draw-not-today" disabled={accepting} onclick={notTodayClick}>not today</button>
+        {#if skipKind(drawn, app.state.templates, new Date(), app.state.settings.rolloverHour)}
+          <button data-testid="draw-skip-round" title="skip until its next time, without counting it as done" disabled={accepting}
+            onclick={skipRoundClick}>skip round</button>
+        {/if}
       </div>
       <button class="already" data-testid="draw-already-did"
         disabled={accepting} onclick={() => void alreadyDidIt()}>

@@ -16,6 +16,7 @@
   import { lock } from './lock.svelte';
   import Checklist from './Checklist.svelte';
   import Glyph from './Glyph.svelte';
+  import { skipKind } from '../domain/skip';
   import LinkChips from './LinkChips.svelte';
 
   /**
@@ -150,6 +151,12 @@
         onclick={() => { loopArmed = true; void app.sendNotToday(task!.id); }}>
         not today
       </button>
+      {#if skipKind(task!, app.state.templates, new Date(), app.state.settings.rolloverHour)}
+        <button class="later" data-testid="current-skip-round" title="skip until its next time, without counting it as done"
+          onclick={() => { loopArmed = true; void app.skipRound(task!.id); }}>
+          skip round
+        </button>
+      {/if}
     </div>
   </section>
   {/key}

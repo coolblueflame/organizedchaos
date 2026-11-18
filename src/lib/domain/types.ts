@@ -138,6 +138,14 @@ export interface Task extends Base {
   ritualPerWindow?: boolean;
   /** Per-window done-marks for per-window rituals: "<dayKey>#<windowIndex>". */
   ritualDoneSlots?: string[];
+  /**
+   * Which of today's done-marks were skips rather than completions
+   * (2026-11-18 ask): a day key for a once-a-day ritual, a slot key for a
+   * per-window one. A skip stamps the done-mark like a completion, so the
+   * ritual stops being owed, but writes no history record. Only today's
+   * entries are kept.
+   */
+  ritualSkips?: string[];
   completedAt?: number;
   /** The RecurrenceTemplate this task was spawned from, if any. */
   recurrenceId?: string;
