@@ -91,8 +91,33 @@ function weeksBetween(a: Date, b: Date, rolloverHour: number): number {
   );
 }
 
-/** Weekly/monthly: the next spawn moment (rolloverHour on a due day), strictly after `after`. */
+/**
+ * The moment a weekly/monthly rule's start day begins (rolloverHour on that
+ * day), or undefined when the rule has no start.
+ */
+export function startMoment(mode: RecurrenceMode, rolloverHour: number): number | undefined {
+  if ((mode.kind !== 'weekly' && mode.kind !== 'monthly') || !mode.startDay) return undefined;
+  const [y, m, d] = mode.startDay.split('-').map(Number);
+  return new Date(y!, m! - 1, d!, rolloverHour).getTime();
+}
+
+/**
+ * True when the rule's start day is a later app day than `now`'s: nothing
+ * spawns until then, and a copy that is open now is set aside until it.
+ */
+export function startsAfterToday(mode: RecurrenceMode, now: Date, rolloverHour: number): boolean {
+  if ((mode.kind !== 'weekly' && mode.kind !== 'monthly') || !mode.startDay) return false;
+  return mode.startDay > appDayKey(now, rolloverHour);
+}
+
+/**
+ * Weekly/monthly: the next spawn moment (rolloverHour on a due day), strictly
+ * after `after`, and never before the rule's start day.
+ */
 export function nextScheduledSpawn(mode: RecurrenceMode, after: Date, rolloverHour: number): number | null {
+  // Searching from just before the start makes the start day itself eligible.
+  const start = startMoment(mode, rolloverHour);
+  if (start !== undefined && start - 1 > after.getTime()) after = new Date(start - 1);
   if (mode.kind === 'weekly') {
     if (mode.weekdays.length === 0) return null;
     // Without an anchor there is no way to say WHICH weeks are on — treat as

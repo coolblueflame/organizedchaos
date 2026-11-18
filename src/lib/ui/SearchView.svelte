@@ -10,6 +10,7 @@
   import { lockedListIds, withoutLocked } from '../domain/lock';
   import { lock } from './lock.svelte';
   import { describeRecurrence } from './recurrenceText';
+  import { appDayKey } from '../domain/time';
   import { searchQuery } from './searchState.svelte';
   import TaskRow from './TaskRow.svelte';
   import { closeOnOutsideOrEscape } from './dismiss';
@@ -130,7 +131,7 @@
         <button class="tpl-row" data-testid="search-tpl-{tpl.id}"
           onclick={() => navigate({ name: 'recurring', tplId: tpl.id })}>
           <span class="tpl-name">{tpl.name || 'untitled'}</span>
-          <span class="tpl-cadence">↻ {describeRecurrence(tpl.mode, tpl.deadlineOffsetDays)}</span>
+          <span class="tpl-cadence">↻ {describeRecurrence(tpl.mode, tpl.deadlineOffsetDays, appDayKey(new Date(), app.state.settings.rolloverHour))}</span>
         </button>
       {/each}
     </section>

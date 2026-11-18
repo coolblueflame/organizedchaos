@@ -142,3 +142,28 @@ test('the Rituals screen selects rituals across lists and re-times them together
   await expect(page.getByTestId('rituals-bulk-bar')).toHaveCount(0);
   await expect(page.getByTestId(`ritual-complete-${a}`)).toBeVisible();
 });
+
+test('a bulk repeat with a start day next week sets the picks aside; one undo brings them back plain', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-18T10:00:00') }); // a Wednesday
+  await reset(page);
+  await makeList(page, 'Chores');
+  const bins = await addTask(page, 'bins');
+  const recycling = await addTask(page, 'recycling');
+
+  await page.getByTestId(`select-${bins}`).click();
+  await page.getByTestId(`select-${recycling}`).click();
+  await page.getByTestId('bulk-repeat').click();
+  const panel = page.getByTestId('bulk-repeat-panel');
+  await panel.getByTestId('recur-mode-weekly').click();
+  await panel.getByTestId('recur-weekday-2').click();
+  await panel.getByTestId('recur-start').fill('2026-11-24');
+  await panel.getByTestId('recur-save').click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);
+
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId(`task-row-${bins}`)).toBeVisible();
+  await expect(page.getByTestId(`task-row-${recycling}`)).toBeVisible();
+  await page.getByTestId('bulk-done').click();
+  await page.getByText('bins', { exact: true }).click();
+  await expect(page.getByTestId('task-recur-row'), 'the rule is gone too').toContainText('make recurring');
+});

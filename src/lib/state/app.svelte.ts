@@ -9,7 +9,7 @@ import {
 } from '../domain/types';
 import { appDayKey, nextRolloverTs } from '../domain/time';
 import {
-  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, sweepSpawns,
+  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, startsAfterToday, sweepSpawns,
 } from '../domain/recurrence';
 import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
@@ -46,6 +46,7 @@ import {
 } from '../domain/stats';
 import { undoStack } from './undo.svelte';
 import { toast } from '../ui/toast.svelte';
+import { shortDay } from '../ui/recurrenceText';
 import { openDb } from '../storage/db';
 import { Repo, type AppState } from '../storage/repo';
 
@@ -989,17 +990,27 @@ export class AppStore {
       if (tpl) {
         const prior = $state.snapshot(tpl) as RecurrenceTemplate;
         await this.updateRecurring(tpl.id, { mode, deadlineOffsetDays });
+        const aside = await this.setAsideBeforeStart(tpl.id);
         inverse.push(async () => {
+          for (const id of aside) await this.restoreTask(id);
           await this.updateRecurring(tpl.id, { mode: prior.mode, deadlineOffsetDays: prior.deadlineOffsetDays });
           // A mode patch re-arms from now; put back the exact arming it had.
           await this.updateRecurring(tpl.id, { nextSpawnAt: prior.nextSpawnAt });
         });
-        forward.push(() => this.updateRecurring(tpl.id, { mode, deadlineOffsetDays }));
+        forward.push(async () => {
+          await this.updateRecurring(tpl.id, { mode, deadlineOffsetDays });
+          await this.setAsideBeforeStart(tpl.id);
+        });
       } else {
         // The rule is looked up at undo time: a redo makes a fresh one.
-        const start = async () => { await this.createRecurring(t.id, mode, deadlineOffsetDays); };
+        const start = async () => {
+          const made = await this.createRecurring(t.id, mode, deadlineOffsetDays);
+          await this.setAsideBeforeStart(made.id);
+        };
         await start();
         inverse.push(async () => {
+          // A copy set aside comes back first: the lookup below reads its rule.
+          if (this.trashTasks.has(t.id)) await this.restoreTask(t.id);
           const id = this.state.tasks.find((x) => x.id === t.id)?.recurrenceId;
           if (id) await this.removeRecurring(id);
           await this.patchTask(t.id, { recurrenceId: undefined });
@@ -1871,6 +1882,36 @@ export class AppStore {
     const tpl = this.state.templates.find((t) => t.id === id);
     if (tpl) Object.assign(tpl, patch, { updatedAt: Date.now() });
     this.requestSync();
+  }
+
+  /**
+   * A rule whose start day is still ahead sets its open copy aside
+   * (soft-deleted, restorable) until then. The first copy spawns on the start,
+   * and an open one would both show the task early and block that spawn.
+   * @returns the ids set aside, for the caller's undo.
+   */
+  private async setAsideBeforeStart(tplId: string): Promise<string[]> {
+    const tpl = this.state.templates.find((t) => t.id === tplId && !t.deleted);
+    if (!tpl || !startsAfterToday(tpl.mode, new Date(), this.state.settings.rolloverHour)) return [];
+    const open = this.state.tasks
+      .filter((t) => t.recurrenceId === tplId && !t.deleted && t.completedAt === undefined)
+      .map((t) => t.id);
+    for (const id of open) await this.removeTask(id, { silent: true });
+    return open;
+  }
+
+  /**
+   * The single-rule save paths' version of setAsideBeforeStart: anything set
+   * aside gets an undo toast that brings it back (the rule keeps its start).
+   */
+  async setAsideUntilStart(tplId: string): Promise<void> {
+    const ids = await this.setAsideBeforeStart(tplId);
+    if (ids.length === 0) return;
+    const tpl = this.state.templates.find((t) => t.id === tplId);
+    const day = tpl && (tpl.mode.kind === 'weekly' || tpl.mode.kind === 'monthly') ? tpl.mode.startDay : undefined;
+    this.pushUndo(`Set aside until ${day ? shortDay(day) : 'it starts'}`,
+      async () => { for (const id of ids) await this.restoreTask(id); },
+      async () => { for (const id of ids) await this.removeTask(id, { silent: true }); });
   }
 
   async removeRecurring(id: string): Promise<void> {

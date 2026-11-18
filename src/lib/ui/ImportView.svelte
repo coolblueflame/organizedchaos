@@ -73,6 +73,7 @@
     const tpl = templateFor(thingsUuid);
     if (tpl) await app.updateRecurring(tpl.id, { mode, deadlineOffsetDays: offset });
     editingUuid = null;
+    if (tpl) await app.setAsideUntilStart(tpl.id);
   }
 </script>
 

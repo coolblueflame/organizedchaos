@@ -1,11 +1,18 @@
 <!--
-  Pure cadence form (no store access) shared by TaskEditor and RecurringView.
+  Cadence form shared by TaskEditor, RecurringView, the bulk bar and import
+  review. It only reads the store's rollover hour; the caller decides what
+  saving means.
   Modes: after-completion (interval+unit), weekly (weekday chips), monthly (day).
-  Optional "deadline lands N days after spawn".
+  Weekly and monthly take an optional start day. Optional "deadline lands N
+  days after spawn".
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { RecurrenceMode } from '../domain/types';
+  import { app } from '../state/app.svelte';
+  import { nextScheduledSpawn, startsAfterToday } from '../domain/recurrence';
+  import { appDayKey, dateKey } from '../domain/time';
+  import { shortDay } from './recurrenceText';
 
   let {
     initial, onsave, oncancel, onremove,
@@ -38,9 +45,16 @@
    */
   const initialAnchor = init?.kind === 'weekly' ? init.anchorMs : undefined;
   const initialEvery = init?.kind === 'weekly' ? (init.everyWeeks ?? 1) : 1;
-  /** True when saving will start counting weeks from now (new/changed cadence). */
+  /**
+   * "Starting on" (2026-11-18 ask): an app-day key, or '' for none. A start
+   * also pins an every-Nth-week rule's on-weeks to the start's week.
+   */
+  let startDay = $state<string>(
+    init?.kind === 'weekly' || init?.kind === 'monthly' ? (init.startDay ?? '') : '',
+  );
+  /** True when saving will start counting weeks from now (new/changed cadence, no start). */
   const willReAnchor = $derived(
-    everyWeeks > 1 && (initialAnchor === undefined || everyWeeks !== initialEvery),
+    everyWeeks > 1 && startDay === '' && (initialAnchor === undefined || everyWeeks !== initialEvery),
   );
   /** Chance mode ("peppered", 2026-08-20): % per roll, and the climb per miss. */
   let baseChance = $state(init?.kind === 'chance' ? init.baseChance : 20);
@@ -98,9 +112,15 @@
     allMonthdays.length > 0,
   );
 
-  function save() {
-    if (!valid) return;
-    const mode: RecurrenceMode =
+  /** Noon of a day key: safely inside that day's week whatever the rollover. */
+  function noonOf(key: string): number {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y!, m! - 1, d!, 12).getTime();
+  }
+
+  /** The mode a save would commit. */
+  function buildMode(): RecurrenceMode {
+    return (
       kind === 'afterCompletion' ? { kind, interval, unit } :
       kind === 'chance' ? { kind, baseChance, perRollBoost } :
       kind === 'weekly' ? {
@@ -110,9 +130,11 @@
         // keeps its exact old shape (canonical-stable in sync, readable by
         // old code). The anchor pins WHICH weeks are on — kept across saves,
         // minted fresh only when the cadence itself is new or changed.
+        // A start day pins the phase to its own week, so it wins over both.
         ...(everyWeeks > 1
-          ? { everyWeeks, anchorMs: willReAnchor ? Date.now() : initialAnchor! }
+          ? { everyWeeks, anchorMs: startDay ? noonOf(startDay) : willReAnchor ? Date.now() : initialAnchor! }
           : {}),
+        ...(startDay ? { startDay } : {}),
       } :
       {
         kind: 'monthly' as const,
@@ -122,7 +144,27 @@
         ...(allMonthdays.length > 1 || allMonthdays.includes('last')
           ? { days: allMonthdays }
           : {}),
-      };
+        ...(startDay ? { startDay } : {}),
+      });
+  }
+
+  const rollover = $derived(app.state.settings.rolloverHour);
+  /** Where the first copy lands, said only once a start is set. */
+  const firstCopy = $derived.by(() => {
+    if (startDay === '' || (kind !== 'weekly' && kind !== 'monthly') || !valid) return null;
+    const mode = buildMode();
+    const at = nextScheduledSpawn(mode, new Date(), rollover);
+    return at === null ? null : {
+      day: shortDay(dateKey(new Date(at))),
+      later: startsAfterToday(mode, new Date(), rollover),
+    };
+  });
+  /** The date picker's lower bound is open, so a past start can set the phase. */
+  const today = $derived(appDayKey(new Date(), rollover));
+
+  function save() {
+    if (!valid) return;
+    const mode = buildMode();
     const off = parseInt(offset, 10);
     // 0 is a real answer — "due the day it appears" — only blank/negative mean
     // unset. Chance mode never carries one: peppers live outside the tiers, so
@@ -204,6 +246,28 @@
     <div class="line"><em>(days past a short month clamp to its end)</em></div>
   {/if}
 
+  {#if kind === 'weekly' || kind === 'monthly'}
+    <div class="line start">
+      <span>starting{#if !startDay}&nbsp;<em>(optional)</em>{/if}</span>
+      <input type="date" data-testid="recur-start" bind:value={startDay} />
+      {#if startDay}
+        <button class="chip" data-testid="recur-start-clear" onclick={() => (startDay = '')}
+          title="no start day">✕</button>
+      {/if}
+    </div>
+    {#if firstCopy}
+      <div class="line" data-testid="recur-start-hint"><em>
+        {#if firstCopy.later}
+          first copy {firstCopy.day}; until then any open copy is set aside
+        {:else if kind === 'weekly' && everyWeeks > 1 && startDay < today}
+          weeks count from {shortDay(startDay)}; next copy {firstCopy.day}
+        {:else}
+          next copy {firstCopy.day}
+        {/if}
+      </em></div>
+    {/if}
+  {/if}
+
   {#if kind !== 'chance'}
     <div class="line">
       <span>deadline</span>
@@ -246,6 +310,12 @@
     padding: 5px 6px; width: 64px;
   }
   .line select { width: auto; }
+  /* min-height: an empty date input collapses to nothing on iOS Safari. */
+  .line input[type='date'] { width: auto; min-width: 130px; min-height: 30px; color-scheme: dark; }
+  /* One row: label, date, ✕. WebKit sizes a date input wide, so it flexes. */
+  .start { flex-wrap: nowrap; }
+  .start span { white-space: nowrap; }
+  .start input[type='date'] { flex: 1; min-width: 0; }
   .weekdays { display: flex; gap: 5px; }
   .day {
     flex: 1; background: var(--bg1); border: 1px solid var(--line); border-radius: 6px;

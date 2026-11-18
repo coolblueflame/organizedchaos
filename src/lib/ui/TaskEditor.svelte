@@ -17,6 +17,7 @@
   import BlockedBy from './BlockedBy.svelte';
   import RecurrenceEditor from './RecurrenceEditor.svelte';
   import { describeRecurrence } from './recurrenceText';
+  import { appDayKey } from '../domain/time';
   import { activeMs, formatElapsed } from '../domain/stats';
   import { liveQueueIds } from '../domain/dayQueue';
   import Checklist from './Checklist.svelte';
@@ -193,13 +194,17 @@
   }
 
   async function saveRecurrence(mode: RecurrenceMode, deadlineOffsetDays?: number) {
+    let tplId: string;
     if (template) {
-      await app.updateRecurring(template.id, { mode, deadlineOffsetDays });
+      tplId = template.id;
+      await app.updateRecurring(tplId, { mode, deadlineOffsetDays });
     } else {
-      await app.createRecurring(task.id, mode, deadlineOffsetDays);
+      tplId = (await app.createRecurring(task.id, mode, deadlineOffsetDays)).id;
     }
     touched();
     recurOpen = false;
+    // Last: a start day still ahead takes this very task out of the list.
+    await app.setAsideUntilStart(tplId);
   }
 
   async function stopRecurrence() {
@@ -290,7 +295,7 @@
   {:else}
     <button class="repeat-row" class:linked={!!template} data-testid="task-recur-row"
       onclick={() => (recurOpen = true)}>
-      {#if template}↻ {describeRecurrence(template.mode, template.deadlineOffsetDays)}{#if template.paused}&nbsp;(paused){/if}
+      {#if template}↻ {describeRecurrence(template.mode, template.deadlineOffsetDays, appDayKey(new Date(), app.state.settings.rolloverHour))}{#if template.paused}&nbsp;(paused){/if}
       {:else}↻ make recurring{/if}
     </button>
     {#if ruleDrift.length > 0}

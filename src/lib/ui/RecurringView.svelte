@@ -90,6 +90,7 @@
   async function saveEdit(tpl: RecurrenceTemplate, mode: RecurrenceMode, offset?: number) {
     await app.updateRecurring(tpl.id, { mode, deadlineOffsetDays: offset });
     editingId = null;
+    await app.setAsideUntilStart(tpl.id);
   }
 
   async function remove(tpl: RecurrenceTemplate) {

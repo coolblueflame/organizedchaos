@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, spawnId, sweepSpawns,
+  alignSpawnToRollover, nextScheduledSpawn, scheduleAfterCompletion, spawnId, startsAfterToday,
+  sweepSpawns,
 } from './recurrence';
 import { DEFAULT_SETTINGS, type RecurrenceTemplate, type Task } from './types';
 
@@ -196,6 +197,55 @@ describe('nextScheduledSpawn', () => {
     // Forty minutes apart within ONE app-day must produce the same cadence.
     expect(nextA).toBe(nextB);
     expect(nextA).toBe(at('2026-08-22T04:00:00').getTime()); // Aug 8's week ON → next ON Sat = Aug 22
+  });
+});
+
+describe('a start day (2026-11-18 ask)', () => {
+  // 2026-11-18 is a Wednesday; the Tuesdays after it are 11-24, 12-01, 12-08.
+  const wed = at('2026-11-18T10:00:00');
+  const noon = (day: string) => at(`${day}T12:00:00`).getTime();
+
+  it('every 2nd Tuesday starting next week: on-weeks count from the start, not from saving', () => {
+    const mode = {
+      kind: 'weekly' as const, weekdays: [2], everyWeeks: 2,
+      anchorMs: noon('2026-11-24'), startDay: '2026-11-24',
+    };
+    expect(nextScheduledSpawn(mode, wed, 4)).toBe(at('2026-11-24T04:00:00').getTime());
+    expect(nextScheduledSpawn(mode, at('2026-11-24T05:00:00'), 4))
+      .toBe(at('2026-12-08T04:00:00').getTime());
+  });
+
+  it('nothing spawns before the start, even on a matching day', () => {
+    const mode = { kind: 'weekly' as const, weekdays: [2], startDay: '2026-12-01' };
+    expect(nextScheduledSpawn(mode, wed, 4)).toBe(at('2026-12-01T04:00:00').getTime());
+  });
+
+  it('a start on a non-matching day waits for the first matching day after it', () => {
+    const mode = { kind: 'weekly' as const, weekdays: [2], startDay: '2026-11-26' };
+    expect(nextScheduledSpawn(mode, wed, 4)).toBe(at('2026-12-01T04:00:00').getTime());
+  });
+
+  it('a past start only sets the phase', () => {
+    const mode = {
+      kind: 'weekly' as const, weekdays: [2], everyWeeks: 2,
+      anchorMs: noon('2026-11-10'), startDay: '2026-11-10',
+    };
+    expect(nextScheduledSpawn(mode, wed, 4)).toBe(at('2026-11-24T04:00:00').getTime());
+  });
+
+  it('monthly: the first copy is the first wanted day on or after the start', () => {
+    const mode = { kind: 'monthly' as const, dayOfMonth: 1, startDay: '2027-01-10' };
+    expect(nextScheduledSpawn(mode, wed, 4)).toBe(at('2027-02-01T04:00:00').getTime());
+    const onStart = { kind: 'monthly' as const, dayOfMonth: 10, startDay: '2027-01-10' };
+    expect(nextScheduledSpawn(onStart, wed, 4)).toBe(at('2027-01-10T04:00:00').getTime());
+  });
+
+  it('startsAfterToday compares app days, so before the rollover the start is still ahead', () => {
+    const mode = { kind: 'weekly' as const, weekdays: [2], startDay: '2026-11-24' };
+    expect(startsAfterToday(mode, wed, 4)).toBe(true);
+    expect(startsAfterToday(mode, at('2026-11-24T02:00:00'), 4)).toBe(true);
+    expect(startsAfterToday(mode, at('2026-11-24T05:00:00'), 4)).toBe(false);
+    expect(startsAfterToday({ kind: 'weekly', weekdays: [2] }, wed, 4)).toBe(false);
   });
 });
 

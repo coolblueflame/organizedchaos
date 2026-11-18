@@ -209,8 +209,13 @@ export type RecurrenceMode =
    * written only when everyWeeks > 1 — a plain weekly template keeps its
    * exact old shape, so unchanged rows stay canonical-stable in sync and
    * old app code degrades to plain weekly rather than misreading.
+   *
+   * `startDay` (weekly and monthly, 2026-11-18 ask) is an app-day key
+   * ("YYYY-MM-DD") before which the rule never spawns. On an every-Nth-week
+   * rule the editor also writes it into `anchorMs`, so the start's week is an
+   * on-week. Written only when the user sets one.
    */
-  | { kind: 'weekly'; weekdays: number[]; everyWeeks?: number; anchorMs?: number }
+  | { kind: 'weekly'; weekdays: number[]; everyWeeks?: number; anchorMs?: number; startDay?: string }
   /**
    * Fixed monthly cadence; 1–31, clamped to the month's length when it
    * overshoots. `days` (2026-08-06 ask) supersedes dayOfMonth when present
@@ -218,7 +223,7 @@ export type RecurrenceMode =
    * written (first numeric day, or 31 when only 'last' — which clamps to
    * roughly the same days) so old readers degrade gracefully.
    */
-  | { kind: 'monthly'; dayOfMonth: number; days?: Array<number | 'last'> };
+  | { kind: 'monthly'; dayOfMonth: number; days?: Array<number | 'last'>; startDay?: string };
 
 export interface RecurrenceTemplate extends Base {
   listId: string;

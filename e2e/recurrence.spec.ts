@@ -436,3 +436,66 @@ test('a daily "after done" task finished just after midnight is back on today\'s
   };
   await expect.poll(backOnTheList, { timeout: 8000 }).toBe(1);
 });
+
+/** A Wednesday; the Tuesdays after it are 11/24, 12/1 and 12/8. */
+async function atWednesday(page: import('@playwright/test').Page) {
+  await page.clock.install({ time: new Date('2026-11-18T10:00:00') });
+  await page.reload();
+  await page.getByTestId('new-list').waitFor();
+  await page.getByTestId('new-list').click();
+  await page.getByTestId('new-list-input').fill('Home');
+  await page.getByTestId('new-list-input').press('Enter');
+}
+
+/** Adds "bins" repeating every 2nd Tuesday from `start`, without saving. */
+async function binsEveryOtherTuesday(page: import('@playwright/test').Page, start: string) {
+  await page.getByTestId('new-task').click();
+  await page.getByTestId('task-name-input').fill('bins');
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-mode-weekly').click();
+  await page.getByTestId('recur-weekday-2').click();
+  await page.getByTestId('recur-every-weeks').selectOption('2');
+  await page.getByTestId('recur-start').fill(start);
+}
+
+test('a start day next week sets the task aside until then, and its week is an on-week', async ({ page }) => {
+  await atWednesday(page);
+  await binsEveryOtherTuesday(page, '2026-11-24');
+  await expect(page.getByTestId('recur-start-hint')).toContainText('first copy Tue 11/24');
+  await page.getByTestId('recur-save').click();
+
+  await expect(page.getByText('Set aside until Tue 11/24', { exact: true })).toBeVisible();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);
+
+  await page.getByTestId('back').click();
+  await page.getByTestId('recurring-link').click();
+  const rule = page.getByTestId(/^recurring-row-/).first();
+  await expect(rule).toContainText('every 2 weeks on Tue');
+  await expect(rule).toContainText('next: 11/24');
+
+  // On the start day it is back, as a fresh copy, and the off week is skipped.
+  await page.clock.setSystemTime(new Date('2026-11-24T05:00:00'));
+  await page.reload();
+  await expect(page.getByTestId(/^recurring-row-/).first()).toContainText('next: 12/8');
+  await page.evaluate(() => { location.hash = '#/'; });
+  await page.getByTestId(/^list-row-/).filter({ hasText: 'Home' }).getByText('Home', { exact: true }).click();
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'bins' })).toHaveCount(1);
+});
+
+test('the set-aside copy comes back with undo, and a past start leaves the copy in place', async ({ page }) => {
+  await atWednesday(page);
+  await binsEveryOtherTuesday(page, '2026-11-24');
+  await page.getByTestId('recur-save').click();
+  await expect(page.getByTestId(/^task-row-/)).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  // It comes back as it was left: open in its editor.
+  await expect(page.getByTestId('task-name-input')).toHaveValue('bins');
+
+  // A past start only says which weeks are on: 11/10's week, so 11/24 is next.
+  await page.getByTestId('task-recur-row').click();
+  await page.getByTestId('recur-start').fill('2026-11-10');
+  await expect(page.getByTestId('recur-start-hint')).toContainText('weeks count from Tue 11/10; next copy Tue 11/24');
+  await page.getByTestId('recur-save').click();
+  await page.getByTestId('task-collapse').click();
+  await expect(page.getByTestId(/^task-row-/).filter({ hasText: 'bins' })).toHaveCount(1);
+});
