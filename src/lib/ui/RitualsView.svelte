@@ -16,6 +16,7 @@
   import type { Task } from '../domain/types';
   import Glyph from './Glyph.svelte';
   import TaskEditor from './TaskEditor.svelte';
+  import BulkSchedule from './BulkSchedule.svelte';
 
   /*
     Tapping a ritual opens its full editor HERE, in a sheet — reported: a
@@ -54,13 +55,37 @@
   const waiting = $derived(rituals.filter((t) => stateOf(t) === 'waiting'));
   const done = $derived(rituals.filter((t) => stateOf(t) === 'done'));
 
+  /*
+    Select mode (2026-11-18 ask): rituals live in many lists, so this screen is
+    where a batch of them can be re-timed at once. While selecting, a tap on a
+    row picks it instead of opening its editor, and the tick gives way to the
+    pick box so "done for today" can't be hit by accident.
+  */
+  let selecting = $state(false);
+  let picked = $state<string[]>([]);
+  // A ritual that stops being visible (deleted, locked) leaves the selection.
+  const pickedLive = $derived(picked.filter((id) => rituals.some((t) => t.id === id)));
+
+  function togglePick(id: string) {
+    picked = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
+  }
+
+  function stopSelecting() {
+    selecting = false;
+    picked = [];
+  }
+
   const listName = (id: string) => app.state.lists.find((l) => l.id === id)?.title ?? '';
 </script>
 
-<main>
+<main class:selecting>
   <header>
     <button data-testid="back" class="back" onclick={() => navigate({ name: 'home' })}>‹</button>
     <h1>Daily Rituals</h1>
+    {#if rituals.length > 0}
+      <button class="select" data-testid="rituals-select"
+        onclick={() => (selecting ? stopSelecting() : (selecting = true))}>{selecting ? 'done' : 'select'}</button>
+    {/if}
   </header>
 
   {#snippet section(title: string, tasks: Task[], tone: string)}
@@ -68,7 +93,14 @@
       <h2 class={tone}>{title}</h2>
       <section class="rows">
         {#each tasks as task (task.id)}
-          <div class="row" data-testid="ritual-row-{task.id}">
+          <div class="row" class:picked={pickedLive.includes(task.id)} data-testid="ritual-row-{task.id}">
+            {#if selecting}
+              <button class="tick pick" data-testid="ritual-pick-{task.id}"
+                aria-label={pickedLive.includes(task.id) ? 'unselect' : 'select'}
+                onclick={() => togglePick(task.id)}>
+                <Glyph name={pickedLive.includes(task.id) ? 'box-all' : 'box'} size={16} />
+              </button>
+            {:else}
             <button
               class="tick {tone}"
               data-testid="ritual-complete-{task.id}"
@@ -77,7 +109,9 @@
               onclick={() => void app.completeTask(task.id)}>
               <Glyph name={dayDone(task) ? 'box-checked' : 'box'} size={16} />
             </button>
-            <button class="info" data-testid="ritual-edit-{task.id}" onclick={() => (editingId = task.id)}>
+            {/if}
+            <button class="info" data-testid="ritual-edit-{task.id}"
+              onclick={() => (selecting ? togglePick(task.id) : (editingId = task.id))}>
               <span class="name">{task.name || 'untitled'}</span>
               <span class="meta">{describeRitualTask(task)}{#if progressOf(task)}&nbsp;· {progressOf(task)!.done}/{progressOf(task)!.total} today{/if}</span>
             </button>
@@ -96,6 +130,23 @@
   {@render section('due now', due, 'due')}
   {@render section('waiting for their window', waiting, 'waiting')}
   {@render section('done today', done, 'done')}
+
+  {#if selecting}
+    <div class="bulk" data-testid="rituals-bulk-bar">
+      <div class="bulk-head">
+        <span class="count">{pickedLive.length} selected</span>
+        <button class="link" data-testid="rituals-pick-all"
+          onclick={() => (picked = pickedLive.length === rituals.length ? [] : rituals.map((t) => t.id))}>
+          {pickedLive.length === rituals.length ? 'none' : 'all'}
+        </button>
+      </div>
+      {#if pickedLive.length > 0}
+        <BulkSchedule ids={pickedLive} repeat={false} />
+      {:else}
+        <p class="bulk-hint">tap rituals to pick them, then set their times together</p>
+      {/if}
+    </div>
+  {/if}
 
   {#if editingTask}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -119,6 +170,8 @@
 
 <style>
   main { max-width: 640px; margin: 0 auto; padding: 24px 16px calc(48px + env(safe-area-inset-bottom)); }
+  /* Room under the last row for the pinned bar while selecting. */
+  main.selecting { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .back { background: none; border: none; color: var(--acc-blue); font-size: 1.6rem; cursor: pointer; padding: 0 8px; }
   h1 { font-family: var(--font-mono); font-size: 1.2rem; margin: 0; }
@@ -173,5 +226,32 @@
   }
   .x { background: none; border: none; color: var(--dim); font-size: 1rem; cursor: pointer; padding: 4px 8px; }
   @media (hover: hover) { .x:hover { color: var(--text); } }
+  .select {
+    margin-left: auto; background: none; border: none; cursor: pointer;
+    color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.78rem;
+    text-decoration: underline; padding: 4px 6px;
+  }
+  .tick.pick { color: var(--acc-cyan); }
+  .row.picked { border-color: var(--acc-cyan); }
+  /* Pinned like a list's bulk bar, so picking and setting share one screen. */
+  .bulk {
+    position: fixed; z-index: 120;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
+    width: min(94vw, 330px);
+    background: var(--bg2); border: 1px solid var(--acc-cyan); border-radius: 10px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  .bulk-head {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+  }
+  .count { color: var(--acc-cyan); font-family: var(--font-mono); font-size: 0.72rem; }
+  .link {
+    background: none; border: none; color: var(--acc-cyan); cursor: pointer;
+    font-family: var(--font-mono); font-size: 0.72rem; text-decoration: underline; padding: 2px 4px;
+  }
+  .bulk-hint { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: 0.72rem; }
   .empty { color: var(--dim); font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.7; margin-top: 20px; }
 </style>

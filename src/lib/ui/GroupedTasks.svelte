@@ -7,6 +7,7 @@
   not support for touch — this way the same code works on phone and desktop.
 -->
 <script lang="ts">
+  import BulkSchedule from './BulkSchedule.svelte';
   import { app } from '../state/app.svelte';
   import type { TaskGroup } from '../domain/views';
   import { regroupPatch } from '../domain/regroup';
@@ -55,6 +56,8 @@
   let bulkPriority = $state<Priority | ''>('');
   let bulkList = $state('');
   let bulkTag = $state('');
+  /** A bulk schedule form is open (BulkSchedule reports it). */
+  let scheduleOpen = $state(false);
   /** Bare-hours ≥10 arm here awaiting an explicit confirm — see the est input. */
   let estArmed = $state<number | null>(null);
   let deleteArmed = $state(false);
@@ -470,6 +473,9 @@
       <span class="count">{selected.length} selected</span>
       <button class="close" data-testid="bulk-done" onclick={() => (selected = [])}>done</button>
     </div>
+    <!-- While a schedule form is open it gets the whole bar: on a phone the
+         bar plus the form outgrows the screen otherwise. -->
+    {#if !scheduleOpen}
     <button class="confirm" class:armed={completeArmed} data-testid="bulk-complete"
       onclick={() => void confirmComplete()}>
       {completeArmed ? `complete ${selected.length}?` : '✓ complete'}
@@ -521,10 +527,14 @@
       <button class="confirm armed wide" data-testid="bulk-estimate-confirm"
         onclick={applyArmedEstimate}>{estArmed}h each?</button>
     {/if}
+    {/if}
+    <BulkSchedule ids={selected} onopen={(o) => (scheduleOpen = o)} />
+    {#if !scheduleOpen}
     <button class="danger wide" class:armed={deleteArmed} data-testid="bulk-delete"
       onclick={() => void confirmDelete()}>
       {deleteArmed ? `delete ${selected.length}?` : 'delete'}
     </button>
+    {/if}
   </div>
 {/if}
 

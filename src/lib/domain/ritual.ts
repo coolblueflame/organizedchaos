@@ -32,6 +32,27 @@ export function ritualWindows(task: Task): HoursRule[] {
   return task.ritual ? [task.ritual] : [];
 }
 
+/**
+ * The task fields that make a task a ritual with exactly this schedule,
+ * replacing whatever schedule it had (or making a plain task a ritual).
+ * @param windows Cleaned windows, at least one.
+ * @param perWindow Whether each window wants its own completion; ignored
+ *   for a single window.
+ * @returns A patch for patchTask.
+ */
+export function ritualPatch(windows: HoursRule[], perWindow: boolean): Partial<Task> {
+  return {
+    rituals: windows.map((w) => ({ days: [...w.days], from: w.from, to: w.to })),
+    // Legacy mirror: an old build reads `ritual` only, so it at least sees
+    // the first window instead of losing the ritual entirely.
+    ritual: { days: [...windows[0]!.days], from: windows[0]!.from, to: windows[0]!.to },
+    ritualPerWindow: windows.length > 1 && perWindow ? true : undefined,
+    // Window indices are the done-marks' identity; edits reshuffle them, so
+    // today's marks stop meaning anything trustworthy. Start the day clean.
+    ritualDoneSlots: undefined,
+  };
+}
+
 export function isRitualTask(task: Task): boolean {
   return ritualWindows(task).length > 0;
 }

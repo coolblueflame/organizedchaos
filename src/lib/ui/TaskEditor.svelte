@@ -4,12 +4,12 @@
   Text fields save on debounce + blur; discrete fields save immediately.
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { app } from '../state/app.svelte';
   import { pickerListGroups } from '../domain/listOrder';
   import { formatEstimate } from '../domain/estimate';
-  import { describeRitualTask, isRitualTask, ritualWindows } from '../domain/ritual';
-  import { ALL_DAYS } from '../domain/schedule';
+  import { describeRitualTask, isRitualTask, ritualPatch, ritualWindows } from '../domain/ritual';
+  import RitualEditor from './RitualEditor.svelte';
+  import type { HoursRule } from '../domain/schedule';
   import { navigate } from './router.svelte';
   import type { Task } from '../domain/types';
   import PrioritySelect from './PrioritySelect.svelte';
@@ -139,86 +139,10 @@
   let recurOpen = $state(false);
 
   // ── daily ritual ──────────────────────────────────────────────────────────
-  const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   let ritualOpen = $state(false);
-  /** The windows being edited (2026-07-29: a ritual can have several a day).
-      `toTouched`: the user set the end themselves — stop auto-following the start. */
-  let ritualWins = $state<Array<{ from: string; to: string; days: number[]; toTouched?: boolean }>>([]);
-  let ritualEach = $state(false);
 
-  // Seed the form from the task each time it opens, not reactively: editing the
-  // fields must not be fought by the value they came from.
-  $effect(() => {
-    if (!ritualOpen) return;
-    const existing = untrack(() => ritualWindows(task));
-    const each = untrack(() => task.ritualPerWindow === true);
-    ritualWins = existing.length > 0
-      // Saved windows are the user's: never auto-adjust their ends.
-      ? existing.map((w) => ({ from: w.from, to: w.to, days: [...w.days], toTouched: true }))
-      : [{ from: nearestHour(), to: nearestHour(1), days: [...ALL_DAYS] }];
-    ritualEach = each;
-  });
-
-  /** "HH:MM" for the hour nearest to now, +offsetH — never with minutes to drag off. */
-  function nearestHour(offsetH = 0): string {
-    const d = new Date();
-    const h = (d.getHours() + (d.getMinutes() >= 30 ? 1 : 0) + offsetH) % 24;
-    return `${String(h).padStart(2, '0')}:00`;
-  }
-
-  /** from + 1h, wrapping midnight; '' passes through untouched. */
-  function hourAfter(from: string): string {
-    const m = from.match(/^(\d{2}):(\d{2})$/);
-    if (!m) return '';
-    return `${String((Number(m[1]) + 1) % 24).padStart(2, '0')}:${m[2]}`;
-  }
-
-  function addRitualWindow() {
-    // A fresh window borrows the last one's days — "drink water" repeats the
-    // same day pattern far more often than it varies it. Times seed to the
-    // nearest whole hour, one hour long (2026-08-01 ask): an empty time input
-    // opens the picker at the CURRENT minute, and dragging minutes back to
-    // ":00" on every window got old fast.
-    const prev = ritualWins[ritualWins.length - 1];
-    const from = nearestHour();
-    ritualWins = [...ritualWins, {
-      from, to: hourAfter(from), days: prev ? [...prev.days] : [...ALL_DAYS],
-    }];
-  }
-
-  /** Picking a start re-seeds the end an hour later — until the user has
-      deliberately set an end of their own, which then stays theirs. */
-  function ritualFromChanged(i: number) {
-    const win = ritualWins[i];
-    if (!win) return;
-    if (!win.toTouched) win.to = hourAfter(win.from);
-  }
-
-  function dropRitualWindow(i: number) {
-    ritualWins = ritualWins.filter((_, x) => x !== i);
-  }
-
-  function toggleRitualDay(i: number, d: number) {
-    ritualWins = ritualWins.map((w, x) => x === i
-      ? { ...w, days: w.days.includes(d) ? w.days.filter((y) => y !== d) : [...w.days, d] }
-      : w);
-  }
-
-  async function saveRitual() {
-    const valid = ritualWins
-      .filter((w) => w.days.length > 0 && w.from && w.to && w.from !== w.to)
-      .map((w) => ({ days: [...w.days].sort((a, b) => a - b), from: w.from, to: w.to }));
-    if (valid.length === 0) { ritualOpen = false; return; }
-    await app.patchTask(task.id, {
-      rituals: valid,
-      // Legacy mirror: an old build reads `ritual` only, so it at least sees
-      // the first window instead of losing the ritual entirely.
-      ritual: valid[0],
-      ritualPerWindow: valid.length > 1 && ritualEach ? true : undefined,
-      // Window indices are the done-marks' identity; edits reshuffle them, so
-      // today's marks stop meaning anything trustworthy. Start the day clean.
-      ritualDoneSlots: undefined,
-    });
+  async function saveRitual(windows: HoursRule[], perWindow: boolean) {
+    await app.patchTask(task.id, ritualPatch(windows, perWindow));
     touched();
     ritualOpen = false;
   }
@@ -391,54 +315,10 @@
     understand. Recurrence spawns copies and accumulates; a ritual does neither.
   -->
   {#if ritualOpen}
-    <div class="ritual-editor">
-      {#each ritualWins as win, i (i)}
-        <div class="ritual-window">
-          <div class="ritual-row" class:has-drop={ritualWins.length > 1}>
-            <label><span>from</span>
-              <input type="time" data-testid={i === 0 ? 'ritual-from' : `ritual-from-${i}`}
-                bind:value={win.from} onchange={() => ritualFromChanged(i)} /></label>
-            <label><span>until</span>
-              <input type="time" data-testid={i === 0 ? 'ritual-to' : `ritual-to-${i}`}
-                bind:value={win.to} onchange={() => (win.toTouched = true)} /></label>
-            {#if ritualWins.length > 1}
-              <button class="win-drop" data-testid="ritual-window-drop-{i}"
-                aria-label="remove this time" onclick={() => dropRitualWindow(i)}>✕</button>
-            {/if}
-          </div>
-          <div class="days">
-            {#each DAY_LABELS as label, d (d)}
-              <button class="day" class:on={win.days.includes(d)}
-                data-testid={i === 0 ? `ritual-day-${d}` : `ritual-day-${i}-${d}`}
-                onclick={() => toggleRitualDay(i, d)}>{label}</button>
-            {/each}
-          </div>
-        </div>
-      {/each}
-      <button class="win-add" data-testid="ritual-add-window" onclick={addRitualWindow}>
-        + another time
-      </button>
-      {#if ritualWins.length > 1}
-        <label class="each" data-testid="ritual-each-row">
-          <input type="checkbox" data-testid="ritual-each" bind:checked={ritualEach} />
-          each time counts separately
-          <span class="each-hint">{ritualEach
-            ? '— it comes up again at every window (drink water)'
-            : '— any one window does the whole day (walk the dogs)'}</span>
-        </label>
-      {/if}
-      <p class="ritual-note">
-        Inside a window it becomes the randomizer's top pick until it's done.
-        Miss a day and nothing piles up — it just comes round again tomorrow.
-      </p>
-      <div class="ritual-actions">
-        <button data-testid="ritual-save" onclick={saveRitual}>save</button>
-        <button data-testid="ritual-cancel" onclick={() => (ritualOpen = false)}>cancel</button>
-        {#if isRitualTask(task)}
-          <button class="drop" data-testid="ritual-remove" onclick={removeRitual}>remove</button>
-        {/if}
-      </div>
-    </div>
+    <RitualEditor initial={ritualWindows(task)} perWindow={task.ritualPerWindow === true}
+      onsave={(w, each) => void saveRitual(w, each)}
+      oncancel={() => (ritualOpen = false)}
+      onremove={isRitualTask(task) ? () => void removeRitual() : undefined} />
   {:else}
     <button class="repeat-row" class:linked={isRitualTask(task)} data-testid="task-ritual-row"
       onclick={() => (ritualOpen = true)}>
@@ -555,54 +435,6 @@
   }
   @media (hover: hover) { .rule-drift button:hover { border-color: var(--acc-cyan); } }
   .repeat-row.snoozed { color: var(--acc-purple); border-color: var(--acc-purple); }
-  .ritual-editor {
-    display: flex; flex-direction: column; gap: 8px;
-    border: 1px solid var(--acc-cyan); border-radius: 6px; padding: 10px;
-  }
-  .ritual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
-  /* The ✕ column exists only when a window can be removed: even an EMPTY auto
-     track costs its grid gap, which was the 6px that overflowed a 320px phone. */
-  .ritual-row.has-drop { grid-template-columns: 1fr 1fr auto; }
-  .ritual-row label { display: flex; flex-direction: column; gap: 4px; }
-  .ritual-row span { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
-  .ritual-row input {
-    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--text); padding: 7px 8px; font-size: 0.85rem; outline: none;
-    color-scheme: dark; width: 100%;
-  }
-  .days { display: flex; gap: 4px; }
-  .day {
-    flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; padding: 6px 0; cursor: pointer;
-  }
-  .day.on { color: var(--acc-green); border-color: var(--acc-green); }
-  .ritual-note { color: var(--dim); font-size: 0.72rem; line-height: 1.5; margin: 0; }
-  .ritual-window { display: flex; flex-direction: column; gap: 8px; }
-  .ritual-window + .ritual-window { border-top: 1px dashed var(--line); padding-top: 10px; }
-  .win-drop {
-    align-self: flex-end; background: none; border: none; color: var(--dim);
-    cursor: pointer; font-size: 0.8rem; padding: 4px 6px;
-  }
-  @media (hover: hover) { .win-drop:hover { color: var(--acc-magenta); } }
-  .win-add {
-    align-self: flex-start; background: none; border: 1px dashed var(--line); border-radius: 6px;
-    color: var(--dim); font-family: var(--font-mono); font-size: 0.72rem;
-    padding: 5px 10px; cursor: pointer;
-  }
-  @media (hover: hover) { .win-add:hover { color: var(--acc-cyan); border-color: var(--acc-cyan); } }
-  .each {
-    display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
-    color: var(--text); font-size: 0.78rem; cursor: pointer;
-  }
-  .each input { accent-color: var(--acc-cyan); }
-  .each-hint { color: var(--dim); font-size: 0.72rem; }
-  .ritual-actions { display: flex; gap: 8px; }
-  .ritual-actions button {
-    background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--text); font-family: var(--font-mono); font-size: 0.75rem;
-    padding: 5px 12px; cursor: pointer;
-  }
-  .ritual-actions .drop { color: var(--acc-magenta); margin-left: auto; }
   /* Wraps: three buttons ("make current / in progress / add to queue") run
      6px past a 320px phone if forced onto one line. */
   .flow-row { display: flex; flex-wrap: wrap; gap: 8px; }

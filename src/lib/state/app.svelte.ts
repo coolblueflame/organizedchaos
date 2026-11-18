@@ -15,8 +15,9 @@ import { drawTask } from '../domain/randomizer';
 import { blockLifts, newlyUnblocked } from '../domain/blocking';
 import {
   creditWindowIndex, dueRitualIds, isPerWindow, isRitualTask, ritualExclusions, ritualSlot,
-  ritualWindows, withRitualLifts,
+  ritualPatch, ritualWindows, withRitualLifts,
 } from '../domain/ritual';
+import type { HoursRule } from '../domain/schedule';
 import { snoozeUntilTs, type SweepVerdict } from '../domain/sweep';
 import { archivedTaskIds } from '../domain/archive';
 import { lockedTaskIds } from '../domain/lock';
@@ -926,6 +927,91 @@ export class AppStore {
     forward.length === inverse.length
       ? async () => { for (const run of forward) await run(); }
       : undefined);
+  }
+
+  /**
+   * Give every listed task the same ritual schedule (2026-11-18 ask), replacing
+   * what each had; a plain task becomes a ritual. Completed and deleted tasks
+   * are skipped. One undo puts every task's own ritual fields back.
+   * @param taskIds The selection.
+   * @param windows Cleaned windows, at least one (see RitualEditor).
+   * @param perWindow Whether each window counts separately.
+   * @returns How many tasks changed.
+   */
+  async bulkSetRitual(taskIds: string[], windows: HoursRule[], perWindow: boolean): Promise<number> {
+    const RITUAL_FIELDS = ['ritual', 'rituals', 'ritualPerWindow', 'ritualDoneDay', 'ritualDoneSlots'] as const;
+    const targets = taskIds
+      .map((id) => this.state.tasks.find((t) => t.id === id))
+      .filter((t): t is Task => t !== undefined && !t.deleted && t.completedAt === undefined);
+    if (targets.length === 0) return 0;
+    // Snapshot every ritual field, undefined included: the undo must also
+    // UN-ritual a task that was plain before.
+    const before = targets.map((t) => {
+      const snap = $state.snapshot(t) as Task;
+      const fields: Partial<Task> = {};
+      for (const k of RITUAL_FIELDS) (fields as Record<string, unknown>)[k] = snap[k];
+      return { id: t.id, fields };
+    });
+    const patch = ritualPatch(windows, perWindow);
+    const apply = async () => { for (const b of before) await this.patchTask(b.id, patch); };
+    await apply();
+    const n = before.length;
+    this.pushUndo(`Set ritual times on ${n} task${n === 1 ? '' : 's'}`,
+      async () => { for (const b of [...before].reverse()) await this.patchTask(b.id, b.fields); },
+      apply);
+    return n;
+  }
+
+  /**
+   * Give every listed task the same repeat rule (2026-11-18 ask): a task that
+   * already repeats has its rule's cadence replaced; a plain task starts
+   * repeating with a rule of its own. Completed and deleted tasks are
+   * skipped. One undo restores each rule's cadence and arming, and stops the
+   * rules this call started.
+   * @param taskIds The selection.
+   * @param mode The cadence to set.
+   * @param deadlineOffsetDays The spawned copies' deadline offset, if any.
+   * @returns How many tasks changed.
+   */
+  async bulkSetRecurrence(
+    taskIds: string[], mode: RecurrenceMode, deadlineOffsetDays?: number,
+  ): Promise<number> {
+    const targets = taskIds
+      .map((id) => this.state.tasks.find((t) => t.id === id))
+      .filter((t): t is Task => t !== undefined && !t.deleted && t.completedAt === undefined);
+    if (targets.length === 0) return 0;
+    const inverse: Array<() => Promise<void>> = [];
+    const forward: Array<() => Promise<void>> = [];
+    for (const t of targets) {
+      const tpl = t.recurrenceId
+        ? this.state.templates.find((x) => x.id === t.recurrenceId && !x.deleted)
+        : undefined;
+      if (tpl) {
+        const prior = $state.snapshot(tpl) as RecurrenceTemplate;
+        await this.updateRecurring(tpl.id, { mode, deadlineOffsetDays });
+        inverse.push(async () => {
+          await this.updateRecurring(tpl.id, { mode: prior.mode, deadlineOffsetDays: prior.deadlineOffsetDays });
+          // A mode patch re-arms from now; put back the exact arming it had.
+          await this.updateRecurring(tpl.id, { nextSpawnAt: prior.nextSpawnAt });
+        });
+        forward.push(() => this.updateRecurring(tpl.id, { mode, deadlineOffsetDays }));
+      } else {
+        // The rule is looked up at undo time: a redo makes a fresh one.
+        const start = async () => { await this.createRecurring(t.id, mode, deadlineOffsetDays); };
+        await start();
+        inverse.push(async () => {
+          const id = this.state.tasks.find((x) => x.id === t.id)?.recurrenceId;
+          if (id) await this.removeRecurring(id);
+          await this.patchTask(t.id, { recurrenceId: undefined });
+        });
+        forward.push(start);
+      }
+    }
+    const n = targets.length;
+    this.pushUndo(`Set repeat on ${n} task${n === 1 ? '' : 's'}`,
+      async () => { for (const run of [...inverse].reverse()) await run(); },
+      async () => { for (const run of forward) await run(); });
+    return n;
   }
 
   /** Move a task to another list (the move control on the task editor). */
