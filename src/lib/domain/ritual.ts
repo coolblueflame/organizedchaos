@@ -122,8 +122,10 @@ export function dueRitualIds(tasks: Task[], settings: Settings, now: Date): stri
 }
 
 /**
- * A due ritual outranks everything. Not a nudge: the window is the point, and a
+ * A due ritual outranks ordinary work. Not a nudge: the window is the point, and a
  * reminder that loses to a big pile of ordinary work never arrives at all.
+ * The draw still serves MAX-priority work before an owed ritual below MAX
+ * (see DrawScope.dueFirst); this lift is what other readers of urgency see.
  * Expressed as a priority lift so it travels the same path as the pressure a
  * blocked task already applies to its blockers. (Since 2026-07-29 the draw
  * also narrows itself to due rituals outright via dueFirst — the lift remains

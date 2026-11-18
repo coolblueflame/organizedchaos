@@ -52,10 +52,14 @@ export interface DrawScope {
   queueFirst?: string[];
   /**
    * Owed RIGHT NOW (2026-07-29: due rituals): while any of these ids survive
-   * in the pool, the draw serves only from them — above every tier. The day
-   * queue comes between: owed rituals at MAX priority are served before it,
-   * the rest after it. Several owed tasks still draw fairly among themselves
-   * (tiering and the in-progress weighting run within the subset).
+   * in the pool, the draw serves only from them — above every tier but one.
+   * Owed rituals at MAX priority are served first, before even the day
+   * queue. The rest come after the queue AND after any MAX-priority work
+   * (its own priority, a deadline's escalation, or a MAX lift from work it
+   * blocks; project pressure does not count): a ritual's window beats
+   * everything of its own urgency or less, but not an emergency. Several owed
+   * tasks still draw fairly among themselves (tiering and the in-progress
+   * weighting run within the subset).
    */
   dueFirst?: string[];
   /**
@@ -141,6 +145,14 @@ export function drawTask(
   }
   if (pool.length === 0) return null;
 
+  // A task's urgency on its own merit: its effective priority, or the lift
+  // of work blocked on it (a blocker is the only route to that work).
+  // Project-deadline pressure is left out on purpose.
+  const ownRank = (t: Task) => {
+    const lift = lifts?.get(t.id);
+    return Math.max(priorityRank(effectivePriority(t, settings, now)), lift ? priorityRank(lift) : 0);
+  };
+
   // What's owed right now (see DrawScope.dueFirst) narrows the draw to
   // itself — before the queue when any owed task is at MAX, after it otherwise.
   const due = scope?.dueFirst?.length ? new Set(scope.dueFirst) : null;
@@ -157,7 +169,13 @@ export function drawTask(
         if (queued) return queued;
       }
     }
-    if (owed.length > 0) pool = owed;
+    if (owed.length > 0) {
+      // MAX work outranks an owed ritual below MAX (2026-11-18 ask). Only
+      // tasks outside `due` are checked: an owed task's lifts entry is its
+      // ritual lift, which would make every owed ritual look MAX here.
+      const maxWork = pool.filter((t) => !due!.has(t.id) && ownRank(t) === priorityRank('max'));
+      pool = maxWork.length > 0 ? maxWork : owed;
+    }
   }
 
   // The pepper roll (see DrawScope.peppers). Each eligible pepper rolls
@@ -191,11 +209,7 @@ export function drawTask(
   // relieves the pressure naturally. A blocker counts as intrinsic: doing it is
   // the ONLY route to the work waiting behind it, so it competes on equal
   // footing with tasks that are natively this urgent.
-  const intrinsic = tier.filter((t) => {
-    const own = priorityRank(effectivePriority(t, settings, now));
-    const lift = lifts?.get(t.id);
-    return Math.max(own, lift ? priorityRank(lift) : 0) === topRank;
-  });
+  const intrinsic = tier.filter((t) => ownRank(t) === topRank);
   const candidates = intrinsic.length > 0 ? intrinsic : tier;
 
   // Due before started before the rest (see tierOrder); the dice only choose

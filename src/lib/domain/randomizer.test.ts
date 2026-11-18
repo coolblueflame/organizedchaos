@@ -77,13 +77,44 @@ describe('work-period fit', () => {
 });
 
 describe('drawTask — what is owed right now (due rituals)', () => {
-  it('a due ritual beats even a max-priority task', () => {
-    const urgent = task({ priority: 'max' });
+  it('a due ritual beats ordinary work, even of a higher priority', () => {
+    const big = task({ priority: 'high' });
     const lunch = task({ priority: 'medium' });
-    const got = drawTask([urgent, lunch], DEFAULT_SETTINGS, now, firstRng, {
+    const got = drawTask([big, lunch], DEFAULT_SETTINGS, now, firstRng, {
       dueFirst: [lunch.id],
     });
     expect(got?.id).toBe(lunch.id);
+  });
+
+  it('but MAX-priority work beats a due ritual below MAX (2026-11-18 ask)', () => {
+    const urgent = task({ priority: 'max' });
+    const yoga = task({ priority: 'high' });
+    const got = drawTask([yoga, urgent], DEFAULT_SETTINGS, now, firstRng, {
+      dueFirst: [yoga.id],
+    });
+    expect(got?.id).toBe(urgent.id);
+    // A deadline escalating ordinary work to MAX counts as MAX work.
+    const escalated = task({ priority: 'high', deadline: '2026-07-15' });
+    expect(drawTask([yoga, escalated], DEFAULT_SETTINGS, now, firstRng, { dueFirst: [yoga.id] })?.id)
+      .toBe(escalated.id);
+    // So does a MAX lift from work waiting on it.
+    const blocker = task({ priority: 'low' });
+    expect(drawTask([yoga, blocker], DEFAULT_SETTINGS, now, firstRng, { dueFirst: [yoga.id] },
+      undefined, new Map([[blocker.id, 'max' as Priority], [yoga.id, 'max' as Priority]]))?.id)
+      .toBe(blocker.id);
+    // Project pressure does not: the ritual's window still wins.
+    const pressed = task({ priority: 'low', listId: 'P' });
+    expect(drawTask([yoga, pressed], DEFAULT_SETTINGS, now, firstRng, { dueFirst: [yoga.id] },
+      new Map([['P', 'max' as Priority]]))?.id).toBe(yoga.id);
+  });
+
+  it('a due ritual AT max still beats max work', () => {
+    const urgent = task({ priority: 'max' });
+    const meds = task({ priority: 'max' });
+    const got = drawTask([urgent, meds], DEFAULT_SETTINGS, now, firstRng, {
+      dueFirst: [meds.id],
+    });
+    expect(got?.id).toBe(meds.id);
   });
 
   it('but the day queue beats it — the plan is the one thing the user assembled by hand', () => {
@@ -119,7 +150,7 @@ describe('drawTask — what is owed right now (due rituals)', () => {
   it('several owed tasks still draw among themselves', () => {
     const a = task({ priority: 'medium' });
     const b = task({ priority: 'medium' });
-    const other = task({ priority: 'max' });
+    const other = task({ priority: 'high' });
     const got = drawTask([other, a, b], DEFAULT_SETTINGS, now, firstRng, {
       dueFirst: [a.id, b.id],
     });
