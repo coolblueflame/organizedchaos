@@ -371,7 +371,7 @@
     <button class="danger" class:armed={deleteArmed} data-testid="task-delete-{task.id}" onclick={remove}>
       {deleteArmed ? 'tap again to delete' : 'delete'}
     </button>
-    <button data-testid="task-collapse" onclick={() => { flush(); oncollapse(); }}>done</button>
+    <button data-testid="task-collapse" onclick={() => { flush(); oncollapse(); }}>done editing</button>
   </div>
   {/if}
 </div>
@@ -460,7 +460,9 @@
   @media (hover: hover) { .flow:hover { color: var(--text); } }
   .flow.active { color: var(--acc-cyan); border-color: var(--acc-cyan); }
   .meta { color: var(--dim); font-family: var(--font-mono); font-size: 0.7rem; }
-  .actions { display: flex; justify-content: space-between; }
+  .actions { display: flex; justify-content: space-between; gap: 8px; }
+  /* The armed delete label is long; it wraps, and this one keeps its line. */
+  .actions button[data-testid="task-collapse"] { white-space: nowrap; }
   .actions button {
     background: none; border: 1px solid var(--line); border-radius: 6px;
     color: var(--text); font-family: var(--font-mono); font-size: 0.8rem;
