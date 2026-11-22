@@ -48,6 +48,16 @@ test('saying the other one’s name in the search box is a discovery', async ({ 
   await expect(page.getByTestId('discoveries')).not.toContainText('Named the Other One');
 });
 
+test('asking the search box for a parade gets one, once typing pauses', async ({ page }) => {
+  await reset(page);
+  await page.goto('./#/search');
+  await page.getByTestId('search-input').fill('parades');
+  await page.waitForTimeout(900);
+  await expect(page.getByTestId('delight-moment'), 'a longer word is just a search').toHaveCount(0);
+  await page.getByTestId('search-input').fill('Parade');
+  await expect(page.locator('.moment.m-parade')).toBeVisible();
+});
+
 test('clearing the last open task in a list is a discovery, and a lone first task is not', async ({ page }) => {
   await reset(page);
   await makeList(page, 'Shelf');

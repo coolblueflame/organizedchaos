@@ -31,6 +31,17 @@
   });
 
   /*
+    Asking for a parade gets one (the story's chapter sixteen). Waits for
+    typing to pause, like the riddles, so "parades" or a slow typist on the
+    way to something else is not interrupted mid-word.
+  */
+  $effect(() => {
+    if (searchQuery.value.trim().toLowerCase() !== 'parade') return;
+    const timer = setTimeout(() => presenter.show({ kind: 'moment', moment: 'parade' }), 600);
+    return () => clearTimeout(timer);
+  });
+
+  /*
     ENTROPY's riddles are answered here too (see eggs/riddles), once the den
     that keeps the notebook is open. Checked when typing pauses rather than
     on every keystroke: a search for "levels" passes through "level" on the

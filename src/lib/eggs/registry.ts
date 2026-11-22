@@ -31,7 +31,7 @@ export const MOMENTS = [
   'fireworks', 'bubbles', 'ticker-tape', 'sunrise',
   'meteor-shower', 'petals', 'lightning', 'lava-lamp',
   'card-cascade', 'level-clear', 'power-off', 'constellation', 'fireflies',
-  'eyes-in-the-dark', 'snowfall', 'balloons', 'countdown',
+  'eyes-in-the-dark', 'snowfall', 'balloons', 'countdown', 'parade',
 ] as const;
 export type MomentName = (typeof MOMENTS)[number];
 

@@ -241,4 +241,5 @@ export const SCRAPBOOK: Readonly<Record<MomentName, ScrapbookPage>> = {
   'snowfall': { name: 'Snowfall', hint: 'only in december' },
   'balloons': { name: 'Balloons', hint: 'only on a birthday (yours, or the app’s)' },
   'countdown': { name: 'Countdown', hint: 'only as one year turns into the next' },
+  'parade': { name: 'The Parade', hint: 'ask the search bar for a parade' },
 };

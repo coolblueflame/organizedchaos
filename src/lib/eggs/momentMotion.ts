@@ -151,3 +151,29 @@ export function diePips(face: number): Array<[number, number]> {
     default: return [[L, L], [L, M], [L, R], [R, R], [R, M], [R, L]];
   }
 }
+
+/** Where one float of the parade is at a moment, on screen. */
+export interface ParadeSpot {
+  x: number; y: number;
+  /** 0 at the back of the route, 1 at the front: drawn in this order, and bigger nearer. */
+  depth: number;
+}
+
+/** Seconds for one lap of the parade route (the story says four). */
+export const PARADE_LAP_S = 4;
+
+/**
+ * The parade goes around its grand marshal, who stays put in the middle: an
+ * ellipse seen from slightly above, wide and shallow, so the floats pass
+ * behind the marshal on the far side and in front on the near side. Floats
+ * are evenly spaced around the loop and travel counter-clockwise as seen.
+ *
+ * @param i Which float, 0-based, out of `n`.
+ * @param t Seconds since the parade set off.
+ */
+export function paradeSpot(i: number, n: number, t: number, cx: number, cy: number, rx: number, ry: number): ParadeSpot {
+  const angle = (i / n) * Math.PI * 2 + (t / PARADE_LAP_S) * Math.PI * 2;
+  // sin > 0 is the near half (lower on screen, in front).
+  const s = Math.sin(angle);
+  return { x: cx + Math.cos(angle) * rx, y: cy + s * ry, depth: (s + 1) / 2 };
+}

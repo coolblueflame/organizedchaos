@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, streakSpawn,
+  PARADE_LAP_S, cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, paradeSpot,
+  streakSpawn,
 } from './momentMotion';
 
 describe('crossingSpeed', () => {
@@ -154,5 +155,22 @@ describe('diePips', () => {
         expect(y).toBeGreaterThan(0); expect(y).toBeLessThan(1);
       }
     }
+  });
+});
+
+describe('the parade route', () => {
+  it('goes all the way around the marshal once per lap, back where it started', () => {
+    const a = paradeSpot(0, 6, 0, 100, 100, 80, 20);
+    const b = paradeSpot(0, 6, PARADE_LAP_S, 100, 100, 80, 20);
+    expect(b.x).toBeCloseTo(a.x);
+    expect(b.y).toBeCloseTo(a.y);
+  });
+
+  it('keeps the floats spread evenly, passing behind the marshal and in front', () => {
+    const spots = Array.from({ length: 4 }, (_, i) => paradeSpot(i, 4, 0, 0, 0, 10, 10));
+    expect(spots.map((s) => Math.round(s.x) + 0)).toEqual([10, 0, -10, 0]);
+    const depths = spots.map((s) => s.depth);
+    expect(Math.max(...depths)).toBeCloseTo(1);
+    expect(Math.min(...depths)).toBeCloseTo(0);
   });
 });

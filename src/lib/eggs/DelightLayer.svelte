@@ -7,7 +7,7 @@
   import { app } from '../state/app.svelte';
   import { MOMENT_MS, presenter } from './presenter.svelte';
   import {
-    cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, streakSpawn,
+    cardStep, cascadeCard, crossingSpeed, diePips, lavaBlob, metaballField, moveLavaBlob, paradeSpot, streakSpawn,
     type CascadeCard,
   } from './momentMotion';
 
@@ -15,7 +15,7 @@
   const CANVAS_MOMENTS = new Set([
     'matrix-rain', 'starfield', 'confetti-storm', 'fireworks', 'bubbles', 'meteor-shower', 'petals',
     'lava-lamp', 'card-cascade', 'level-clear', 'constellation', 'fireflies',
-    'eyes-in-the-dark', 'snowfall', 'balloons', 'countdown',
+    'eyes-in-the-dark', 'snowfall', 'balloons', 'countdown', 'parade',
   ]);
   import { burstAt } from '../ui/fx/particles';
   import { haptic } from '../ui/fx/haptics';
@@ -126,6 +126,9 @@
           // phone types it into the search box instead (see SearchView).
           wordBuf = '';
           if (app.grantUnlockAndShow('named-it')) presenter.show({ kind: 'moment', moment: 'crt-flicker' });
+        } else if (wordBuf.endsWith('parade')) {
+          wordBuf = '';
+          presenter.show({ kind: 'moment', moment: 'parade' });
         }
       }
     };
@@ -717,6 +720,51 @@
         raf = requestAnimationFrame(draw);
       };
       draw();
+    } else if (current.moment === 'parade') {
+      // ENTROPY's parade for finished things: floats go round and round the
+      // grand marshal, Kevin, who does not move. Floats on the far side of
+      // the route are drawn before Kevin and smaller, the near ones after.
+      const FLOATS = ['🎺', '✅', '🎈', '🥁', '🐲', '✅', '🎏', '🦖', '✅', '🎠'];
+      const size = Math.min(W, H);
+      const cx = W / 2;
+      const cy = H * 0.55;
+      const rx = Math.min(W * 0.4, size * 0.62);
+      const ry = size * 0.13;
+      const t0 = performance.now();
+      const draw = () => {
+        const t = (performance.now() - t0) / 1000;
+        ctx.clearRect(0, 0, W, H);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // The route, a dashed ring on the floor.
+        ctx.strokeStyle = 'rgba(210, 168, 255, 0.35)';
+        ctx.setLineDash([6, 8]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const spots = FLOATS.map((emoji, i) => ({ emoji, ...paradeSpot(i, FLOATS.length, t, cx, cy, rx, ry) }))
+          .sort((a, b) => a.depth - b.depth);
+        const drawFloat = (f: (typeof spots)[number]) => {
+          const px = Math.round(size * (0.07 + 0.04 * f.depth));
+          ctx.font = `${px}px system-ui, sans-serif`;
+          // A little bounce in each step.
+          ctx.fillText(f.emoji, f.x, f.y - px * 0.4 - Math.abs(Math.sin(t * 6 + f.x)) * px * 0.15);
+        };
+        for (const f of spots) if (f.depth < 0.5) drawFloat(f);
+        ctx.font = `${Math.round(size * 0.13)}px system-ui, sans-serif`;
+        ctx.fillText('🐇', cx, cy - size * 0.06);
+        for (const f of spots) if (f.depth >= 0.5) drawFloat(f);
+        ctx.fillStyle = '#d2a8ff';
+        ctx.font = `bold ${Math.round(size * 0.055)}px ui-monospace, monospace`;
+        ctx.fillText('A PARADE FOR FINISHED THINGS', cx, H * 0.22, W * 0.92);
+        ctx.fillStyle = '#8b949e';
+        ctx.font = `${Math.round(size * 0.034)}px ui-monospace, monospace`;
+        ctx.fillText('grand marshal: Kevin (stationary)', cx, H * 0.22 + size * 0.07, W * 0.92);
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
     } else if (current.moment === 'fireflies') {
       // A summer field at dusk: soft lights drift and blink on and off. Each
       // glow is drawn as a gradient, never a filter, so nothing here asks
@@ -1013,6 +1061,7 @@
   /* The felt every solitaire win was played on. */
   .m-card-cascade { background: rgb(14, 96, 44); }
   .m-level-clear { background: #0b0e14; }
+  .m-parade { background: rgba(11, 14, 20, 0.9); }
   .m-constellation { background: rgb(6, 9, 18); }
   .m-fireflies { background: rgba(8, 16, 10, 0.9); }
   .m-eyes-in-the-dark { background: rgb(3, 3, 5); }
