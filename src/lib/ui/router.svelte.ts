@@ -27,6 +27,7 @@ export type Route =
   | { name: 'wrapped' }
   | { name: 'story' }
   | { name: 'den' }
+  | { name: 'vault' }
   | { name: 'sweep'; mode?: 'estimates' };
 
 function parse(hash: string): Route {
@@ -53,6 +54,7 @@ function parse(hash: string): Route {
   if (parts[0] === 'wrapped') return { name: 'wrapped' };
   if (parts[0] === 'story') return { name: 'story' };
   if (parts[0] === 'den') return { name: 'den' };
+  if (parts[0] === 'vault') return { name: 'vault' };
   if (parts[0] === 'sweep') {
     return parts[1] === 'estimates' ? { name: 'sweep', mode: 'estimates' } : { name: 'sweep' };
   }
@@ -78,6 +80,7 @@ function toHash(r: Route): string {
     case 'wrapped': return '#/wrapped';
     case 'story': return '#/story';
     case 'den': return '#/den';
+    case 'vault': return '#/vault';
     case 'sweep': return r.mode === 'estimates' ? '#/sweep/estimates' : '#/sweep';
   }
 }
@@ -86,7 +89,8 @@ function toHash(r: Route): string {
  * One Escape = one step toward home (2026-08-05 ask). Mirrors where each
  * screen's ‹ button points, so the key and the button never disagree:
  * import's ‹ returns to settings; the screens opened from Stats (the week,
- * Wrapped, the story so far) return to Stats; every other screen goes home,
+ * Wrapped, the story so far) return to Stats; the room behind the den's
+ * little door returns to the den; every other screen goes home,
  * which itself has nowhere further up. A new screen whose ‹ points anywhere
  * but home belongs in this switch too, or Escape leaves by a different door.
  */
@@ -97,6 +101,7 @@ export function parentOf(route: Route): Route | null {
     case 'week':
     case 'wrapped':
     case 'story': return { name: 'stats' };
+    case 'vault': return { name: 'den' };
     default: return { name: 'home' };
   }
 }

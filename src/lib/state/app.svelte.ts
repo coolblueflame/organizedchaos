@@ -37,6 +37,7 @@ import { SPARKLE_PREFIX, sparkleTally } from '../eggs/sparkles';
 import { BIRTHDAY_KEY, nextBirthdayValue, namedSeason, seasonalEnabled, type MonthDay } from '../eggs/seasons';
 import { choiceStamp } from '../eggs/ledger';
 import { RIDDLES, RIDDLE_PREFIX, riddleSolved, type Riddle } from '../eggs/riddles';
+import { VAULT_MARKS, VAULT_WEEK_PREFIX, vaultFinds, vaultOpened, weekOf, type Find } from '../eggs/vault';
 import { TRINKETS } from '../eggs/den';
 import { SPARKLE_FIRST, SPARKLE_FOUND } from '../eggs/content/sparkles';
 import { UNLOCKS } from '../eggs/content/extras';
@@ -307,6 +308,38 @@ export class AppStore {
     presenter.show({ kind: 'note', emoji: prize?.emoji ?? '📓', accent: 'purple', celebrate: true, text: text.trim() });
     this.grantUnlockAndShow('riddler');
     if (all) this.grantUnlockAndShow('sphinx');
+  }
+
+  /**
+   * The little door in the notebook's margin was opened (see eggs/vault).
+   * Recorded before the celebration, so the room behind it is open by the
+   * time anything is shown.
+   */
+  openLittleDoor(): void {
+    if (!this.eggsLoaded || vaultOpened(this.eggMarks)) return;
+    this.markEgg(VAULT_MARKS.opened);
+    this.grantUnlockAndShow('little-door');
+  }
+
+  /**
+   * The vault was visited on `day` (an app-day key). Each new week adds one
+   * of Kevin's finds; returns the find this visit added, or null.
+   */
+  visitVault(day: string): Find | null {
+    if (!this.eggsLoaded || !vaultOpened(this.eggMarks)) return null;
+    const key = `${VAULT_WEEK_PREFIX}${weekOf(day)}`;
+    if (this.eggMarks[key] !== undefined) return null;
+    const before = vaultFinds(this.eggMarks).length;
+    this.markEgg(key);
+    const after = vaultFinds(this.eggMarks);
+    return after.length > before ? after[after.length - 1]! : null;
+  }
+
+  /** Kevin moved, in front of the reader. Kept once; the discovery says so. */
+  noteKevinMoved(): void {
+    if (!this.eggsLoaded) return;
+    if (this.eggMarks[VAULT_MARKS.kevinMoved] === undefined) this.markEgg(VAULT_MARKS.kevinMoved);
+    this.grantUnlockAndShow('kevin-moved');
   }
 
   /**

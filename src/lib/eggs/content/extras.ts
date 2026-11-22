@@ -429,4 +429,6 @@ export const UNLOCKS: readonly UnlockDef[] = [
   { id: 'hoard', label: 'Dragon’s Hoard - fifty sparkles found', hint: 'a proper hoard' },
   { id: 'riddler', label: 'Riddle Me This - solved one of ENTROPY’s riddles', hint: 'a notebook in the den' },
   { id: 'sphinx', label: 'The Sphinx - solved every riddle in the notebook', hint: 'every page of the notebook' },
+  { id: 'little-door', label: 'The Little Door - opened the door in the notebook’s margin', hint: 'a door drawn in pencil' },
+  { id: 'kevin-moved', label: 'Witness - saw Kevin move', hint: 'patience, with someone very still' },
 ] as const;

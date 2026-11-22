@@ -50,6 +50,7 @@
   import WrappedView from './lib/ui/WrappedView.svelte';
   import StoryView from './lib/ui/StoryView.svelte';
   import DenView from './lib/eggs/DenView.svelte';
+  import VaultView from './lib/eggs/VaultView.svelte';
   import SweepView from './lib/ui/SweepView.svelte';
   import UndoToast from './lib/ui/UndoToast.svelte';
   import InstallHowTo from './lib/ui/InstallHowTo.svelte';
@@ -228,6 +229,8 @@
     <StoryView />
   {:else if r.name === 'den'}
     <DenView />
+  {:else if r.name === 'vault'}
+    <VaultView />
   {:else if r.name === 'sweep'}
     <SweepView />
   {:else}

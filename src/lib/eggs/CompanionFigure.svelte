@@ -50,6 +50,14 @@
   /* Flatter than a hat, so they sit lower to rest on the head rather than hover over it. */
   .slot-head.item-bow, .slot-head.item-flower { top: -20%; }
   .slot-head.item-cap { top: -26%; }
+  /* The bigger crown: a crown with a smaller crown stacked on top, and glitter. */
+  .slot-head.item-grand-crown { top: -40%; }
+  .slot-head.item-grand-crown::before {
+    content: '👑'; position: absolute; left: 50%; top: -42%; font-size: 0.62em; transform: translateX(-50%);
+  }
+  .slot-head.item-grand-crown::after {
+    content: '✨'; position: absolute; right: -46%; top: -30%; font-size: 0.5em;
+  }
   .slot-eyes { left: 50%; top: 15%; font-size: 0.64em; transform: translateX(-50%); }
   /* Turned on its side, a scarf wraps under the chin instead of hanging over the snout. */
   .slot-neck { left: 50%; bottom: -20%; font-size: 0.6em; transform: translateX(-50%) rotate(-78deg); }

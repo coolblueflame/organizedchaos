@@ -27,6 +27,7 @@
   import { RIDDLES, openRiddles, riddleSolved } from './riddles';
   import { ADVENT_DOORS, GIFTS, adventKey, calendarUp as calendarHangs, doorsOpenable } from './advent';
   import Glyph from '../ui/Glyph.svelte';
+  import { doorDrawn, holdingKey, vaultOpened } from './vault';
 
   const lifetime = $derived(lifetimeCompletions(app.state.tasks));
   const open = $derived(denOpen(lifetime, app.eggMarks));
@@ -112,6 +113,27 @@
     bubble = next;
   }
 
+  const doodle = $derived(doorDrawn(app.eggMarks));
+  const doorUnlocked = $derived(vaultOpened(app.eggMarks));
+  /** What the margin says after the door was tried. */
+  let doorNote = $state('');
+
+  /**
+   * The little door in the notebook's margin: through it once it has been
+   * opened; opened if the companion is holding the key; otherwise a hint.
+   */
+  function tryDoor() {
+    if (doorUnlocked) { navigate({ name: 'vault' }); return; }
+    if (holdingKey(fit)) {
+      haptic('success');
+      app.openLittleDoor();
+      navigate({ name: 'vault' });
+      return;
+    }
+    haptic('tick');
+    doorNote = 'locked. the keyhole is tiny. whoever opens it will need something small, held just so.';
+  }
+
   /** What the line under the shelf says about the trinket tapped last. */
   let caption = $state('tap something to try it on.');
 
@@ -183,6 +205,14 @@
           {/if}
         </div>
       {/each}
+      {#if doodle}
+        <button class="doodle" class:unlocked={doorUnlocked} data-testid="notebook-door" onclick={tryDoor}
+          aria-label={doorUnlocked ? 'the little door, open' : 'a little door, drawn in the margin'}>
+          <span class="door-glyph" aria-hidden="true">🚪</span>
+          <span>{doorUnlocked ? '// the little door is ajar. Kevin left it that way.' : '// in the margin, in pencil: a little door with a keyhole.'}</span>
+        </button>
+        {#if doorNote && !doorUnlocked}<p class="dim" data-testid="notebook-door-note">{doorNote}</p>{/if}
+      {/if}
       {#if riddles.length < RIDDLES.length}
         <p class="dim">// {RIDDLES.length - riddles.length} more pages, stuck together.</p>
       {:else if riddlesSolved === RIDDLES.length}
@@ -197,7 +227,7 @@
         <div class="trinkets">
           {#each row.items as t (t.id)}
             {#if t.earned}
-              <button class="trinket" class:on={fit[t.slot]?.id === t.id} data-testid="trinket-{t.id}"
+              <button class="trinket" class:on={fit[t.slot]?.id === t.id} class:grand={t.id === 'grand-crown'} data-testid="trinket-{t.id}"
                 aria-pressed={fit[t.slot]?.id === t.id} aria-label={t.label} onclick={() => wear(t)}>{t.emoji}</button>
             {:else}
               <button class="trinket locked" data-testid="trinket-{t.id}" aria-label="locked: {t.hint}"
@@ -307,6 +337,15 @@
     font-family: var(--font-mono); font-size: 0.78rem; color: var(--acc-purple);
   }
   .prize { font-size: 1rem; }
+  /* Pencil on paper: dashed and grey until it opens. */
+  .doodle {
+    display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+    background: none; border: 1px dashed var(--dim); border-radius: 10px; padding: 8px 12px;
+    color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem;
+  }
+  .doodle .door-glyph { font-size: 1.3rem; filter: grayscale(1); opacity: 0.7; }
+  .doodle.unlocked { border-style: solid; border-color: rgb(255 214 102 / 0.5); color: var(--text); }
+  .doodle.unlocked .door-glyph { filter: none; opacity: 1; }
   .kind {
     margin: 10px 0 6px; font-family: var(--font-mono); font-size: 0.66rem; font-weight: 400;
     text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim);
@@ -317,6 +356,9 @@
     background: var(--bg1); border: 1px solid var(--line); border-radius: 10px; padding: 0;
     font-size: 1.5rem; line-height: 1; cursor: pointer;
   }
+  /* The bigger crown would read as the first one on the shelf; its glitter tells them apart. */
+  .trinket.grand { position: relative; }
+  .trinket.grand::after { content: '✨'; position: absolute; top: 6%; right: 8%; font-size: 0.55em; }
   .trinket.on { border-color: var(--acc-yellow); box-shadow: 0 0 0 1px var(--acc-yellow) inset; }
   .trinket.locked { color: var(--dim); font-family: var(--font-mono); font-size: 1.1rem; border-style: dashed; }
   .caption { margin: 8px 0 0; color: var(--dim); font-family: var(--font-mono); font-size: 0.75rem; }

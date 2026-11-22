@@ -12,6 +12,7 @@ import { SEASON_LOOKS } from './content/seasons';
 import { appDayKey } from '../domain/time';
 import { RIDDLE_PREFIX } from './riddles';
 import { doorEverOpened } from './advent';
+import { collectionComplete, vaultOpened } from './vault';
 
 /** Lifetime completions at which the den opens: the dragon rung of the companion. */
 export const DEN_OPENS_AT = 250;
@@ -101,6 +102,9 @@ const NOTEBOOK_HINT = 'a riddle in ENTROPY’s notebook';
 /** The crown's rung on the companion's ladder. */
 const CROWN_AT = PET_STAGES[PET_STAGES.length - 1]![0];
 
+/** Lifetime completions for the bigger crown: twice the first one. */
+export const GRAND_CROWN_AT = CROWN_AT * 2;
+
 export const TRINKETS: readonly Trinket[] = [
   { id: 'crown', emoji: '👑', slot: 'head', label: 'the crown', hint: 'four digits of done', earned: (p) => p.lifetime >= CROWN_AT },
   { id: 'balloon', emoji: '🎈', slot: 'float', label: 'a balloon', hint: 'for coming in', earned: () => true },
@@ -129,6 +133,11 @@ export const TRINKETS: readonly Trinket[] = [
   { id: 'compass', emoji: '🧭', slot: 'held', label: 'a compass', hint: NOTEBOOK_HINT, earned: riddle('map') },
   { id: 'bubbles', emoji: '🫧', slot: 'float', label: 'some bubbles', hint: NOTEBOOK_HINT, earned: riddle('secret') },
   { id: 'scholar', emoji: '🎓', slot: 'head', label: 'a scholar’s cap', hint: 'the last page of ENTROPY’s notebook', earned: riddle('last') },
+  // Behind the little door (see ./vault).
+  { id: 'idea-hat', emoji: '💭', slot: 'head', label: 'the idea of a hat (Kevin’s)', hint: 'a door drawn in pencil', earned: (p) => vaultOpened(p.marks) },
+  { id: 'lint-bear', emoji: '🧸', slot: 'held', label: 'a tiny bear Kevin made from lint', hint: 'a whole collection of lost things', earned: (p) => collectionComplete(p.marks) },
+  // A crown with a second crown on top, and more glitter (drawn by CompanionFigure).
+  { id: 'grand-crown', emoji: '👑', slot: 'head', label: 'the bigger crown', hint: 'twice what the first crown took', earned: (p) => p.lifetime >= GRAND_CROWN_AT },
 ];
 
 /** The id a season's costume goes by when it is chosen on the shelf. */
