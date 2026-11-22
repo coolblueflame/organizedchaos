@@ -48,6 +48,10 @@ export const DEN_LINES: readonly string[] = [
   'I counted my hats. then I counted them again with them on. the number felt bigger.',
   'ENTROPY taught me a card trick. the trick is that every card is an ace. it is still a good trick.',
   'when you are away it gets very quiet in here. I fill it with small dragon noises. *small dragon noise*',
+  'I heard a tiny hop from somewhere. probably nothing. probably.',
+  'the notebook margins keep getting busier. somebody in here doodles at night.',
+  'do you think doors know they are doors? I think about it a lot.',
+  'I tried on every hat at once. ENTROPY said I looked like a wedding cake. I took it as a compliment.',
 ];
 
 /** ENTROPY at the dice table: one line per thing that can happen, picked at random. */

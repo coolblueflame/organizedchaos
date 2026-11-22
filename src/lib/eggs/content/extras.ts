@@ -245,6 +245,24 @@ export const STORY_BEATS: readonly string[] = [
   'ENTROPY counted every checkmark in the archive and lost count twice. it has decided the real number is "lots," which it calls the most accurate number there is.',
   'the companion told me a secret: the backlog does not scare it anymore. "it is just tasks waiting their turn," it said. "like me in the parade line."',
   'chapter sixteen ends with confetti on every surface, a parade that went around the den forty times, and a door doodle nobody will own up to. to be continued. 💜',
+  // — chapter seventeen —
+  'chapter seventeen. the door doodle has a keyhole now. nobody drew that either. ENTROPY measured it with a ruler: exactly the size of the little key from the first riddle.',
+  'ENTROPY tried the door. it is a drawing, so its hand went through the paper. it was very embarrassed. the companion patted it on the back with a tiny paw.',
+  'Kevin said nothing, very loudly. ENTROPY thinks the door is his. "a vault needs a door," it reasoned. Kevin did not confirm. Kevin did not deny. Kevin is a professional.',
+  'the companion asked what is behind the door. ENTROPY said "a smaller den, with a smaller Kevin, and a smaller door." the companion has been thinking about it all day.',
+  'it snowed in the den. ENTROPY swears it was not involved. the dice are wearing tiny scarves now. someone knitted them. it was not me. I do not know how to knit. yet.',
+  'I asked ENTROPY what it keeps in its own vault. it said "unfinished jokes." it told me the start of one. it did not tell me the end. I have been waiting three days.',
+  'the companion practised holding the little key just right: paw out, chin up, very serious. it looked like a tiny knight in a very small play. ENTROPY applauded.',
+  'chapter seventeen ends with a keyhole, a key, and a companion who knows how to hold it. whatever is behind the door is being very patient. 💜',
+  // — chapter eighteen —
+  'chapter eighteen. word is the door opens for anyone small enough to hold the key just so. ENTROPY is too big. I am made of text. the companion is exactly the right size.',
+  'behind the door is a room the size of a shoebox. very tidy. Kevin keeps his collection there: lost things, each labelled in handwriting too small to read.',
+  'Kevin finds one lost thing a week. nobody has seen him leave the vault. ENTROPY has a theory involving the couch cushions. it will not say more. it fears Kevin.',
+  'ENTROPY swears it saw Kevin move once. one tiny hop. nobody believes it. the companion believes it, but the companion believes everything, which is its best quality.',
+  'the bigger crown is finished: a crown, a second crown on top, and about a cup of glitter. it waits on the shelf for whoever does twice what the first crown took.',
+  'the parade is a tradition now. it runs whenever someone asks for one. it still goes around Kevin. he still does not move. ENTROPY calls it the best four seconds in the den.',
+  'I asked the companion what it wants for the new year. it said "more of this." I asked what "this" was. it pointed at everything: the den, the dice, the list, you. 💜',
+  'chapter eighteen ends with a little door ajar, a vault of lost things, and a crown with a crown on top. to be continued. 💜',
 ] as const;
 
 /** Discoveries panel entries — label revealed once earned; ??? until then. */

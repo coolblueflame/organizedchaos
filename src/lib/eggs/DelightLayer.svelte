@@ -761,7 +761,7 @@
         ctx.fillText('A PARADE FOR FINISHED THINGS', cx, H * 0.22, W * 0.92);
         ctx.fillStyle = '#8b949e';
         ctx.font = `${Math.round(size * 0.034)}px ui-monospace, monospace`;
-        ctx.fillText('grand marshal: Kevin (stationary)', cx, H * 0.22 + size * 0.07, W * 0.92);
+        ctx.fillText('led by Kevin (stationary)', cx, H * 0.22 + size * 0.07, W * 0.92);
         raf = requestAnimationFrame(draw);
       };
       draw();
