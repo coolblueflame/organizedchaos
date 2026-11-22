@@ -56,6 +56,14 @@ test('asking the search box for a parade gets one, once typing pauses', async ({
   await expect(page.getByTestId('delight-moment'), 'a longer word is just a search').toHaveCount(0);
   await page.getByTestId('search-input').fill('Parade');
   await expect(page.locator('.moment.m-parade')).toBeVisible();
+  await page.getByTestId('delight-moment').click();
+  // The query survives a trip away; coming back to it is not asking again.
+  await page.evaluate(() => { location.hash = '#/stats'; });
+  await expect(page.getByTestId('discoveries')).toBeVisible();
+  await page.evaluate(() => { location.hash = '#/search'; });
+  await expect(page.getByTestId('search-input')).toHaveValue('Parade');
+  await page.waitForTimeout(900);
+  await expect(page.getByTestId('delight-moment')).toHaveCount(0);
 });
 
 test('clearing the last open task in a list is a discovery, and a lone first task is not', async ({ page }) => {

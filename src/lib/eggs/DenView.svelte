@@ -131,7 +131,10 @@
       return;
     }
     haptic('tick');
-    doorNote = 'locked. the keyhole is tiny. whoever opens it will need something small, held just so.';
+    // A season's costume can take the paw the key would be held in.
+    doorNote = fit.held?.id.startsWith('season-')
+      ? 'locked. the companion’s paws are full of something festive right now.'
+      : 'locked. the keyhole is tiny. whoever opens it will need something small, held just so.';
   }
 
   /** What the line under the shelf says about the trinket tapped last. */

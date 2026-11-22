@@ -33,11 +33,19 @@
   /*
     Asking for a parade gets one (the story's chapter sixteen). Waits for
     typing to pause, like the riddles, so "parades" or a slow typist on the
-    way to something else is not interrupted mid-word.
+    way to something else is not interrupted mid-word. The query outlives
+    the screen, so coming back to a search that still says "parade" must
+    not replay it: only a query that becomes the word, here, asks again.
   */
+  const isParade = (q: string) => q.trim().toLowerCase() === 'parade';
+  let paradeArmed = !isParade(searchQuery.value);
   $effect(() => {
-    if (searchQuery.value.trim().toLowerCase() !== 'parade') return;
-    const timer = setTimeout(() => presenter.show({ kind: 'moment', moment: 'parade' }), 600);
+    if (!isParade(searchQuery.value)) { paradeArmed = true; return; }
+    if (!paradeArmed) return;
+    const timer = setTimeout(() => {
+      paradeArmed = false;
+      presenter.show({ kind: 'moment', moment: 'parade' });
+    }, 600);
     return () => clearTimeout(timer);
   });
 
